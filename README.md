@@ -1,150 +1,286 @@
 # AI Chat
 
-Небольшой чат из двух приложений:
+Чат с Vue frontend, Spring Boot backend и серверными профилями агентов для
+DeepSeek.
 
-- `ai-chat-backend` — Java 21 + Spring Boot REST API;
-- `ai-chat-client` — Vue 3 + Vite интерфейс;
-- LLM вызывается только с backend, поэтому API-ключ не попадает в браузер;
-- по умолчанию включён fallback-режим, не требующий LLM или ключей.
+- **ai-chat-backend** — активный Java 21 + Spring Boot backend;
+- **ai-chat-client** — Vue 3 + Vite интерфейс;
+- **ai-chat-backend-python** — параллельный FastAPI backend, который не удаляется;
+- API-ключ и системные промпты не передаются в браузер;
+- профиль рецептов отдельным вызовом DeepSeek отклоняет некулинарные запросы;
+- по умолчанию включён fallback-режим без внешних запросов.
 
 ## Быстрый запуск через Docker Compose
 
 Требования: Docker с плагином Docker Compose.
 
-```bash
+~~~bash
 docker compose up --build
-```
+~~~
 
-После запуска откройте <http://localhost:8080>. Backend также доступен напрямую на <http://localhost:8081>.
+Откройте <http://localhost:8080>. Backend доступен напрямую на
+<http://localhost:8081>.
 
-Проверка API без браузера:
+~~~bash
+curl http://localhost:8081/api/profiles
 
-```bash
 curl -X POST http://localhost:8081/api/chat \
   -H "Content-Type: application/json" \
-  -d '{"message":"Привет!"}'
-```
+  -d '{"profileId":"general","responseMode":"free","message":"Привет!","history":[]}'
+~~~
 
-Остановка:
+## Подключение DeepSeek
 
-```bash
-docker compose down
-```
+Скопируйте **.env.example** в локальный **.env** и заполните ключ:
 
-## Подключение LLM
-
-Backend поддерживает API, совместимый с OpenAI Chat Completions (`POST /chat/completions`). Скопируйте `.env.example` в `.env` и заполните параметры:
-
-```dotenv
+~~~dotenv
 CHAT_MODE=llm
-LLM_BASE_URL=https://api.openai.com/v1
+LLM_BASE_URL=https://api.deepseek.com
 LLM_API_KEY=ваш_ключ
-LLM_MODEL=gpt-4o-mini
-```
+LLM_MODEL=deepseek-v4-flash
+~~~
 
-Затем перезапустите контейнеры:
+Файл **.env** игнорируется Git. Не записывайте ключи в YAML-профили, исходный
+код или **.env.example**. После изменения конфигурации перезапустите приложение.
 
-```bash
-docker compose up --build
-```
+## Локальный запуск
 
-Для другого OpenAI-совместимого провайдера измените `LLM_BASE_URL` и `LLM_MODEL`. Значение `LLM_BASE_URL` должно включать `/v1`, если это требуется провайдером. Не добавляйте реальный `.env` в Git.
-
-## Локальный запуск без Docker
-
-Требования: Java 21, Maven 3.9+, Node.js 22+, pnpm 11+.
-
-В первом терминале:
-
-```bash
-cd ai-chat-backend
-mvn spring-boot:run
-```
-
-Во втором терминале:
-
-```bash
-cd ai-chat-client
-pnpm install
-pnpm dev
-```
-
-Откройте <http://localhost:5173>. Dev-сервер Vite проксирует `/api` на backend по адресу `http://localhost:8080`.
-
-Чтобы локально включить LLM в PowerShell:
-
-```powershell
-$env:CHAT_MODE = "llm"
-$env:LLM_API_KEY = "ваш_ключ"
-$env:LLM_MODEL = "gpt-4o-mini"
-mvn spring-boot:run
-```
-
-## Тесты и сборка
+Требования: Java 21, Node.js 22.12+ и pnpm 11+. Глобально устанавливать Maven
+не нужно — wrapper включён в проект.
 
 Backend:
 
-```bash
+~~~powershell
 cd ai-chat-backend
-mvn test
-```
+$env:CHAT_MODE = 'llm'
+$env:LLM_API_KEY = 'ваш_ключ'
+.\mvnw.cmd spring-boot:run
+~~~
 
-Client:
+При нативном запуске Spring Boot читает переменные окружения текущего процесса.
+Файл **.env** автоматически используется именно Docker Compose; оба способа не
+требуют хранить ключ в Git.
 
-```bash
+Frontend:
+
+~~~powershell
 cd ai-chat-client
 pnpm install
-pnpm test
-pnpm build
-```
+pnpm dev
+~~~
 
-Полная проверка Docker-образов:
+Откройте <http://localhost:5173>. Vite проксирует **/api** на
+<http://localhost:8080>.
 
-```bash
-docker compose build
-docker compose up -d
-docker compose ps
-```
+## Профили агентов
+
+Spring Boot загружает включённые YAML-файлы из
+**ai-chat-backend/src/main/resources/agents**.
+
+Доступны два профиля:
+
+- **general** — универсальный чат;
+- **recipe** — помощник по рецептам.
+
+Frontend получает только безопасные метаданные профиля и доступных режимов.
+Системный промпт, инструкции формата, параметры DeepSeek, входные ограничения
+и выходные политики остаются на backend.
+
+Профиль **recipe** также содержит `request_guard`. В режиме `CHAT_MODE=llm`
+первый вызов DeepSeek классифицирует запрос, и только разрешённый запрос
+передаётся второму вызову для генерации ответа. Погода и другие посторонние темы
+отклоняются с HTTP 422. Несъедобные объекты получают подсказку указать
+существующее съедобное блюдо. В fallback-режиме внешний классификатор не
+вызывается.
+
+Классификатор возвращает один уникальный маркер: `[[ALLOW_RECIPE]]`,
+`[[REJECT_NOT_FOOD]]`, `[[REJECT_UNRELATED]]` или `[[REJECT_UNCLEAR]]`.
+JSON и DTO для этого шага не используются. Если DeepSeek не вернул ровно одно
+непротиворечивое решение, backend повторяет проверку с усиленной инструкцией.
+После второго неуспешного ответа frontend
+показывает понятную просьбу повторить запрос. Сообщения, завершившиеся ошибкой,
+остаются видимыми в чате, но больше не передаются в следующую LLM-историю.
+
+Чтобы добавить третий текстовый профиль, достаточно создать ещё один YAML-файл:
+
+~~~yaml
+id: study
+name: Учебный помощник
+description: Объясняет сложные темы
+version: 1
+enabled: true
+
+system_prompt: |
+  Ты учебный помощник. Объясняй материал последовательно и понятно.
+
+input_policy:
+  max_message_length: 10000
+  max_history_messages: 30
+  allowed_roles:
+    - user
+    - assistant
+
+deepseek:
+  thinking: disabled
+  temperature: 0.5
+
+default_response_mode: free
+response_modes:
+  - id: free
+    name: Без ограничений
+    description: Обычный текстовый ответ
+    output_policy: text
+
+  - id: controlled
+    name: Краткий ответ
+    description: Ответ с ограничением длины
+    instruction: |
+      Ответь не более чем в трёх предложениях и закончи маркером <END>.
+    output_policy: text
+    max_tokens: 180
+    stop: "<END>"
+~~~
+
+После добавления файла перезапустите backend. Новый профиль появится в
+**GET /api/profiles** и в переключателе frontend без изменения Java-кода.
 
 ## API
 
-### `POST /api/chat`
+### GET /api/profiles
 
-Запрос:
+Возвращает безопасные публичные метаданные включённых профилей.
 
-```json
+### POST /api/chat
+
+~~~json
 {
-  "message": "Объясни, что такое dependency injection"
+  "profileId": "recipe",
+  "responseMode": "json",
+  "message": "Хочу приготовить салат",
+  "history": [
+    {"role": "user", "content": "У меня есть помидоры"},
+    {"role": "assistant", "content": "Какие ещё ингредиенты доступны?"}
+  ]
 }
-```
+~~~
 
 Ответ:
 
-```json
+~~~json
 {
-  "reply": "...",
-  "source": "fallback"
+  "reply": "Овощной салат",
+  "structuredReply": {
+    "dishName": "Овощной салат",
+    "requiredIngredients": [
+      "Помидоры — 2 шт.",
+      "Огурцы — 2 шт."
+    ],
+    "cookingTime": "15 минут"
+  },
+  "source": "llm",
+  "profileId": "recipe",
+  "responseMode": "json",
+  "meta": {
+    "model": "deepseek-v4-flash",
+    "finishReason": "stop",
+    "maxTokens": 1000,
+    "responseFormat": "json_object",
+    "stop": null
+  }
 }
-```
+~~~
 
-`source` имеет значение `fallback` или `llm`. Пустые сообщения и сообщения длиннее 10 000 символов отклоняются с HTTP 400. Ошибки провайдера возвращаются как HTTP 502 без раскрытия API-ключа.
+**profileId** необязателен и по умолчанию равен **general**. **responseMode**
+необязателен и берётся из **defaultResponseMode** профиля. История принимает
+только роли **user** и **assistant**; системный промпт и инструкции режима
+добавляются самим backend и не могут быть подменены клиентом.
+
+Пример ответа на запрос о погоде в профиле рецептов:
+
+~~~json
+{
+  "error": "Профиль рецептов принимает только запросы о приготовлении блюд."
+}
+~~~
+
+## День 2: управление форматом ответа
+
+Для обоих Java-профилей доступны три переключаемых режима:
+
+| Режим | Формат | Ограничение длины | Завершение |
+|---|---|---|---|
+| free | обычный текст | не задаётся режимом | естественное |
+| controlled | до трёх предложений | max_tokens 180/220 | stop sequence `<END>` |
+| json | фиксированная JSON-схема | max_tokens 300/1000 | явная инструкция завершить после `}` |
+
+Для JSON-режимов backend автоматически делает одну повторную генерацию, если
+ответ оборван по `finish_reason=length` или не проходит Java-схему. Повтор получает
+увеличенный лимит и строгую инструкцию вернуть компактный закрытый JSON. В
+универсальном профиле значение `answer` дополнительно детерминированно ограничено
+500 символами, поэтому наружу не уходит оборванный JSON.
+
+Один запрос можно отправить последовательно с разным уровнем контроля:
+
+~~~bash
+curl -X POST http://localhost:8081/api/chat -H "Content-Type: application/json" \
+  -d '{"profileId":"recipe","responseMode":"free","message":"Хочу приготовить салат"}'
+
+curl -X POST http://localhost:8081/api/chat -H "Content-Type: application/json" \
+  -d '{"profileId":"recipe","responseMode":"controlled","message":"Хочу приготовить салат"}'
+
+curl -X POST http://localhost:8081/api/chat -H "Content-Type: application/json" \
+  -d '{"profileId":"recipe","responseMode":"json","message":"Хочу приготовить салат"}'
+~~~
+
+В режиме **json** backend отправляет DeepSeek параметр
+`response_format={"type":"json_object"}`, затем десериализует результат в
+Java record, запрещает неизвестные поля и проверяет, что `dishName` и
+`cookingTime` заполнены, а `requiredIngredients` является непустым массивом
+непустых строк.
+
+Невалидный ответ LLM не передаётся клиенту как успешный: backend возвращает
+HTTP 502. Поэтому постоянство JSON означает одинаковую схему ответа, а не
+одинаковый текст рецепта при каждом вызове.
+
+Подробное описание компонентов и полного пути запроса находится в
+**application-guide.md**.
+
+## Тесты
+
+Backend:
+
+~~~powershell
+cd ai-chat-backend
+.\mvnw.cmd test
+~~~
+
+Frontend:
+
+~~~powershell
+cd ai-chat-client
+pnpm test
+pnpm build
+~~~
+
+Тесты backend не выполняют настоящие запросы к DeepSeek.
 
 ## Конфигурация backend
 
 | Переменная | По умолчанию | Назначение |
 |---|---|---|
-| `CHAT_MODE` | `fallback` | `fallback` или `llm` |
-| `LLM_BASE_URL` | `https://api.openai.com/v1` | Базовый URL OpenAI-совместимого API |
-| `LLM_API_KEY` | пусто | Секретный API-ключ; обязателен в режиме `llm` |
-| `LLM_MODEL` | `gpt-4o-mini` | Имя модели у провайдера |
-| `CORS_ALLOWED_ORIGINS` | localhost:5173, localhost:8080 | Разрешённые origin через запятую |
+| CHAT_MODE | fallback | fallback или llm |
+| LLM_BASE_URL | https://api.deepseek.com | Базовый URL DeepSeek |
+| LLM_API_KEY | пусто | Ключ DeepSeek; обязателен в режиме llm |
+| LLM_MODEL | deepseek-v4-flash | Модель по умолчанию |
+| LLM_LOG_PAYLOADS | false | Логировать полные запросы и ответы LLM без API-ключа |
+| DEFAULT_AGENT_ID | general | Профиль по умолчанию |
+| AGENT_PROFILES_PATTERN | classpath*:agents/*.yml | Расположение профилей |
+| CORS_ALLOWED_ORIGINS | localhost:5173, localhost:8080 | Разрешённые origin |
 
-## Развёртывание на VPS
+Параметры агента задают model, thinking, reasoning effort, temperature и top_p.
+Каждый режим ответа отдельно задаёт закрытую инструкцию, output policy,
+max_tokens, stop и response_format.
 
-1. Установите Docker и Docker Compose.
-2. Скопируйте репозиторий на VPS.
-3. Создайте `.env` рядом с `docker-compose.yml`.
-4. Выполните `docker compose up -d --build`.
-5. Для публичного доступа поставьте перед портом `8080` reverse proxy (Caddy, Nginx или Traefik) и включите HTTPS.
-
-Порт backend `8081` нужен только для диагностики. На публичном VPS его лучше удалить из секции `ports` или ограничить firewall: браузер работает через `/api`, который Nginx client-контейнера проксирует во внутреннюю Docker-сеть.
+При `LLM_LOG_PAYLOADS=true` логи содержат системные промпты, историю и сообщения
+пользователя, поэтому настройку следует включать только локально для отладки.
+Заголовок `Authorization` и `LLM_API_KEY` в payload-логи не попадают.

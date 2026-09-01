@@ -10,6 +10,9 @@ public record ChatProperties(
         String baseUrl,
         String apiKey,
         String model,
+        String agentProfilesPattern,
+        String defaultAgentId,
+        boolean logPayloads,
         List<String> allowedOrigins
 ) {
     public enum Mode {
@@ -17,4 +20,3 @@ public record ChatProperties(
         LLM
     }
 }
-

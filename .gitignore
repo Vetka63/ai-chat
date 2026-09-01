@@ -2,8 +2,14 @@
 .vscode/
 *.iml
 .env
+.env.*
+!.env.example
 .tools/
 .pnpm-store/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+ai-chat-backend-python/.venv/
 ai-chat-backend/target/
 ai-chat-client/node_modules/
 ai-chat-client/dist/

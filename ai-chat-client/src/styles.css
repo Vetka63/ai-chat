@@ -20,7 +20,7 @@ body {
     #071019;
 }
 
-button, textarea { font: inherit; }
+button, textarea, select { font: inherit; }
 
 .page-shell {
   min-height: 100vh;
@@ -91,6 +91,35 @@ button, textarea { font: inherit; }
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.18em;
+}
+
+.profile-picker {
+  display: grid;
+  gap: 4px;
+  color: #7f92a8;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.chat-controls {
+  display: flex;
+  gap: 10px;
+}
+
+.profile-picker select {
+  min-width: 170px;
+  padding: 8px 30px 8px 10px;
+  color: #dce6f2;
+  background: #0a1622;
+  border: 1px solid rgba(158, 180, 205, 0.18);
+  border-radius: 10px;
+  outline: none;
+}
+
+.profile-picker select:focus {
+  border-color: rgba(69, 230, 191, 0.45);
 }
 
 .status-pill {
@@ -217,6 +246,47 @@ button, textarea { font: inherit; }
   background: rgba(69, 230, 191, 0.1);
 }
 
+.mode-badge {
+  padding: 2px 6px;
+  color: #8eb6e8;
+  background: rgba(92, 146, 213, 0.1);
+  border-radius: 5px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.json-reply {
+  max-width: 100%;
+  margin: 0;
+  overflow-x: auto;
+  color: #bcebdc;
+  font: 500 12px/1.65 ui-monospace, SFMono-Regular, Consolas, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.recipe-reply {
+  display: grid;
+  gap: 12px;
+}
+
+.recipe-reply p,
+.recipe-reply ul {
+  margin: 0;
+}
+
+.recipe-reply strong {
+  color: #bcebdc;
+}
+
+.recipe-reply ul {
+  padding-left: 20px;
+}
+
+.recipe-reply li + li {
+  margin-top: 4px;
+}
+
 .typing { display: flex; gap: 5px; padding-block: 18px; }
 .typing span {
   width: 6px;
@@ -292,6 +362,13 @@ button, textarea { font: inherit; }
   font-size: 10px;
 }
 
+.chat-footer span:first-child {
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
@@ -310,14 +387,18 @@ button, textarea { font: inherit; }
   .chat-header { padding: 17px 18px; }
   .brand-mark { width: 40px; height: 40px; }
   .status-pill { font-size: 0; padding: 9px; }
+  .profile-picker span { display: none; }
+  .profile-picker select { min-width: 0; max-width: 145px; }
+  .chat-controls { gap: 6px; }
+  .profile-picker select { max-width: 126px; font-size: 11px; }
   .messages { padding: 20px 16px 12px; }
   .message-stack { max-width: 82%; }
   .composer { margin: 0 14px; }
   .chat-footer { padding-bottom: 12px; }
+  .chat-footer span:first-child,
   .chat-footer span:last-child { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; }
 }
-

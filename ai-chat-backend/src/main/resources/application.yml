@@ -9,8 +9,11 @@ app:
   chat:
     mode: ${CHAT_MODE:fallback}
     base-url: ${LLM_BASE_URL:https://api.deepseek.com}
-    api-key: ${LLM_API_KEY:sk-2dbe204affa84286875c43204eef9596}
+    api-key: ${LLM_API_KEY:}
     model: ${LLM_MODEL:deepseek-v4-flash}
+    agent-profiles-pattern: ${AGENT_PROFILES_PATTERN:classpath*:agents/*.yml}
+    default-agent-id: ${DEFAULT_AGENT_ID:general}
+    log-payloads: ${LLM_LOG_PAYLOADS:false}
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:8080}
 
 management:
@@ -22,4 +25,3 @@ management:
     health:
       probes:
         enabled: true
-

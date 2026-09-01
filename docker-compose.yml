@@ -4,9 +4,12 @@ services:
       context: ./ai-chat-backend
     environment:
       CHAT_MODE: ${CHAT_MODE:-fallback}
-      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.openai.com/v1}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.deepseek.com}
       LLM_API_KEY: ${LLM_API_KEY:-}
-      LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
+      LLM_MODEL: ${LLM_MODEL:-deepseek-v4-flash}
+      DEFAULT_AGENT_ID: ${DEFAULT_AGENT_ID:-general}
+      AGENT_PROFILES_PATTERN: ${AGENT_PROFILES_PATTERN:-classpath*:agents/*.yml}
+      LLM_LOG_PAYLOADS: ${LLM_LOG_PAYLOADS:-false}
       CORS_ALLOWED_ORIGINS: http://localhost:5173,http://localhost:8080
     ports:
       - "8081:8080"
@@ -15,7 +18,7 @@ services:
       interval: 10s
       timeout: 3s
       retries: 10
-      start_period: 20s
+      start_period: 10s
 
   client:
     build:
@@ -25,4 +28,3 @@ services:
         condition: service_healthy
     ports:
       - "8080:80"
-
