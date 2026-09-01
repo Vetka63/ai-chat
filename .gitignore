@@ -1,0 +1,9 @@
+.idea/
+.vscode/
+*.iml
+.env
+.tools/
+.pnpm-store/
+ai-chat-backend/target/
+ai-chat-client/node_modules/
+ai-chat-client/dist/

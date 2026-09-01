@@ -1,0 +1,28 @@
+services:
+  backend:
+    build:
+      context: ./ai-chat-backend
+    environment:
+      CHAT_MODE: ${CHAT_MODE:-fallback}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.openai.com/v1}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
+      CORS_ALLOWED_ORIGINS: http://localhost:5173,http://localhost:8080
+    ports:
+      - "8081:8080"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+
+  client:
+    build:
+      context: ./ai-chat-client
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "8080:80"
+
