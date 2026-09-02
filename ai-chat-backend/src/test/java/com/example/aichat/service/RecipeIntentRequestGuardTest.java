@@ -228,6 +228,7 @@ class RecipeIntentRequestGuardTest {
                 "classpath*:agents/*.yml",
                 "general",
                 false,
+                ChatProperties.Pricing.free(),
                 List.of("http://localhost:5173")
         );
         return new AgentRegistry(

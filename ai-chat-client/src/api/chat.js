@@ -39,3 +39,43 @@ export async function sendChatMessage({
 
   return payload
 }
+
+export async function runReasoningExperiment({
+  task,
+  profileId = 'day3-reasoning',
+  strategies = [],
+}) {
+  const response = await fetch('/api/reasoning-experiments', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ task, profileId, strategies }),
+  })
+
+  const payload = await readPayload(response)
+
+  if (!response.ok) {
+    throw new Error(payload.error || 'Не удалось выполнить эксперимент')
+  }
+
+  return payload
+}
+
+export async function judgeReasoningExperiment({ task, profileId, candidates }) {
+  const response = await fetch('/api/reasoning-experiments/judge', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ task, profileId, candidates }),
+  })
+
+  const payload = await readPayload(response)
+
+  if (!response.ok) {
+    throw new Error(payload.error || 'Не удалось получить оценку DeepSeek')
+  }
+
+  return payload
+}

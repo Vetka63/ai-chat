@@ -55,6 +55,7 @@ class ChatServiceTest {
                 "classpath*:agents/*.yml",
                 "general",
                 false,
+                ChatProperties.Pricing.free(),
                 List.of("http://localhost:5173")
         );
         var registry = new AgentRegistry(
@@ -119,6 +120,7 @@ class ChatServiceTest {
                 "classpath*:agents/*.yml",
                 "general",
                 false,
+                ChatProperties.Pricing.free(),
                 List.of("http://localhost:5173")
         );
         var registry = new AgentRegistry(

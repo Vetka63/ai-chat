@@ -2,6 +2,7 @@
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { getChatProfiles, sendChatMessage } from './api/chat.js'
 import AppDropdown from './components/AppDropdown.vue'
+import ReasoningExperimentWorkspace from './components/ReasoningExperimentWorkspace.vue'
 import SeasonalEffects from './components/SeasonalEffects.vue'
 import { findTheme, THEME_STORAGE_KEY, themeOptions } from './config/themes.js'
 
@@ -35,6 +36,10 @@ const themeId = ref(storedTheme || 'light')
 const selectedProfile = computed(() => (
   profiles.value.find((profile) => profile.id === selectedProfileId.value)
   || profiles.value[0]
+))
+
+const isReasoningExperiment = computed(() => (
+  selectedProfile.value?.experienceType === 'reasoning-experiment'
 ))
 
 const responseModes = computed(() => (
@@ -259,7 +264,7 @@ function handleKeydown(event) {
             />
           </div>
 
-          <div class="control-card">
+          <div v-if="!isReasoningExperiment" class="control-card">
             <span class="control-label">Формат ответа</span>
             <AppDropdown
               v-model="selectedResponseModeId"
@@ -314,7 +319,14 @@ function handleKeydown(event) {
         </div>
       </aside>
 
-      <section class="chat-workspace" aria-label="AI-чат">
+      <ReasoningExperimentWorkspace
+        v-if="isReasoningExperiment"
+        :profile="selectedProfile"
+        :backend-state="backendState"
+        :backend-status-label="backendStatusLabel"
+      />
+
+      <section v-else class="chat-workspace" aria-label="AI-чат">
         <header class="conversation-header">
           <div class="conversation-identity">
             <div class="profile-glyph" aria-hidden="true">

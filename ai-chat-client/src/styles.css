@@ -2170,3 +2170,251 @@ kbd {
     animation: none;
   }
 }
+
+/* Readability scale: roomier desktop chat without changing the mobile layout model. */
+@media (min-width: 901px) {
+  .page-shell {
+    padding: 18px;
+  }
+
+  .app-window {
+    width: min(1480px, 100%);
+    height: min(960px, calc(100vh - 36px));
+    grid-template-columns: clamp(296px, 21vw, 326px) minmax(0, 1fr);
+  }
+
+  .sidebar {
+    padding: 34px 28px 26px;
+  }
+
+  .brand {
+    gap: 15px;
+  }
+
+  .brand-mark {
+    width: 58px;
+    height: 58px;
+  }
+
+  .brand-mark img {
+    width: 64px;
+    height: 64px;
+  }
+
+  .brand-copy h1 {
+    font-size: 28px;
+  }
+
+  .eyebrow,
+  .conversation-kicker,
+  .control-label {
+    font-size: 11px;
+  }
+
+  .sidebar-controls {
+    gap: 16px;
+    margin-top: 48px;
+  }
+
+  .control-card {
+    gap: 9px;
+    padding: 16px;
+  }
+
+  .control-hint {
+    font-size: 12px;
+  }
+
+  .dropdown-trigger {
+    min-height: 56px;
+    padding: 7px 12px 7px 8px;
+  }
+
+  .dropdown-icon {
+    width: 38px;
+    height: 38px;
+  }
+
+  .dropdown-value strong {
+    font-size: 14px;
+  }
+
+  .dropdown-value small,
+  .dropdown-option-copy small {
+    font-size: 11px;
+  }
+
+  .dropdown-option {
+    padding: 11px 10px;
+  }
+
+  .dropdown-option-copy strong {
+    font-size: 13px;
+  }
+
+  .privacy-note {
+    padding: 16px;
+  }
+
+  .privacy-note strong {
+    font-size: 12px;
+  }
+
+  .privacy-note span {
+    font-size: 11px;
+  }
+
+  .conversation-header {
+    padding: 25px 36px 23px;
+  }
+
+  .conversation-identity {
+    gap: 15px;
+  }
+
+  .profile-glyph {
+    width: 48px;
+    height: 48px;
+  }
+
+  .conversation-identity h2 {
+    font-size: 20px;
+  }
+
+  .conversation-identity > div:last-child > p:last-child {
+    max-width: 680px;
+    font-size: 13px;
+  }
+
+  .status-pill {
+    padding: 9px 13px;
+    font-size: 12px;
+  }
+
+  .messages {
+    padding: 30px clamp(32px, 4.4vw, 68px) 34px;
+  }
+
+  .date-separator {
+    margin-bottom: 31px;
+    font-size: 11px;
+  }
+
+  .message-row {
+    gap: 12px;
+    margin-bottom: 27px;
+  }
+
+  .message-stack {
+    max-width: min(78%, 820px);
+  }
+
+  .message-author {
+    font-size: 11px;
+  }
+
+  .avatar {
+    width: 38px;
+    height: 38px;
+  }
+
+  .avatar img {
+    width: 43px;
+    height: 43px;
+  }
+
+  .bubble {
+    padding: 16px 20px;
+  }
+
+  .bubble p {
+    font-size: 16px;
+    line-height: 1.65;
+  }
+
+  .message-meta {
+    font-size: 10px;
+  }
+
+  .source-badge,
+  .mode-badge {
+    font-size: 9px;
+  }
+
+  .json-reply {
+    font-size: 14px;
+  }
+
+  .recipe-reply {
+    min-width: min(520px, 62vw);
+  }
+
+  .recipe-heading h3 {
+    font-size: 30px;
+  }
+
+  .recipe-section > strong {
+    font-size: 12px;
+  }
+
+  .recipe-reply li,
+  .recipe-time span {
+    font-size: 14px;
+  }
+
+  .input-dock {
+    padding: 14px 36px 22px;
+  }
+
+  .composer {
+    gap: 14px;
+    padding: 9px 9px 9px 20px;
+  }
+
+  .composer textarea {
+    min-height: 50px;
+    max-height: 190px;
+    padding: 13px 0 11px;
+    font-size: 16px;
+  }
+
+  .composer button {
+    width: 50px;
+    height: 50px;
+  }
+
+  .chat-footer {
+    padding-top: 11px;
+    font-size: 10px;
+  }
+}
+
+@media (min-width: 721px) and (max-width: 900px) {
+  .bubble p,
+  .composer textarea {
+    font-size: 15px;
+  }
+
+  .message-stack {
+    max-width: 80%;
+  }
+
+  .conversation-identity h2 {
+    font-size: 18px;
+  }
+}
+
+@media (max-width: 720px) {
+  .bubble p {
+    font-size: 15px;
+    line-height: 1.62;
+  }
+
+  .composer textarea {
+    font-size: 16px;
+  }
+
+  .dropdown-value strong {
+    font-size: 12px;
+  }
+}

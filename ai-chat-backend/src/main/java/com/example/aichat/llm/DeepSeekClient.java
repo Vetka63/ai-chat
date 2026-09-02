@@ -17,13 +17,17 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 @Component
 public class DeepSeekClient implements LlmClient {
 
     private static final Logger log = LoggerFactory.getLogger(DeepSeekClient.class);
+    private static final BigDecimal TOKENS_PER_MILLION = BigDecimal.valueOf(1_000_000);
 
     private final ChatProperties properties;
     private final RestClient restClient;
@@ -85,6 +89,7 @@ public class DeepSeekClient implements LlmClient {
             );
         }
 
+        var startedAt = System.nanoTime();
         try {
             var responseBody = restClient
                     .post()
@@ -118,19 +123,28 @@ public class DeepSeekClient implements LlmClient {
             var responseModel = StringUtils.hasText(response.model())
                     ? response.model()
                     : request.model();
+            var durationMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt);
+            var usage = toUsage(response.usage());
+            var estimatedCost = estimateCost(usage);
             log.info(
-                    "DeepSeek request completed: callId={}, profile={}, operation={}, responseModel={}, finishReason={}, contentLength={}",
+                    "DeepSeek request completed: callId={}, profile={}, operation={}, responseModel={}, finishReason={}, contentLength={}, durationMs={}, promptTokens={}, completionTokens={}, totalTokens={}, estimatedCostUsd={}",
                     callId,
                     profile.id(),
                     responseMode.id(),
                     responseModel,
                     choice.finishReason(),
-                    choice.message().content().length()
+                    choice.message().content().length(),
+                    durationMs,
+                    usage.promptTokens(),
+                    usage.completionTokens(),
+                    usage.totalTokens(),
+                    estimatedCost
             );
             return new LlmResult(
                     choice.message().content().trim(),
                     responseModel,
-                    choice.finishReason()
+                    choice.finishReason(),
+                    new LlmMetrics(durationMs, usage, estimatedCost)
             );
         } catch (ResponseStatusException exception) {
             throw exception;
@@ -158,6 +172,67 @@ public class DeepSeekClient implements LlmClient {
                     "LLM provider is unavailable"
             );
         }
+    }
+
+    private LlmUsage toUsage(LlmUsageResponse usage) {
+        if (usage == null) {
+            return LlmUsage.empty();
+        }
+        var promptTokens = value(usage.promptTokens());
+        var completionTokens = value(usage.completionTokens());
+        var totalTokens = value(usage.totalTokens());
+        if (totalTokens == 0 && (promptTokens > 0 || completionTokens > 0)) {
+            totalTokens = promptTokens + completionTokens;
+        }
+        return new LlmUsage(
+                promptTokens,
+                completionTokens,
+                totalTokens,
+                value(usage.promptCacheHitTokens()),
+                value(usage.promptCacheMissTokens()),
+                usage.completionTokensDetails() == null
+                        ? 0
+                        : value(usage.completionTokensDetails().reasoningTokens())
+        );
+    }
+
+    private BigDecimal estimateCost(LlmUsage usage) {
+        var pricing = properties.pricing();
+        if (!pricing.configured()) {
+            return null;
+        }
+
+        var cacheHitTokens = usage.promptCacheHitTokens();
+        var cacheMissTokens = usage.promptCacheMissTokens();
+        var classifiedPromptTokens = cacheHitTokens + cacheMissTokens;
+        if (classifiedPromptTokens < usage.promptTokens()) {
+            cacheMissTokens += usage.promptTokens() - classifiedPromptTokens;
+        }
+
+        var inputMissCost = tokenCost(
+                cacheMissTokens,
+                pricing.promptCacheMissPerMillionUsd()
+        );
+        var inputHitCost = tokenCost(
+                cacheHitTokens,
+                pricing.promptCacheHitPerMillionUsd()
+        );
+        var outputCost = tokenCost(
+                usage.completionTokens(),
+                pricing.outputPerMillionUsd()
+        );
+        return inputMissCost.add(inputHitCost).add(outputCost)
+                .setScale(8, RoundingMode.HALF_UP);
+    }
+
+    private static BigDecimal tokenCost(long tokens, BigDecimal pricePerMillion) {
+        return BigDecimal.valueOf(tokens)
+                .multiply(pricePerMillion)
+                .divide(TOKENS_PER_MILLION, 12, RoundingMode.HALF_UP);
+    }
+
+    private static long value(Long value) {
+        return value == null ? 0 : value;
     }
 
     private LlmResponse parseResponse(String responseBody, String callId) {
@@ -211,13 +286,29 @@ public class DeepSeekClient implements LlmClient {
 
     record LlmResponse(
             String model,
-            List<LlmChoice> choices
+            List<LlmChoice> choices,
+            LlmUsageResponse usage
     ) {
     }
 
     record LlmChoice(
             LlmMessage message,
             @JsonProperty("finish_reason") String finishReason
+    ) {
+    }
+
+    record LlmUsageResponse(
+            @JsonProperty("prompt_tokens") Long promptTokens,
+            @JsonProperty("completion_tokens") Long completionTokens,
+            @JsonProperty("total_tokens") Long totalTokens,
+            @JsonProperty("prompt_cache_hit_tokens") Long promptCacheHitTokens,
+            @JsonProperty("prompt_cache_miss_tokens") Long promptCacheMissTokens,
+            @JsonProperty("completion_tokens_details") CompletionTokensDetails completionTokensDetails
+    ) {
+    }
+
+    record CompletionTokensDetails(
+            @JsonProperty("reasoning_tokens") Long reasoningTokens
     ) {
     }
 }

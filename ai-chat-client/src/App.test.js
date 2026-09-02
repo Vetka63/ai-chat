@@ -23,6 +23,16 @@ const profiles = [
     defaultResponseMode: 'free',
     responseModes: modes,
   },
+  {
+    id: 'day3-reasoning',
+    name: 'День 3 · Решение задачи',
+    description: 'Сравнение четырёх способов рассуждения',
+    experienceType: 'reasoning-experiment',
+    defaultResponseMode: 'experiment',
+    responseModes: [
+      { id: 'experiment', name: 'Сравнение подходов', description: 'Четыре способа' },
+    ],
+  },
 ]
 
 async function chooseDropdownOption(wrapper, label, optionName) {
@@ -195,5 +205,172 @@ describe('App', () => {
         history: [],
       }),
     }))
+  })
+
+  it('runs the Day 3 experiment and renders all strategy shapes', async () => {
+    const metrics = (apiCalls, totalTokens) => ({
+      apiCalls,
+      elapsedMs: apiCalls * 100,
+      apiDurationMs: apiCalls * 120,
+      promptTokens: totalTokens - 20,
+      completionTokens: 20,
+      totalTokens,
+      promptCacheHitTokens: 0,
+      promptCacheMissTokens: totalTokens - 20,
+      reasoningTokens: 0,
+      estimatedCostUsd: null,
+    })
+    const experiment = {
+      experimentId: 'abcd1234-0000-0000-0000-000000000000',
+      profileId: 'day3-reasoning',
+      task: 'Реши логическую задачу',
+      results: [
+        {
+          strategy: 'direct',
+          title: 'Прямой ответ',
+          description: 'Без дополнительных инструкций',
+          status: 'success',
+          answer: 'Прямое решение',
+          experts: [],
+          metrics: metrics(1, 100),
+          model: 'deepseek-chat',
+        },
+        {
+          strategy: 'step-by-step',
+          title: 'Пошаговое решение',
+          description: 'С инструкцией',
+          status: 'success',
+          answer: 'Пошаговое решение задачи',
+          experts: [],
+          metrics: metrics(1, 120),
+          model: 'deepseek-chat',
+        },
+        {
+          strategy: 'meta-prompt',
+          title: 'Промпт для решения',
+          description: 'Сначала промпт, затем решение',
+          status: 'success',
+          answer: 'Решение по созданному промпту',
+          generatedPrompt: 'Проверь данные и найди строгий ответ',
+          experts: [],
+          metrics: metrics(2, 220),
+          model: 'deepseek-chat',
+        },
+        {
+          strategy: 'expert-panel',
+          title: 'Группа экспертов',
+          description: 'Три точки зрения',
+          status: 'success',
+          answer: 'Общий ответ',
+          experts: [
+            { role: 'Аналитик', solution: 'Аналитическое решение' },
+            { role: 'Инженер', solution: 'Практическое решение' },
+            { role: 'Критик', solution: 'Проверка решения' },
+          ],
+          consensus: 'Согласованный итог',
+          comparison: 'Аналитик и инженер совпали, критик проверил крайний случай',
+          confidence: 'high',
+          metrics: metrics(4, 440),
+          model: 'deepseek-chat',
+        },
+      ],
+    }
+    const judgeResult = {
+      winnerStrategy: 'expert-panel',
+      winnerTitle: 'Группа экспертов',
+      evaluations: experiment.results.map((result, index) => ({
+        strategy: result.strategy,
+        title: result.title,
+        scores: {
+          correctness: 7 + index,
+          clarity: 7,
+          completeness: 8,
+          efficiency: 7,
+          edgeCases: 8,
+        },
+        average: 7.4 + index * 0.2,
+        strengths: 'Корректное решение',
+        weaknesses: 'Можно сократить объяснение',
+      })),
+      explanation: 'Экспертная комиссия лучше проверила крайние случаи',
+      metrics: metrics(1, 180),
+      model: 'deepseek-chat',
+      finishReason: 'stop',
+    }
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => profiles })
+      .mockResolvedValueOnce({ ok: true, json: async () => experiment })
+      .mockResolvedValueOnce({ ok: true, json: async () => judgeResult }))
+
+    const wrapper = mount(App)
+    await flushPromises()
+    await chooseDropdownOption(wrapper, 'Профиль чата', 'День 3')
+
+    expect(wrapper.find('.experiment-workspace').exists()).toBe(true)
+    expect(wrapper.find('[aria-label="Режим ответа"]').exists()).toBe(false)
+
+    await wrapper.get('#reasoning-task').setValue('Реши логическую задачу')
+    await wrapper.get('.experiment-form').trigger('submit')
+    await flushPromises()
+
+    expect(fetch).toHaveBeenNthCalledWith(2, '/api/reasoning-experiments', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({
+        task: 'Реши логическую задачу',
+        profileId: 'day3-reasoning',
+        strategies: [],
+      }),
+    }))
+    expect(wrapper.findAll('.strategy-card')).toHaveLength(4)
+    expect(wrapper.text()).toContain('Прямое решение')
+    expect(wrapper.text()).toContain('Проверь данные и найди строгий ответ')
+    expect(wrapper.text()).toContain('Аналитик')
+    expect(wrapper.text()).toContain('Согласованный итог')
+    expect(wrapper.text()).toContain('Высокая уверенность')
+    expect(wrapper.text()).toContain('критик проверил крайний случай')
+    expect(wrapper.findAll('.strategy-metrics')).toHaveLength(4)
+    expect(wrapper.findAll('.experiment-metrics strong')[0].text()).toBe('8')
+    expect(wrapper.findAll('.experiment-metrics strong')[1].text()).toContain('880')
+    expect(wrapper.text()).toContain('На сервере история экспериментов не создаётся')
+
+    const correctnessFive = wrapper.get(
+      '[aria-label="Правильность: 5 из 5 для Прямой ответ"]',
+    )
+    await correctnessFive.trigger('click')
+    await wrapper.get('.winner-option[data-strategy="direct"]').trigger('click')
+    await wrapper.get('.evaluation-comment textarea').setValue(
+      'Ответ правильный и хорошо объяснён',
+    )
+
+    expect(correctnessFive.attributes('aria-pressed')).toBe('true')
+    expect(wrapper.get('.winner-option[data-strategy="direct"]').attributes('aria-checked'))
+      .toBe('true')
+    expect(wrapper.text()).toContain('Лучшим выбран способ «Прямой ответ»')
+    expect(wrapper.get('.evaluation-comment textarea').element.value)
+      .toBe('Ответ правильный и хорошо объяснён')
+
+    await wrapper.get('.judge-button').trigger('click')
+    await flushPromises()
+
+    expect(fetch).toHaveBeenNthCalledWith(
+      3,
+      '/api/reasoning-experiments/judge',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          task: 'Реши логическую задачу',
+          profileId: 'day3-reasoning',
+          candidates: experiment.results.map((result) => ({
+            strategy: result.strategy,
+            answer: result.answer,
+          })),
+        }),
+      }),
+    )
+    expect(wrapper.text()).toContain('Рекомендация модели')
+    expect(wrapper.text()).toContain('Группа экспертов')
+    expect(wrapper.text()).toContain('Экспертная комиссия лучше проверила крайние случаи')
+    expect(wrapper.text()).toContain('Отличается от вашего выбора')
+    expect(wrapper.get('.judge-metrics').text()).toContain('1 API-выз.')
   })
 })

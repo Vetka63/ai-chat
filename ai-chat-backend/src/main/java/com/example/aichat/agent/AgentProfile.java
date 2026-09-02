@@ -14,10 +14,12 @@ public record AgentProfile(
         String description,
         int version,
         boolean enabled,
+        String experienceType,
         String systemPrompt,
         InputPolicyConfig inputPolicy,
         RequestGuardConfig requestGuard,
         DeepSeekConfig deepseek,
+        ReasoningExperimentConfig reasoningExperiment,
         String defaultResponseMode,
         List<ResponseModeConfig> responseModes
 ) {
@@ -30,6 +32,12 @@ public record AgentProfile(
         }
         requireText(name, "name");
         requireText(description, "description");
+        experienceType = experienceType == null || experienceType.isBlank()
+                ? "chat"
+                : experienceType.trim();
+        if (!experienceType.matches("^[a-z][a-z0-9-]{1,63}$")) {
+            throw new IllegalArgumentException("Experience type has an invalid format: " + id);
+        }
         requireText(systemPrompt, "system_prompt");
         requireText(defaultResponseMode, "default_response_mode");
         if (version < 1) {
@@ -44,6 +52,14 @@ public record AgentProfile(
             requestGuard.validate(id);
         }
         deepseek.validate(id);
+        if ("reasoning-experiment".equals(experienceType)) {
+            if (reasoningExperiment == null) {
+                throw new IllegalArgumentException(
+                        "Reasoning experiment config is required: " + id
+                );
+            }
+            reasoningExperiment.validate(id);
+        }
         validateResponseModes(id, defaultResponseMode, responseModes);
     }
 
@@ -142,6 +158,99 @@ public record AgentProfile(
             }
             if (topP != null && (topP < 0 || topP > 1)) {
                 throw new IllegalArgumentException("Invalid top_p: " + agentId);
+            }
+        }
+    }
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record ReasoningExperimentConfig(
+            ExpertPanelConfig expertPanel,
+            JudgeConfig judge
+    ) {
+        void validate(String agentId) {
+            if (expertPanel == null) {
+                throw new IllegalArgumentException(
+                        "Expert panel config is required: " + agentId
+                );
+            }
+            expertPanel.validate(agentId);
+            if (judge == null) {
+                throw new IllegalArgumentException(
+                        "Reasoning judge config is required: " + agentId
+                );
+            }
+            judge.validate(agentId);
+        }
+    }
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record JudgeConfig(
+            String instruction,
+            Integer maxTokens
+    ) {
+        void validate(String agentId) {
+            requireText(instruction, "reasoning_experiment.judge.instruction");
+            if (maxTokens == null || maxTokens < 1 || maxTokens > 8_000) {
+                throw new IllegalArgumentException(
+                        "Invalid reasoning judge max_tokens: " + agentId
+                );
+            }
+        }
+    }
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record ExpertPanelConfig(
+            String commonInstruction,
+            List<ExpertRoleConfig> roles,
+            String synthesisInstruction,
+            Integer expertMaxTokens,
+            Integer synthesisMaxTokens
+    ) {
+        public ExpertPanelConfig {
+            roles = roles == null ? List.of() : List.copyOf(roles);
+        }
+
+        void validate(String agentId) {
+            requireText(commonInstruction, "reasoning_experiment.expert_panel.common_instruction");
+            requireText(synthesisInstruction, "reasoning_experiment.expert_panel.synthesis_instruction");
+            if (roles.size() < 2 || roles.size() > 6) {
+                throw new IllegalArgumentException(
+                        "Expert panel must contain from two to six roles: " + agentId
+                );
+            }
+            Set<String> ids = new HashSet<>();
+            for (var role : roles) {
+                if (role == null) {
+                    throw new IllegalArgumentException("Expert role must not be null: " + agentId);
+                }
+                role.validate(agentId);
+                if (!ids.add(role.id())) {
+                    throw new IllegalArgumentException("Duplicate expert role: " + role.id());
+                }
+            }
+            validateTokenLimit(expertMaxTokens, "expert_max_tokens", agentId);
+            validateTokenLimit(synthesisMaxTokens, "synthesis_max_tokens", agentId);
+        }
+
+        private static void validateTokenLimit(Integer value, String field, String agentId) {
+            if (value == null || value < 1 || value > 8_000) {
+                throw new IllegalArgumentException("Invalid " + field + ": " + agentId);
+            }
+        }
+    }
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record ExpertRoleConfig(
+            String id,
+            String name,
+            String instruction
+    ) {
+        void validate(String agentId) {
+            requireText(id, "reasoning_experiment.expert_panel.roles.id");
+            requireText(name, "reasoning_experiment.expert_panel.roles.name");
+            requireText(instruction, "reasoning_experiment.expert_panel.roles.instruction");
+            if (!id.matches("^[a-z][a-z0-9-]{1,19}$")) {
+                throw new IllegalArgumentException("Invalid expert role id: " + agentId);
             }
         }
     }

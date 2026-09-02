@@ -7,6 +7,7 @@ public record AgentSummary(
         String name,
         String description,
         int version,
+        String experienceType,
         String defaultResponseMode,
         List<ResponseModeSummary> responseModes
 ) {
@@ -16,6 +17,7 @@ public record AgentSummary(
                 profile.name(),
                 profile.description(),
                 profile.version(),
+                profile.experienceType(),
                 profile.defaultResponseMode(),
                 profile.responseModes().stream().map(ResponseModeSummary::from).toList()
         );

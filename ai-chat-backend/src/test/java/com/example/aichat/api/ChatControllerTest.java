@@ -41,14 +41,16 @@ class ChatControllerTest {
     void exposesPublicProfileMetadataWithoutSystemPrompts() throws Exception {
         mockMvc.perform(get("/api/profiles"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(2)))
-                .andExpect(jsonPath("$[0].id", is("general")))
-                .andExpect(jsonPath("$[1].id", is("recipe")))
-                .andExpect(jsonPath("$[0].defaultResponseMode", is("free")))
-                .andExpect(jsonPath("$[0].responseModes", hasSize(3)))
-                .andExpect(jsonPath("$[1].responseModes[2].id", is("json")))
+                .andExpect(jsonPath("$", hasSize(3)))
+                .andExpect(jsonPath("$[0].id", is("day3-reasoning")))
+                .andExpect(jsonPath("$[0].experienceType", is("reasoning-experiment")))
+                .andExpect(jsonPath("$[1].id", is("general")))
+                .andExpect(jsonPath("$[2].id", is("recipe")))
+                .andExpect(jsonPath("$[1].defaultResponseMode", is("free")))
+                .andExpect(jsonPath("$[1].responseModes", hasSize(3)))
+                .andExpect(jsonPath("$[2].responseModes[2].id", is("json")))
                 .andExpect(jsonPath("$[0].systemPrompt").doesNotExist())
-                .andExpect(jsonPath("$[0].responseModes[0].instruction").doesNotExist());
+                .andExpect(jsonPath("$[1].responseModes[0].instruction").doesNotExist());
     }
 
     @Test
