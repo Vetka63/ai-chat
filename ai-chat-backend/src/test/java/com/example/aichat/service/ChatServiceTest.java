@@ -4,11 +4,19 @@ import com.example.aichat.agent.AgentRegistry;
 import com.example.aichat.agent.AgentProfile.ResponseModeConfig;
 import com.example.aichat.api.ChatController.ChatRequest;
 import com.example.aichat.config.ChatProperties;
+import com.example.aichat.enums.Mode;
 import com.example.aichat.llm.DeepSeekClient;
 import com.example.aichat.llm.LlmClient;
 import com.example.aichat.llm.LlmResult;
-import com.example.aichat.service.AnswerJsonOutputPolicy.AnswerPayload;
-import com.example.aichat.service.RecipeJsonOutputPolicy.RecipePayload;
+import com.example.aichat.service.input.InputPolicy;
+import com.example.aichat.service.input.RecipeIntentRequestGuard;
+import com.example.aichat.service.input.RequestGuardRegistry;
+import com.example.aichat.service.output.AnswerJsonOutputPolicy;
+import com.example.aichat.service.output.AnswerJsonOutputPolicy.AnswerPayload;
+import com.example.aichat.service.output.OutputPolicyRegistry;
+import com.example.aichat.service.output.RecipeJsonOutputPolicy;
+import com.example.aichat.service.output.RecipeJsonOutputPolicy.RecipePayload;
+import com.example.aichat.service.output.TextOutputPolicy;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -40,7 +48,7 @@ class ChatServiceTest {
     @ValueSource(strings = {"length", "stop"})
     void retriesTruncatedOrInvalidStructuredOutput(String firstFinishReason) {
         var properties = new ChatProperties(
-                ChatProperties.Mode.LLM,
+                Mode.LLM,
                 "https://llm.example/v1",
                 "test-key",
                 "test-model",
@@ -104,7 +112,7 @@ class ChatServiceTest {
         var builder = RestClient.builder().baseUrl("https://llm.example/v1");
         var server = MockRestServiceServer.bindTo(builder).build();
         var properties = new ChatProperties(
-                ChatProperties.Mode.LLM,
+                Mode.LLM,
                 "https://llm.example/v1",
                 "test-key",
                 "test-model",

@@ -1,8 +1,9 @@
-package com.example.aichat.service;
+package com.example.aichat.service.input;
 
 import com.example.aichat.agent.AgentProfile;
 import com.example.aichat.agent.AgentProfile.RequestGuardConfig;
 import com.example.aichat.agent.AgentProfile.ResponseModeConfig;
+import com.example.aichat.enums.RecipeIntentVerdict;
 import com.example.aichat.llm.LlmClient;
 import com.example.aichat.llm.LlmMessage;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -60,7 +61,7 @@ public class RecipeIntentRequestGuard implements RequestGuard {
                 null,
                 null
         );
-        Verdict verdict = null;
+        RecipeIntentVerdict verdict = null;
         for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
             try {
                 var classifierMessages = classifierMessages(
@@ -94,7 +95,7 @@ public class RecipeIntentRequestGuard implements RequestGuard {
         if (verdict == null) {
             throw new IllegalStateException("Recipe classifier finished without a verdict");
         }
-        if (verdict != Verdict.ALLOW_RECIPE) {
+        if (verdict != RecipeIntentVerdict.ALLOW_RECIPE) {
             throw new ResponseStatusException(
                     HttpStatus.UNPROCESSABLE_ENTITY,
                     rejectionMessage(verdict)
@@ -196,11 +197,11 @@ public class RecipeIntentRequestGuard implements RequestGuard {
         return normalized.substring(0, maxLength - 3).stripTrailing() + "...";
     }
 
-    private static Verdict extractVerdict(String content) {
+    private static RecipeIntentVerdict extractVerdict(String content) {
         var matcher = VERDICT_PATTERN.matcher(content);
-        var verdicts = EnumSet.noneOf(Verdict.class);
+        var verdicts = EnumSet.noneOf(RecipeIntentVerdict.class);
         while (matcher.find()) {
-            verdicts.add(Verdict.valueOf(matcher.group(1).toUpperCase(Locale.ROOT)));
+            verdicts.add(RecipeIntentVerdict.valueOf(matcher.group(1).toUpperCase(Locale.ROOT)));
         }
         if (verdicts.isEmpty()) {
             throw invalidClassifierResponse("verdict marker is missing");
@@ -211,7 +212,7 @@ public class RecipeIntentRequestGuard implements RequestGuard {
         return verdicts.iterator().next();
     }
 
-    private static String rejectionMessage(Verdict verdict) {
+    private static String rejectionMessage(RecipeIntentVerdict verdict) {
         return switch (verdict) {
             case REJECT_NOT_FOOD -> "Укажите существующее съедобное блюдо, для которого нужен рецепт.";
             case REJECT_UNRELATED -> "Профиль рецептов принимает только запросы о приготовлении блюд.";
@@ -224,13 +225,6 @@ public class RecipeIntentRequestGuard implements RequestGuard {
 
     private static InvalidClassifierResponseException invalidClassifierResponse(String reason) {
         return new InvalidClassifierResponseException(reason);
-    }
-
-    public enum Verdict {
-        ALLOW_RECIPE,
-        REJECT_NOT_FOOD,
-        REJECT_UNRELATED,
-        REJECT_UNCLEAR
     }
 
     private record ClassifierInput(

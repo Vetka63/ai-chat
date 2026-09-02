@@ -1,5 +1,6 @@
 package com.example.aichat.config;
 
+import com.example.aichat.enums.Mode;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.util.List;
@@ -15,8 +16,4 @@ public record ChatProperties(
         boolean logPayloads,
         List<String> allowedOrigins
 ) {
-    public enum Mode {
-        FALLBACK,
-        LLM
-    }
 }

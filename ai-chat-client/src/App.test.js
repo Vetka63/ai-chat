@@ -25,9 +25,51 @@ const profiles = [
   },
 ]
 
+async function chooseDropdownOption(wrapper, label, optionName) {
+  await wrapper.get('[aria-label="' + label + '"]').trigger('click')
+  const option = wrapper.findAll('[role="option"]')
+    .find((item) => item.text().includes(optionName))
+  await option.trigger('click')
+}
+
 describe('App', () => {
   afterEach(() => {
     vi.restoreAllMocks()
+    window.localStorage.clear()
+  })
+
+  it('applies and remembers the autumn experience', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({
+      ok: true,
+      json: async () => profiles,
+    }))
+
+    const wrapper = mount(App)
+    await flushPromises()
+    await chooseDropdownOption(wrapper, 'Тема оформления', 'Осень')
+
+    expect(wrapper.get('main').attributes('data-theme')).toBe('autumn')
+    expect(wrapper.get('.season-story').text()).toContain('Время тёплых разговоров')
+    expect(wrapper.find('.seasonal-effects--autumn').exists()).toBe(true)
+    expect(window.localStorage.getItem('klever-theme')).toBe('autumn')
+  })
+
+  it('renders the winter scene with a garland and festive details', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({
+      ok: true,
+      json: async () => profiles,
+    }))
+
+    const wrapper = mount(App)
+    await flushPromises()
+    await chooseDropdownOption(wrapper, 'Тема оформления', 'Зима')
+
+    expect(wrapper.get('main').attributes('data-theme')).toBe('winter')
+    expect(wrapper.get('.season-story--winter').text()).toContain('Новогодняя мастерская')
+    expect(wrapper.find('.winter-garland').exists()).toBe(true)
+    expect(wrapper.findAll('.winter-light')).toHaveLength(12)
+    expect(wrapper.find('.winter-scene').text()).toContain('🎄')
+    expect(window.localStorage.getItem('klever-theme')).toBe('winter')
   })
 
   it('sends the selected response mode to the backend', async () => {
@@ -46,7 +88,7 @@ describe('App', () => {
 
     const wrapper = mount(App)
     await flushPromises()
-    await wrapper.get('[aria-label="Режим ответа"]').setValue('controlled')
+    await chooseDropdownOption(wrapper, 'Режим ответа', 'Краткий ответ')
     await wrapper.get('textarea').setValue('Привет')
     await wrapper.get('form').trigger('submit')
     await flushPromises()
@@ -61,7 +103,7 @@ describe('App', () => {
       }),
     }))
     expect(wrapper.text()).toContain('Краткий тестовый ответ')
-    expect(wrapper.text()).toContain('controlled')
+    expect(wrapper.text()).toContain('Краткий ответ')
   })
 
   it('renders a validated structured recipe response', async () => {
@@ -85,8 +127,8 @@ describe('App', () => {
 
     const wrapper = mount(App)
     await flushPromises()
-    await wrapper.get('[aria-label="Профиль чата"]').setValue('recipe')
-    await wrapper.get('[aria-label="Режим ответа"]').setValue('json')
+    await chooseDropdownOption(wrapper, 'Профиль чата', 'Рецепты')
+    await chooseDropdownOption(wrapper, 'Режим ответа', 'Строгий JSON')
     await wrapper.get('textarea').setValue('Дай рецепт борща')
     await wrapper.get('form').trigger('submit')
     await flushPromises()
@@ -100,10 +142,12 @@ describe('App', () => {
       }),
     }))
     const recipe = wrapper.find('.recipe-reply')
-    expect(recipe.text()).toContain('Название блюда: Борщ')
-    expect(recipe.text()).toContain('Требуемые ингредиенты:')
+    expect(recipe.text()).toContain('Готовый рецепт')
+    expect(recipe.text()).toContain('Борщ')
+    expect(recipe.text()).toContain('Ингредиенты')
     expect(recipe.text()).toContain('Свёкла — 2 шт.')
-    expect(recipe.text()).toContain('Время готовки: 1 час 30 минут')
+    expect(recipe.text()).toContain('Время готовки')
+    expect(recipe.text()).toContain('1 час 30 минут')
     expect(wrapper.find('pre.json-reply').exists()).toBe(false)
   })
 
@@ -130,7 +174,7 @@ describe('App', () => {
 
     const wrapper = mount(App)
     await flushPromises()
-    await wrapper.get('[aria-label="Профиль чата"]').setValue('recipe')
+    await chooseDropdownOption(wrapper, 'Профиль чата', 'Рецепты')
     await wrapper.get('textarea').setValue('Какая сегодня погода?')
     await wrapper.get('form').trigger('submit')
     await flushPromises()

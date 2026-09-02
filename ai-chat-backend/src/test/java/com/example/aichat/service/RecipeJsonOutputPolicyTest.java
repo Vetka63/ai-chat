@@ -1,7 +1,8 @@
 package com.example.aichat.service;
 
 import com.example.aichat.llm.LlmResult;
-import com.example.aichat.service.RecipeJsonOutputPolicy.RecipePayload;
+import com.example.aichat.service.output.RecipeJsonOutputPolicy;
+import com.example.aichat.service.output.RecipeJsonOutputPolicy.RecipePayload;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.server.ResponseStatusException;

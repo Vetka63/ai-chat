@@ -1,4 +1,4 @@
-package com.example.aichat.service;
+package com.example.aichat.service.output;
 
 import org.springframework.stereotype.Component;
 

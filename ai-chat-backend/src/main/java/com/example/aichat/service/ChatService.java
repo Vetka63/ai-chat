@@ -7,9 +7,14 @@ import com.example.aichat.api.ChatController.ChatMeta;
 import com.example.aichat.api.ChatController.ChatRequest;
 import com.example.aichat.api.ChatController.ChatResponse;
 import com.example.aichat.config.ChatProperties;
+import com.example.aichat.enums.Mode;
 import com.example.aichat.llm.LlmClient;
 import com.example.aichat.llm.LlmMessage;
 import com.example.aichat.llm.LlmResult;
+import com.example.aichat.service.input.InputPolicy;
+import com.example.aichat.service.input.RequestGuardRegistry;
+import com.example.aichat.service.output.OutputPolicy;
+import com.example.aichat.service.output.OutputPolicyRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -71,7 +76,7 @@ public class ChatService {
 
         CompletionOutcome completion;
         String source;
-        if (properties.mode() == ChatProperties.Mode.FALLBACK) {
+        if (properties.mode() == Mode.FALLBACK) {
             var llmResult = new LlmResult(fallbackContent(responseMode), null, null);
             completion = new CompletionOutcome(
                     llmResult,

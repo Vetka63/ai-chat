@@ -1,4 +1,4 @@
-package com.example.aichat.service;
+package com.example.aichat.service.input;
 
 import com.example.aichat.agent.AgentProfile;
 import com.example.aichat.agent.AgentProfile.ResponseModeConfig;

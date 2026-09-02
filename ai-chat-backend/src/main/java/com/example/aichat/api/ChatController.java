@@ -1,6 +1,7 @@
 package com.example.aichat.api;
 
 import com.example.aichat.service.ChatService;
+import com.example.aichat.enums.HistoryRole;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -61,11 +62,6 @@ public class ChatController {
             @Size(max = 100_000, message = "History message is too long")
             String content
     ) {
-    }
-
-    public enum HistoryRole {
-        user,
-        assistant
     }
 
     public record ChatResponse(

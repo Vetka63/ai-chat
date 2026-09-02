@@ -2,9 +2,11 @@ package com.example.aichat.service;
 
 import com.example.aichat.agent.AgentRegistry;
 import com.example.aichat.config.ChatProperties;
+import com.example.aichat.enums.Mode;
 import com.example.aichat.llm.LlmClient;
 import com.example.aichat.llm.LlmMessage;
 import com.example.aichat.llm.LlmResult;
+import com.example.aichat.service.input.RecipeIntentRequestGuard;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
@@ -219,7 +221,7 @@ class RecipeIntentRequestGuardTest {
 
     private static com.example.aichat.agent.AgentProfile recipeProfile() {
         var properties = new ChatProperties(
-                ChatProperties.Mode.FALLBACK,
+                Mode.FALLBACK,
                 "https://api.deepseek.com",
                 "",
                 "test-model",
