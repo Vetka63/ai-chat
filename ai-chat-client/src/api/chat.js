@@ -79,3 +79,24 @@ export async function judgeReasoningExperiment({ task, profileId, candidates }) 
 
   return payload
 }
+
+export async function runTemperatureExperiment({
+  task,
+  profileId = 'day4-temperature',
+}) {
+  const response = await fetch('/api/temperature-experiments', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ task, profileId }),
+  })
+
+  const payload = await readPayload(response)
+
+  if (!response.ok) {
+    throw new Error(payload.error || 'Не удалось выполнить температурный эксперимент')
+  }
+
+  return payload
+}

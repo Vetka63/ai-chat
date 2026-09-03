@@ -1,0 +1,46 @@
+id: day4-temperature
+name: День 4 · Температура
+description: Сравнение точности, креативности и разнообразия при разных температурах
+version: 1
+enabled: true
+experience_type: temperature-experiment
+
+system_prompt: |
+  Ты участвуешь в учебном эксперименте по влиянию температуры на ответ языковой модели.
+  Выполняй ровно задачу пользователя, соблюдай все её ограничения и отвечай на языке пользователя.
+  Не обсуждай настройки эксперимента и не утверждай, что видел ответы других запусков.
+
+input_policy:
+  max_message_length: 10000
+  max_history_messages: 0
+  allowed_roles:
+    - user
+    - assistant
+
+deepseek:
+  model: deepseek-v4-flash
+  thinking: disabled
+  top_p: 1.0
+
+feature_config:
+  temperatures:
+    - id: precise
+      title: Точный
+      description: Сфокусированный и наиболее предсказуемый ответ
+      value: 0.0
+    - id: balanced
+      title: Сбалансированный
+      description: Баланс точности, естественности и вариативности
+      value: 0.7
+    - id: creative
+      title: Творческий
+      description: Больше неожиданных идей и формулировок
+      value: 1.2
+  max_tokens: 1200
+
+default_response_mode: experiment
+response_modes:
+  - id: experiment
+    name: Сравнение температур
+    description: Три независимых ответа на одну задачу
+    output_policy: text

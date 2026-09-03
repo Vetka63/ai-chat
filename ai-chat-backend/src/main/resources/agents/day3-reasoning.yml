@@ -43,6 +43,9 @@ feature_config:
     solver_max_tokens: 1800
     max_generated_prompt_length: 6000
   judge:
+    llm:
+      model: deepseek-v4-pro
+      thinking: disabled
     instruction: |
       Ты — независимый судья решений одной задачи. Кандидаты обезличены, поэтому
       оценивай только содержание и не пытайся определить способ создания ответа.

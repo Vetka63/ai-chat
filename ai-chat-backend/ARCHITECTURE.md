@@ -24,7 +24,8 @@ com.example.aichat
     ├── day2/                       задание структурированного ответа
     │   ├── recipe/                 semantic guard + строгий JSON-рецепт
     │   └── answer/                 универсальный строгий JSON-ответ
-    └── day3/reasoning/              четыре стратегии и LLM-as-judge
+    ├── day3/reasoning/              четыре стратегии и LLM-as-judge
+    └── day4/temperature/            сравнение ответов при трёх температурах
 ```
 
 В Java-именах используются `inputpolicy`, `outputpolicy` и `llmjudge`, потому
@@ -39,6 +40,8 @@ com.example.aichat
 - DTO HTTP-контроллера остаются в `controller/dto`; сервисы получают внутренние
   command/model и не зависят от HTTP.
 - `LlmClient` работает с `LlmCompletionRequest` и не знает о профилях и днях.
+- `LlmRequestOverrides` позволяет задаче изменить только нужные параметры
+  конкретного вызова, не создавая новый клиент и не изменяя весь профиль.
 - `bootstrap` может видеть модули для fail-fast проверки, но модули не знают о
   `bootstrap`.
 - Архитектурный тест контролирует пути package, циклы, запрещённые зависимости,
@@ -75,4 +78,5 @@ LLM-as-judge, не переписывая центральный chat pipeline.
 
 Публичные URL и JSON-контракты при этом рефакторинге не менялись:
 `/api/chat`, `/api/profiles`, `/api/reasoning-experiments` и
-`/api/reasoning-experiments/judge` остаются совместимыми с клиентом.
+`/api/reasoning-experiments/judge` остаются совместимыми с клиентом. День 4
+добавляет отдельный контракт `POST /api/temperature-experiments`.

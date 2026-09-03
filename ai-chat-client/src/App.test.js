@@ -33,6 +33,16 @@ const profiles = [
       { id: 'experiment', name: 'Сравнение подходов', description: 'Четыре способа' },
     ],
   },
+  {
+    id: 'day4-temperature',
+    name: 'День 4 · Температура',
+    description: 'Сравнение ответов с разной температурой',
+    experienceType: 'temperature-experiment',
+    defaultResponseMode: 'experiment',
+    responseModes: [
+      { id: 'experiment', name: 'Сравнение температур', description: 'Три температуры' },
+    ],
+  },
 ]
 
 async function chooseDropdownOption(wrapper, label, optionName) {
@@ -294,7 +304,7 @@ describe('App', () => {
       })),
       explanation: 'Экспертная комиссия лучше проверила крайние случаи',
       metrics: metrics(1, 180),
-      model: 'deepseek-chat',
+      model: 'deepseek-v4-pro',
       finishReason: 'stop',
     }
     vi.stubGlobal('fetch', vi.fn()
@@ -371,6 +381,84 @@ describe('App', () => {
     expect(wrapper.text()).toContain('Группа экспертов')
     expect(wrapper.text()).toContain('Экспертная комиссия лучше проверила крайние случаи')
     expect(wrapper.text()).toContain('Отличается от вашего выбора')
+    expect(wrapper.get('.judge-metrics').text()).toContain('deepseek-v4-pro')
     expect(wrapper.get('.judge-metrics').text()).toContain('1 API-выз.')
+  })
+
+  it('runs the Day 4 experiment and supports a manual comparison', async () => {
+    const metrics = {
+      apiCalls: 3,
+      elapsedMs: 900,
+      apiDurationMs: 840,
+      promptTokens: 300,
+      completionTokens: 240,
+      totalTokens: 540,
+      promptCacheHitTokens: 0,
+      promptCacheMissTokens: 300,
+      reasoningTokens: 0,
+      estimatedCostUsd: null,
+    }
+    const variants = [
+      { id: 'precise', title: 'Точный', description: 'Предсказуемый', temperature: 0 },
+      { id: 'balanced', title: 'Сбалансированный', description: 'Баланс', temperature: 0.7 },
+      { id: 'creative', title: 'Творческий', description: 'Необычные идеи', temperature: 1.2 },
+    ]
+    const experiment = {
+      experimentId: 'temp1234-0000-0000-0000-000000000000',
+      profileId: 'day4-temperature',
+      task: 'Придумай название приложения',
+      results: variants.map((variant) => ({
+        ...variant,
+        status: 'success',
+        answer: `Ответ ${variant.temperature}`,
+        metrics: { ...metrics, apiCalls: 1, totalTokens: 180 },
+        model: 'deepseek-v4-flash',
+        finishReason: 'stop',
+      })),
+      metrics,
+    }
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => profiles })
+      .mockResolvedValueOnce({ ok: true, json: async () => experiment }))
+
+    const wrapper = mount(App)
+    await flushPromises()
+    await chooseDropdownOption(wrapper, 'Профиль чата', 'День 4')
+
+    expect(wrapper.find('.temperature-workspace').exists()).toBe(true)
+    expect(wrapper.find('[aria-label="Режим ответа"]').exists()).toBe(false)
+
+    await wrapper.get('#temperature-task').setValue('Придумай название приложения')
+    await wrapper.get('.temperature-form').trigger('submit')
+    await flushPromises()
+
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      '/api/temperature-experiments',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          task: 'Придумай название приложения',
+          profileId: 'day4-temperature',
+        }),
+      }),
+    )
+    expect(wrapper.findAll('.temperature-card')).toHaveLength(3)
+    expect(wrapper.text()).toContain('Ответ 0')
+    expect(wrapper.text()).toContain('Ответ 0.7')
+    expect(wrapper.text()).toContain('Ответ 1.2')
+    expect(wrapper.get('.experiment-metrics').text()).toContain('540')
+
+    const creativeFive = wrapper.get('[aria-label="Креативность: 5 из 5 для Творческий"]')
+    await creativeFive.trigger('click')
+    await wrapper.get('.temperature-card--creative .temperature-winner').trigger('click')
+    await wrapper.get('[aria-label="Разнообразие: 5 из 5"]').trigger('click')
+    await wrapper.get('.temperature-conclusion textarea').setValue('Творческий ответ разнообразнее')
+
+    expect(creativeFive.attributes('aria-pressed')).toBe('true')
+    expect(wrapper.get('.temperature-card--creative .temperature-winner').text())
+      .toContain('Выбран лучшим')
+    expect(wrapper.get('[aria-label="Разнообразие: 5 из 5"]').attributes('aria-pressed'))
+      .toBe('true')
   })
 })

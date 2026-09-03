@@ -141,7 +141,17 @@ class StructuredReasoningStrategiesTest {
                         6_000
                 ),
                 panel,
-                new JudgeConfig("Оцени решения", 1_800, 2, 4_000)
+                new JudgeConfig(
+                        new com.example.aichat.task.day3.reasoning.config.JudgeLlmConfig(
+                                "deepseek-v4-pro",
+                                "disabled",
+                                null
+                        ),
+                        "Оцени решения",
+                        1_800,
+                        2,
+                        4_000
+                )
         );
     }
 

@@ -4,6 +4,7 @@ import { getChatProfiles, sendChatMessage } from './api/chat.js'
 import AppDropdown from './components/AppDropdown.vue'
 import ReasoningExperimentWorkspace from './components/ReasoningExperimentWorkspace.vue'
 import SeasonalEffects from './components/SeasonalEffects.vue'
+import TemperatureExperimentWorkspace from './components/TemperatureExperimentWorkspace.vue'
 import { findTheme, THEME_STORAGE_KEY, themeOptions } from './config/themes.js'
 
 const defaultResponseModes = [
@@ -40,6 +41,14 @@ const selectedProfile = computed(() => (
 
 const isReasoningExperiment = computed(() => (
   selectedProfile.value?.experienceType === 'reasoning-experiment'
+))
+
+const isTemperatureExperiment = computed(() => (
+  selectedProfile.value?.experienceType === 'temperature-experiment'
+))
+
+const isSpecialExperience = computed(() => (
+  isReasoningExperiment.value || isTemperatureExperiment.value
 ))
 
 const responseModes = computed(() => (
@@ -264,7 +273,7 @@ function handleKeydown(event) {
             />
           </div>
 
-          <div v-if="!isReasoningExperiment" class="control-card">
+          <div v-if="!isSpecialExperience" class="control-card">
             <span class="control-label">Формат ответа</span>
             <AppDropdown
               v-model="selectedResponseModeId"
@@ -321,6 +330,13 @@ function handleKeydown(event) {
 
       <ReasoningExperimentWorkspace
         v-if="isReasoningExperiment"
+        :profile="selectedProfile"
+        :backend-state="backendState"
+        :backend-status-label="backendStatusLabel"
+      />
+
+      <TemperatureExperimentWorkspace
+        v-else-if="isTemperatureExperiment"
         :profile="selectedProfile"
         :backend-state="backendState"
         :backend-status-label="backendStatusLabel"

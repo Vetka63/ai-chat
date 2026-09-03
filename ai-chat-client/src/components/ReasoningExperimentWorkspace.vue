@@ -153,7 +153,7 @@ function formatTokens(value) {
 }
 
 function formatCost(value) {
-  if (value === null || value === undefined) return 'Тарифы не настроены'
+  if (value === null || value === undefined) return 'Стоимость недоступна'
   const cost = Number(value) || 0
   if (cost > 0 && cost < 0.000001) return '< $0.000001'
   return `$${cost.toFixed(6)}`
@@ -561,6 +561,7 @@ async function retry(strategyId) {
               <p class="judge-explanation">{{ judgeResult.explanation }}</p>
 
               <div v-if="judgeResult.metrics" class="judge-metrics">
+                <span>Судья: {{ judgeResult.model }}</span>
                 <span>{{ judgeResult.metrics.apiCalls }} API-выз.</span>
                 <span>{{ formatTokens(judgeResult.metrics.totalTokens) }} токенов</span>
                 <span>{{ formatDuration(judgeResult.metrics.elapsedMs) }}</span>

@@ -52,4 +52,15 @@ describe('experiment report', () => {
       estimatedCostUsd: null,
     })
   })
+
+  it('does not show a partial total when one model has no configured price', () => {
+    expect(combineMetrics([
+      { apiCalls: 4, totalTokens: 100, estimatedCostUsd: 0.001 },
+      { apiCalls: 1, totalTokens: 20, estimatedCostUsd: null },
+    ])).toMatchObject({
+      apiCalls: 5,
+      totalTokens: 120,
+      estimatedCostUsd: null,
+    })
+  })
 })

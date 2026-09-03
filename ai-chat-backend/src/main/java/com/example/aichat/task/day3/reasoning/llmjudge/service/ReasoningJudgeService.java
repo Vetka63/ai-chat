@@ -114,7 +114,8 @@ public class ReasoningJudgeService implements LlmJudge<ReasoningJudgeCommand, Re
                     List.of(
                             new LlmMessage("system", attemptSystemPrompt),
                             new LlmMessage("user", userMessage)
-                    )
+                    ),
+                    judgeConfig.llm().toOverrides()
             ));
             attempts.add(result);
             try {

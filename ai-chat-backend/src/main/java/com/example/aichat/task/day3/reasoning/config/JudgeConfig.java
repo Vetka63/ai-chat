@@ -6,12 +6,17 @@ import com.fasterxml.jackson.databind.annotation.JsonNaming;
 /** Содержит неизменяемые настройки Judge. */
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public record JudgeConfig(
+        JudgeLlmConfig llm,
         String instruction,
         Integer maxTokens,
         Integer maxAttempts,
         Integer maxRetryTokens
 ) {
     public void validate(String profileId) {
+        if (llm == null) {
+            throw new IllegalArgumentException("Missing judge LLM config: " + profileId);
+        }
+        llm.validate(profileId);
         MetaPromptConfig.requireText(instruction, "judge instruction", profileId);
         MetaPromptConfig.validateTokenLimit(maxTokens, "judge max_tokens", profileId);
         MetaPromptConfig.validateTokenLimit(maxRetryTokens, "judge max_retry_tokens", profileId);
