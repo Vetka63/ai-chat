@@ -1,7 +1,15 @@
-import { describe, expect, it } from 'vitest'
-import { createTemperatureReport } from './temperatureReport.js'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  createTemperatureReport,
+  downloadTemperatureReport,
+} from './temperatureReport.js'
 
 describe('createTemperatureReport', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
   it('includes all temperatures, ratings and the selected winner', () => {
     const report = createTemperatureReport({
       experimentId: 'experiment-1',
@@ -48,5 +56,27 @@ describe('createTemperatureReport', () => {
     expect(report).toContain('## Оценка AI-судьи')
     expect(report).toContain('Модель: deepseek-v4-pro')
     expect(report).toContain('Разнообразие: 8 / 10')
+  })
+
+  it('downloads the report as a Markdown file named after the experiment', () => {
+    const createObjectURL = vi.fn(() => 'blob:temperature-report')
+    const revokeObjectURL = vi.fn()
+    let downloadedFileName = ''
+    vi.stubGlobal('URL', { createObjectURL, revokeObjectURL })
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function click() {
+      downloadedFileName = this.download
+    })
+
+    downloadTemperatureReport({
+      experimentId: 'temp1234-0000-0000-0000-000000000000',
+      task: 'Придумай название приложения',
+      results: [],
+    })
+
+    const blob = createObjectURL.mock.calls[0][0]
+    expect(blob).toBeInstanceOf(Blob)
+    expect(blob.type).toBe('text/markdown;charset=utf-8')
+    expect(downloadedFileName).toBe('day4-temperature-temp1234.md')
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:temperature-report')
   })
 })

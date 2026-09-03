@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { judgeTemperatureExperiment, runTemperatureExperiment } from '../api/chat.js'
-import { createTemperatureReport } from '../utils/temperatureReport.js'
+import { downloadTemperatureReport } from '../utils/temperatureReport.js'
 
 const props = defineProps({
   profile: {
@@ -61,7 +61,7 @@ const winner = ref('')
 const conclusion = ref('')
 const isRunning = ref(false)
 const error = ref('')
-const copyNotice = ref('')
+const exportNotice = ref('')
 const judgeResult = ref(null)
 const judgeLoading = ref(false)
 const judgeError = ref('')
@@ -126,7 +126,7 @@ async function runExperiment() {
   winner.value = ''
   conclusion.value = ''
   error.value = ''
-  copyNotice.value = ''
+  exportNotice.value = ''
   judgeResult.value = null
   judgeError.value = ''
   isRunning.value = true
@@ -170,8 +170,8 @@ async function runJudge() {
   }
 }
 
-async function copyReport() {
-  const report = createTemperatureReport({
+function downloadReport() {
+  downloadTemperatureReport({
     experimentId: experimentId.value,
     task: submittedTask.value,
     results: cards.value,
@@ -181,12 +181,7 @@ async function copyReport() {
     conclusion: conclusion.value,
     judgeResult: judgeResult.value,
   })
-  try {
-    await navigator.clipboard.writeText(report)
-    copyNotice.value = 'Отчёт скопирован'
-  } catch {
-    copyNotice.value = 'Браузер не разрешил копирование'
-  }
+  exportNotice.value = 'Markdown-отчёт скачан'
 }
 </script>
 
@@ -499,8 +494,8 @@ async function copyReport() {
           </section>
 
           <div class="temperature-report-actions">
-            <button type="button" @click="copyReport">Скопировать отчёт</button>
-            <span v-if="copyNotice" role="status">{{ copyNotice }}</span>
+            <button type="button" @click="downloadReport">Скачать Markdown</button>
+            <span v-if="exportNotice" role="status">{{ exportNotice }}</span>
           </div>
         </section>
       </section>

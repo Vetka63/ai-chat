@@ -85,5 +85,20 @@ export function createTemperatureReport({
       )
     }
   }
-  return lines.join('\n')
+  return `${lines.join('\n')}\n`
+}
+
+export function downloadTemperatureReport(reportData) {
+  const shortId = reportData.experimentId?.slice(0, 8) || 'current'
+  const blob = new Blob([createTemperatureReport(reportData)], {
+    type: 'text/markdown;charset=utf-8',
+  })
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = `day4-temperature-${shortId}.md`
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  URL.revokeObjectURL(url)
 }
