@@ -1,0 +1,46 @@
+package com.example.aichat.task.day3.reasoning.strategy;
+
+import com.example.aichat.common.profile.model.ResponseModeConfig;
+import com.example.aichat.common.llm.model.LlmMessage;
+
+import java.util.List;
+
+/** Provides shared helpers used by the Day 3 reasoning strategy executors. */
+final class StrategySupport {
+
+    private StrategySupport() {
+    }
+
+    static ResponseModeConfig textMode(String id, int maxTokens) {
+        return mode(id, maxTokens, null);
+    }
+
+    static ResponseModeConfig jsonMode(String id, int maxTokens) {
+        return mode(id, maxTokens, "json_object");
+    }
+
+    static List<LlmMessage> messages(String systemPrompt, String task) {
+        return List.of(
+                new LlmMessage("system", systemPrompt.trim()),
+                new LlmMessage("user", task.trim())
+        );
+    }
+
+    static String withInstruction(String systemPrompt, String instruction) {
+        return systemPrompt.trim() + "\n\nИнструкция для текущего способа решения:\n"
+                + instruction.trim();
+    }
+
+    private static ResponseModeConfig mode(String id, int maxTokens, String responseFormat) {
+        return new ResponseModeConfig(
+                id,
+                id,
+                id,
+                null,
+                "text",
+                maxTokens,
+                null,
+                responseFormat
+        );
+    }
+}

@@ -1,11 +1,12 @@
 package com.example.aichat.config;
 
-import com.example.aichat.enums.Mode;
+import com.example.aichat.config.enums.Mode;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.math.BigDecimal;
 import java.util.List;
 
+/** Immutable configuration model for Chat settings. */
 @ConfigurationProperties(prefix = "app.chat")
 public record ChatProperties(
         Mode mode,

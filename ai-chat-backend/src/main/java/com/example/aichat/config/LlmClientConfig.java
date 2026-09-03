@@ -8,6 +8,7 @@ import org.springframework.web.client.RestClient;
 
 import java.time.Duration;
 
+/** Creates the shared authenticated HTTP client used by LLM provider adapters. */
 @Configuration
 public class LlmClientConfig {
 
@@ -24,4 +25,3 @@ public class LlmClientConfig {
                 .build();
     }
 }
-
