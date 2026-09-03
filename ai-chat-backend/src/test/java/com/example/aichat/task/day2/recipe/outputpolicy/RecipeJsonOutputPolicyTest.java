@@ -1,7 +1,7 @@
-package com.example.aichat.task.day2.responseformat.outputpolicy;
+package com.example.aichat.task.day2.recipe.outputpolicy;
 
 import com.example.aichat.common.llm.model.LlmResult;
-import com.example.aichat.task.day2.responseformat.outputpolicy.dto.RecipePayload;
+import com.example.aichat.task.day2.recipe.outputpolicy.dto.RecipePayload;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.server.ResponseStatusException;

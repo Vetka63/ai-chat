@@ -1,4 +1,4 @@
-package com.example.aichat.task.day2.responseformat.outputpolicy.dto;
+package com.example.aichat.task.day2.recipe.outputpolicy.dto;
 
 import java.util.List;
 

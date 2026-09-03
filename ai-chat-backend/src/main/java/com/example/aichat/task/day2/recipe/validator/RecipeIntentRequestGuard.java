@@ -1,9 +1,9 @@
-package com.example.aichat.task.recipe.validator;
+package com.example.aichat.task.day2.recipe.validator;
 
 import com.example.aichat.common.profile.model.AgentProfile;
 import com.example.aichat.common.profile.model.RequestGuardConfig;
 import com.example.aichat.common.profile.model.ResponseModeConfig;
-import com.example.aichat.task.recipe.enums.RecipeIntentVerdict;
+import com.example.aichat.task.day2.recipe.enums.RecipeIntentVerdict;
 import com.example.aichat.common.llm.LlmClient;
 import com.example.aichat.common.llm.model.LlmMessage;
 import com.example.aichat.common.validator.RequestGuard;

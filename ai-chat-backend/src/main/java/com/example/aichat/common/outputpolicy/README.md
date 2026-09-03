@@ -7,8 +7,8 @@
 - `TextOutputPolicy` — общая реализация обычного текста.
 - `model` — нейтральный результат применения policy.
 
-Специфичные JSON policy и payload Дня 2 находятся в
-`task/day2/responseformat/outputpolicy`.
+Специфичные JSON policy и payload Дня 2 находятся в `task/day2/recipe` и
+`task/day2/answer`.
 
 Структурированная policy сама сообщает, нужна ли повторная генерация и какое
 ограничение добавить к retry-промпту. Поэтому новая JSON-схема добавляется новой

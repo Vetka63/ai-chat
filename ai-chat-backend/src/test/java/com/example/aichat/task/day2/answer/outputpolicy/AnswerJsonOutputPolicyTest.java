@@ -1,7 +1,7 @@
-package com.example.aichat.task.day2.responseformat.outputpolicy;
+package com.example.aichat.task.day2.answer.outputpolicy;
 
 import com.example.aichat.common.llm.model.LlmResult;
-import com.example.aichat.task.day2.responseformat.outputpolicy.dto.AnswerPayload;
+import com.example.aichat.task.day2.answer.outputpolicy.dto.AnswerPayload;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 

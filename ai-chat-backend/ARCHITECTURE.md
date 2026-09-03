@@ -21,8 +21,9 @@ com.example.aichat
 │   └── exception/                  единая обработка HTTP-ошибок
 └── task/                           независимые вертикальные задачи
     ├── chat/                       основной HTTP-сценарий чата
-    ├── recipe/                     классификация кулинарного запроса
-    ├── day2/responseformat/         строгие JSON output-policy
+    ├── day2/                       задание структурированного ответа
+    │   ├── recipe/                 semantic guard + строгий JSON-рецепт
+    │   └── answer/                 универсальный строгий JSON-ответ
     └── day3/reasoning/              четыре стратегии и LLM-as-judge
 ```
 

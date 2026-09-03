@@ -1,4 +1,4 @@
-package com.example.aichat.task.day2.responseformat.outputpolicy.dto;
+package com.example.aichat.task.day2.answer.outputpolicy.dto;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

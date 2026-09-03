@@ -1,8 +1,8 @@
-package com.example.aichat.task.day2.responseformat.outputpolicy;
+package com.example.aichat.task.day2.answer.outputpolicy;
 
 import com.example.aichat.common.llm.model.LlmResult;
 import com.example.aichat.common.outputpolicy.OutputPolicy;
-import com.example.aichat.task.day2.responseformat.outputpolicy.dto.AnswerPayload;
+import com.example.aichat.task.day2.answer.outputpolicy.dto.AnswerPayload;
 import com.example.aichat.common.outputpolicy.model.OutputPolicyResult;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;

@@ -150,6 +150,16 @@ class ArchitectureRulesTest {
     }
 
     @Test
+    void legacyTaskPackagesContainNoJavaSources() throws IOException {
+        var legacyRoots = List.of(
+                PACKAGE_ROOT.resolve("task/recipe"),
+                PACKAGE_ROOT.resolve("task/day2/responseformat")
+        );
+        assertThat(javaSources())
+                .noneMatch(source -> legacyRoots.stream().anyMatch(source::startsWith));
+    }
+
+    @Test
     void everyDomainHasNearbyDocumentation() {
         assertThat(List.of(
                 PACKAGE_ROOT.resolve("bootstrap/README.md"),
@@ -162,8 +172,9 @@ class ArchitectureRulesTest {
                 PACKAGE_ROOT.resolve("common/llmjudge/README.md"),
                 PACKAGE_ROOT.resolve("task/README.md"),
                 PACKAGE_ROOT.resolve("task/chat/README.md"),
-                PACKAGE_ROOT.resolve("task/recipe/README.md"),
-                PACKAGE_ROOT.resolve("task/day2/responseformat/README.md"),
+                PACKAGE_ROOT.resolve("task/day2/README.md"),
+                PACKAGE_ROOT.resolve("task/day2/recipe/README.md"),
+                PACKAGE_ROOT.resolve("task/day2/answer/README.md"),
                 PACKAGE_ROOT.resolve("task/day3/reasoning/README.md"),
                 PACKAGE_ROOT.resolve("task/day3/reasoning/llmjudge/README.md"),
                 Path.of("src/main/resources/agents/README.md")

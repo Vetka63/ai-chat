@@ -1,4 +1,4 @@
-package com.example.aichat.task.recipe.validator;
+package com.example.aichat.task.day2.recipe.validator;
 
 import com.example.aichat.common.profile.registry.AgentRegistry;
 import com.example.aichat.config.ChatProperties;

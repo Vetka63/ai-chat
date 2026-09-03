@@ -1,4 +1,4 @@
-package com.example.aichat.task.recipe.enums;
+package com.example.aichat.task.day2.recipe.enums;
 
 /** Перечисляет поддерживаемые значения RecipeIntentVerdict. */
 
