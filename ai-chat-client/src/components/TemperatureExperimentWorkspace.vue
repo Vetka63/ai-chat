@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue'
-import { runTemperatureExperiment } from '../api/chat.js'
+import { judgeTemperatureExperiment, runTemperatureExperiment } from '../api/chat.js'
 import { createTemperatureReport } from '../utils/temperatureReport.js'
 
 const props = defineProps({
@@ -37,6 +37,12 @@ const defaultVariants = [
     description: 'Больше неожиданных идей и формулировок',
     temperature: 1.2,
   },
+  {
+    id: 'experimental',
+    title: 'Экспериментальный',
+    description: 'Предельная вариативность и наиболее неожиданные ответы',
+    temperature: 2,
+  },
 ]
 
 const criteria = [
@@ -56,6 +62,9 @@ const conclusion = ref('')
 const isRunning = ref(false)
 const error = ref('')
 const copyNotice = ref('')
+const judgeResult = ref(null)
+const judgeLoading = ref(false)
+const judgeError = ref('')
 
 const cards = computed(() => {
   if (results.value.length) return results.value
@@ -67,6 +76,10 @@ const cards = computed(() => {
 
 const successfulCards = computed(() => (
   cards.value.filter((card) => card.status === 'success')
+))
+
+const canRunJudge = computed(() => (
+  successfulCards.value.length >= 2 && !isRunning.value && !judgeLoading.value
 ))
 
 function formatDuration(value) {
@@ -114,6 +127,8 @@ async function runExperiment() {
   conclusion.value = ''
   error.value = ''
   copyNotice.value = ''
+  judgeResult.value = null
+  judgeError.value = ''
   isRunning.value = true
   try {
     const response = await runTemperatureExperiment({
@@ -132,6 +147,29 @@ async function runExperiment() {
   }
 }
 
+async function runJudge() {
+  if (!canRunJudge.value) return
+
+  judgeLoading.value = true
+  judgeError.value = ''
+  try {
+    judgeResult.value = await judgeTemperatureExperiment({
+      task: submittedTask.value,
+      profileId: props.profile.id,
+      candidates: successfulCards.value.map((card) => ({
+        variantId: card.id,
+        answer: card.answer,
+      })),
+    })
+  } catch (requestError) {
+    judgeError.value = requestError instanceof Error
+      ? requestError.message
+      : 'Не удалось получить оценку AI-судьи'
+  } finally {
+    judgeLoading.value = false
+  }
+}
+
 async function copyReport() {
   const report = createTemperatureReport({
     experimentId: experimentId.value,
@@ -141,6 +179,7 @@ async function copyReport() {
     diversity: diversity.value,
     winner: winner.value,
     conclusion: conclusion.value,
+    judgeResult: judgeResult.value,
   })
   try {
     await navigator.clipboard.writeText(report)
@@ -177,10 +216,10 @@ async function copyReport() {
     <div class="experiment-scroll temperature-scroll">
       <section class="experiment-intro temperature-intro">
         <div>
-          <span class="experiment-eyebrow">Один запрос · три температуры</span>
+          <span class="experiment-eyebrow">Один запрос · четыре температуры</span>
           <h3>Как случайность меняет ответ модели</h3>
           <p>
-            DeepSeek получит один и тот же запрос при temperature 0, 0.7 и 1.2.
+            DeepSeek получит один и тот же запрос при temperature 0, 0.7, 1.2 и 2.0.
             Модель, промпт и лимиты останутся одинаковыми, история чата не используется.
           </p>
         </div>
@@ -225,7 +264,7 @@ async function copyReport() {
         <div class="results-heading">
           <div>
             <span class="experiment-eyebrow">Результаты эксперимента</span>
-            <h3>Три версии одного ответа</h3>
+            <h3>Четыре версии одного ответа</h3>
           </div>
           <div v-if="experimentId" class="results-heading__meta">
             <span class="experiment-id">Запуск {{ experimentId.slice(0, 8) }}</span>
@@ -361,7 +400,7 @@ async function copyReport() {
             <textarea
               v-model="conclusion"
               rows="3"
-              placeholder="Например: при 0 ответ точнее соблюдает условия, а при 1.2 предлагает более необычные идеи…"
+              placeholder="Например: при 0 ответ точнее соблюдает условия, а при 2.0 предлагает самые неожиданные идеи…"
             ></textarea>
           </label>
 
@@ -378,7 +417,86 @@ async function copyReport() {
               <strong>1.2</strong>
               <p>Мозговой штурм, названия, сюжеты и творческие варианты.</p>
             </article>
+            <article>
+              <strong>2.0</strong>
+              <p>Экспериментальные идеи, максимальная вариативность и намеренный риск.</p>
+            </article>
           </div>
+
+          <section class="temperature-judge">
+            <header>
+              <div>
+                <span class="experiment-eyebrow">Независимая проверка</span>
+                <h4>AI-судья DeepSeek Pro</h4>
+                <p>Ответы передаются без названий и температур — только как варианты A–D.</p>
+              </div>
+              <button
+                type="button"
+                class="temperature-judge__button"
+                :disabled="!canRunJudge"
+                @click="runJudge"
+              >
+                <span v-if="judgeLoading" class="button-spinner" aria-hidden="true"></span>
+                {{ judgeLoading ? 'Оцениваем…' : judgeResult ? 'Оценить заново' : 'Запустить AI-судью' }}
+              </button>
+            </header>
+
+            <div v-if="judgeError" class="temperature-judge__error" role="alert">
+              <span>{{ judgeError }}</span>
+              <button type="button" :disabled="!canRunJudge" @click="runJudge">Повторить</button>
+            </div>
+
+            <div v-else-if="judgeResult" class="temperature-judge__result" aria-live="polite">
+              <div class="temperature-judge__winner">
+                <span>Рекомендация модели</span>
+                <strong>temperature {{ judgeResult.winnerTemperature }} · {{ judgeResult.winnerTitle }}</strong>
+                <em v-if="winner">
+                  {{ winner === judgeResult.winnerVariantId
+                    ? 'Совпадает с вашим выбором'
+                    : 'Отличается от вашего выбора' }}
+                </em>
+              </div>
+
+              <p class="temperature-judge__explanation">{{ judgeResult.explanation }}</p>
+
+              <div class="temperature-judge__diversity">
+                <strong>Разнообразие: {{ judgeResult.diversityScore }} / 10</strong>
+                <span>{{ judgeResult.diversityExplanation }}</span>
+              </div>
+
+              <div class="temperature-judge__evaluations">
+                <article
+                  v-for="evaluation in judgeResult.evaluations"
+                  :key="evaluation.variantId"
+                  :class="{ 'is-winner': evaluation.variantId === judgeResult.winnerVariantId }"
+                >
+                  <header>
+                    <strong>{{ evaluation.temperature }} · {{ evaluation.title }}</strong>
+                    <span>{{ evaluation.average }} / 10</span>
+                  </header>
+                  <dl>
+                    <div><dt>Точность</dt><dd>{{ evaluation.scores.accuracy }}</dd></div>
+                    <div><dt>Креативность</dt><dd>{{ evaluation.scores.creativity }}</dd></div>
+                    <div><dt>Следование запросу</dt><dd>{{ evaluation.scores.instructionFollowing }}</dd></div>
+                  </dl>
+                  <p><b>Сильные стороны:</b> {{ evaluation.strengths }}</p>
+                  <p><b>Слабые стороны:</b> {{ evaluation.weaknesses }}</p>
+                </article>
+              </div>
+
+              <div class="temperature-judge__metrics">
+                <span>Судья: {{ judgeResult.model }}</span>
+                <span>{{ judgeResult.metrics.apiCalls }} API-выз.</span>
+                <span>{{ formatTokens(judgeResult.metrics.totalTokens) }} токенов</span>
+                <span>{{ formatDuration(judgeResult.metrics.elapsedMs) }}</span>
+                <span>{{ formatCost(judgeResult.metrics.estimatedCostUsd) }}</span>
+              </div>
+            </div>
+
+            <p v-else class="temperature-judge__note">
+              Это отдельный API-вызов. Ручная оценка и выбор пользователя не изменяются.
+            </p>
+          </section>
 
           <div class="temperature-report-actions">
             <button type="button" @click="copyReport">Скопировать отчёт</button>
@@ -393,9 +511,11 @@ async function copyReport() {
 <style scoped>
 .temperature-workspace {
   min-width: 0;
+  min-height: 0;
   height: 100%;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
   color: var(--theme-text);
   background:
     radial-gradient(circle at 90% 5%, color-mix(in srgb, var(--theme-accent) 12%, transparent), transparent 28rem),
@@ -424,6 +544,8 @@ async function copyReport() {
 .temperature-scroll {
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
   padding: clamp(22px, 3vw, 42px);
 }
 
@@ -560,7 +682,7 @@ async function copyReport() {
 
 .temperature-scale {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 12px;
   margin: 18px 0 30px;
 }
@@ -668,7 +790,7 @@ async function copyReport() {
 
 .temperature-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 15px;
   align-items: start;
 }
@@ -694,6 +816,10 @@ async function copyReport() {
 
 .temperature-card--creative {
   border-top: 4px solid #b36c9a;
+}
+
+.temperature-card--experimental {
+  border-top: 4px solid #a44f63;
 }
 
 .temperature-card__header {
@@ -935,7 +1061,7 @@ async function copyReport() {
 
 .temperature-guidance {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   gap: 10px;
 }
 
@@ -961,6 +1087,199 @@ async function copyReport() {
   color: var(--theme-muted);
   font-size: 9px;
   line-height: 1.4;
+}
+
+.temperature-judge {
+  display: grid;
+  gap: 15px;
+  padding: 20px;
+  background: color-mix(in srgb, var(--theme-workspace) 84%, transparent);
+  border: 1px solid var(--theme-border);
+  border-radius: 19px;
+}
+
+.temperature-judge > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.temperature-judge h4 {
+  margin: 4px 0 0;
+  color: var(--theme-text);
+  font-size: 17px;
+}
+
+.temperature-judge header p,
+.temperature-judge__note {
+  margin: 5px 0 0;
+  color: var(--theme-muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.temperature-judge__button,
+.temperature-judge__error button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 14px;
+  color: #fff;
+  background: var(--theme-accent);
+  border: 0;
+  border-radius: 11px;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.temperature-judge__button:disabled,
+.temperature-judge__error button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.temperature-judge__error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 14px;
+  color: #9a3c3c;
+  background: rgba(206, 84, 84, 0.1);
+  border-radius: 12px;
+  font-size: 11px;
+}
+
+.temperature-judge__result {
+  display: grid;
+  gap: 14px;
+}
+
+.temperature-judge__winner {
+  display: grid;
+  gap: 3px;
+  padding: 14px 16px;
+  background: var(--theme-accent-soft);
+  border-radius: 14px;
+}
+
+.temperature-judge__winner span,
+.temperature-judge__winner em {
+  color: var(--theme-muted);
+  font-size: 9px;
+  font-style: normal;
+}
+
+.temperature-judge__winner strong {
+  color: var(--theme-accent-strong);
+  font-size: 15px;
+}
+
+.temperature-judge__explanation {
+  margin: 0;
+  color: var(--theme-body);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.temperature-judge__diversity {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  background: var(--theme-card);
+  border: 1px solid var(--theme-border);
+  border-radius: 12px;
+}
+
+.temperature-judge__diversity strong {
+  font-size: 11px;
+}
+
+.temperature-judge__diversity span {
+  color: var(--theme-muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.temperature-judge__evaluations {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.temperature-judge__evaluations > article {
+  display: grid;
+  gap: 9px;
+  padding: 13px;
+  background: var(--theme-card);
+  border: 1px solid var(--theme-border);
+  border-radius: 13px;
+}
+
+.temperature-judge__evaluations > article.is-winner {
+  border-color: var(--theme-accent);
+  box-shadow: inset 3px 0 0 var(--theme-accent);
+}
+
+.temperature-judge__evaluations article > header {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.temperature-judge__evaluations article > header strong {
+  font-size: 11px;
+}
+
+.temperature-judge__evaluations article > header span {
+  color: var(--theme-accent-strong);
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.temperature-judge__evaluations dl {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+}
+
+.temperature-judge__evaluations dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.temperature-judge__evaluations dt,
+.temperature-judge__evaluations dd,
+.temperature-judge__evaluations p {
+  margin: 0;
+  color: var(--theme-muted);
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.temperature-judge__evaluations dd {
+  color: var(--theme-text);
+  font-weight: 750;
+}
+
+.temperature-judge__metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.temperature-judge__metrics span {
+  padding: 5px 8px;
+  color: var(--theme-muted);
+  background: var(--theme-card);
+  border: 1px solid var(--theme-border);
+  border-radius: 999px;
+  font-size: 8px;
 }
 
 .temperature-report-actions {
@@ -1014,7 +1333,9 @@ async function copyReport() {
   }
 
   .results-heading,
-  .diversity-rating {
+  .diversity-rating,
+  .temperature-judge > header,
+  .temperature-judge__error {
     align-items: stretch;
     flex-direction: column;
   }
@@ -1030,6 +1351,11 @@ async function copyReport() {
   .result-state {
     grid-column: 2;
     justify-self: start;
+  }
+
+  .temperature-judge__button,
+  .temperature-judge__error button {
+    width: 100%;
   }
 }
 

@@ -1,7 +1,7 @@
 # День 4: температура
 
 Домен демонстрирует влияние `temperature` на один и тот же запрос. Backend
-выполняет три независимых вызова со значениями `0`, `0.7` и `1.2`, а frontend
+выполняет четыре независимых вызова со значениями `0`, `0.7`, `1.2` и `2.0`, а frontend
 показывает ответы рядом и помогает вручную сравнить точность, креативность и
 разнообразие.
 
@@ -27,7 +27,7 @@ POST /api/temperature-experiments
        -> TemperatureConfigProvider читает feature_config
        -> AgentLlmRequestFactory создаёт базовый запрос
        -> LlmRequestOverrides меняет только temperature
-       -> LlmClient вызывается последовательно три раза
+       -> LlmClient вызывается последовательно четыре раза
   -> TemperatureExperiment с результатами и общими метриками
 ```
 
@@ -39,9 +39,10 @@ POST /api/temperature-experiments
 
 - `controller` — HTTP endpoint;
 - `controller/dto` — входной контракт запуска;
-- `service` — оркестрация трёх вызовов;
+- `service` — оркестрация четырёх вызовов;
 - `config` — типизированная конфигурация `feature_config`;
 - `model` — результат эксперимента и каждой температуры;
+- `llmjudge` — отдельный обезличенный судья, его HTTP-контракт и результат;
 - `enums` — статус отдельного результата.
 
 ## HTTP API
@@ -77,7 +78,7 @@ Content-Type: application/json
       "metrics": { "apiCalls": 1, "totalTokens": 150 }
     }
   ],
-  "metrics": { "apiCalls": 3, "totalTokens": 470 }
+  "metrics": { "apiCalls": 4, "totalTokens": 620 }
 }
 ```
 
@@ -101,6 +102,7 @@ feature_config:
     - { id: precise, title: Точный, value: 0.0 }
     - { id: balanced, title: Сбалансированный, value: 0.7 }
     - { id: creative, title: Творческий, value: 1.2 }
+    - { id: experimental, title: Экспериментальный, value: 2.0 }
   max_tokens: 1200
 ```
 
@@ -124,3 +126,30 @@ UI позволяет для каждого успешного ответа по
 записать вывод. Эти оценки не отправляются на backend и не сохраняются после
 обновления страницы. Кнопка копирования формирует Markdown-отчёт, пригодный для
 результата учебного задания.
+
+## Автоматический судья
+
+После генерации минимум двух успешных вариантов клиент может отдельно вызвать:
+
+```http
+POST /api/temperature-experiments/judge
+Content-Type: application/json
+```
+
+```json
+{
+  "profileId": "day4-temperature",
+  "task": "Придумай три названия для приложения учёта домашних растений",
+  "candidates": [
+    { "variantId": "precise", "answer": "..." },
+    { "variantId": "experimental", "answer": "..." }
+  ]
+}
+```
+
+`TemperatureJudgeService` проверяет идентификаторы по конфигурации, обезличивает
+ответы кодами `A`–`D` и вызывает `deepseek-v4-pro` с `temperature: 0`. Ответ
+валидируется как JSON: оценки должны быть целыми числами `0..10`, каждый
+кандидат обязан присутствовать ровно один раз, а победитель должен существовать.
+При повреждённом JSON выполняется одна повторная попытка. Детальная схема и
+примеры описаны в соседнем `llmjudge/README.md`.

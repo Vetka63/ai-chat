@@ -25,7 +25,7 @@ com.example.aichat
     │   ├── recipe/                 semantic guard + строгий JSON-рецепт
     │   └── answer/                 универсальный строгий JSON-ответ
     ├── day3/reasoning/              четыре стратегии и LLM-as-judge
-    └── day4/temperature/            сравнение ответов при трёх температурах
+    └── day4/temperature/            четыре температуры и отдельный LLM-as-judge
 ```
 
 В Java-именах используются `inputpolicy`, `outputpolicy` и `llmjudge`, потому
@@ -79,4 +79,5 @@ LLM-as-judge, не переписывая центральный chat pipeline.
 Публичные URL и JSON-контракты при этом рефакторинге не менялись:
 `/api/chat`, `/api/profiles`, `/api/reasoning-experiments` и
 `/api/reasoning-experiments/judge` остаются совместимыми с клиентом. День 4
-добавляет отдельный контракт `POST /api/temperature-experiments`.
+добавляет контракты `POST /api/temperature-experiments` и
+`POST /api/temperature-experiments/judge`.

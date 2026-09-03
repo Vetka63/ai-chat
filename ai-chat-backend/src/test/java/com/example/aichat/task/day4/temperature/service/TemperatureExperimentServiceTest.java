@@ -9,6 +9,8 @@ import com.example.aichat.common.profile.model.InputPolicyConfig;
 import com.example.aichat.common.profile.registry.AgentRegistry;
 import com.example.aichat.task.day4.temperature.config.TemperatureConfigProvider;
 import com.example.aichat.task.day4.temperature.config.TemperatureExperimentConfig;
+import com.example.aichat.task.day4.temperature.config.TemperatureJudgeConfig;
+import com.example.aichat.task.day4.temperature.config.TemperatureJudgeLlmConfig;
 import com.example.aichat.task.day4.temperature.config.TemperatureVariantConfig;
 import com.example.aichat.task.day4.temperature.enums.TemperatureResultStatus;
 import org.junit.jupiter.api.Test;
@@ -44,16 +46,16 @@ class TemperatureExperimentServiceTest {
         assertThat(experiment.task()).isEqualTo("Придумай идею");
         assertThat(experiment.results())
                 .extracting(result -> result.temperature())
-                .containsExactly(0.0, 0.7, 1.2);
+                .containsExactly(0.0, 0.7, 1.2, 2.0);
         assertThat(experiment.results())
                 .allMatch(result -> result.status() == TemperatureResultStatus.SUCCESS);
-        assertThat(experiment.metrics().apiCalls()).isEqualTo(3);
+        assertThat(experiment.metrics().apiCalls()).isEqualTo(4);
 
         var requests = ArgumentCaptor.forClass(LlmCompletionRequest.class);
-        verify(fixture.llmClient, times(3)).complete(requests.capture());
+        verify(fixture.llmClient, times(4)).complete(requests.capture());
         assertThat(requests.getAllValues())
                 .extracting(LlmCompletionRequest::temperature)
-                .containsExactly(0.0, 0.7, 1.2);
+                .containsExactly(0.0, 0.7, 1.2, 2.0);
         assertThat(requests.getAllValues())
                 .extracting(LlmCompletionRequest::model)
                 .containsOnly("deepseek-v4-flash");
@@ -89,11 +91,12 @@ class TemperatureExperimentServiceTest {
                 .containsExactly(
                         TemperatureResultStatus.SUCCESS,
                         TemperatureResultStatus.ERROR,
+                        TemperatureResultStatus.SUCCESS,
                         TemperatureResultStatus.SUCCESS
                 );
         assertThat(experiment.results().get(1).error())
                 .isEqualTo("Не удалось получить ответ DeepSeek");
-        assertThat(experiment.metrics().apiCalls()).isEqualTo(3);
+        assertThat(experiment.metrics().apiCalls()).isEqualTo(4);
     }
 
     private static Fixture fixture() {
@@ -119,9 +122,19 @@ class TemperatureExperimentServiceTest {
                 List.of(
                         new TemperatureVariantConfig("precise", "Точный", "Описание", 0.0),
                         new TemperatureVariantConfig("balanced", "Баланс", "Описание", 0.7),
-                        new TemperatureVariantConfig("creative", "Творческий", "Описание", 1.2)
+                        new TemperatureVariantConfig("creative", "Творческий", "Описание", 1.2),
+                        new TemperatureVariantConfig("experimental", "Экспериментальный", "Описание", 2.0)
                 ),
-                1200
+                1200,
+                new TemperatureJudgeConfig(
+                        new TemperatureJudgeLlmConfig(
+                                "deepseek-v4-pro", "disabled", null, 0.0, 1.0
+                        ),
+                        "Инструкция судьи",
+                        1800,
+                        2,
+                        3600
+                )
         ));
         var llmClient = mock(LlmClient.class);
         return new Fixture(

@@ -29,17 +29,23 @@
 
 html {
   min-width: 320px;
-  min-height: 100%;
+  height: 100%;
 }
 
 body {
   margin: 0;
   min-width: 320px;
-  min-height: 100vh;
+  height: 100%;
+  overflow: hidden;
   background:
     radial-gradient(circle at 7% 8%, rgba(162, 190, 166, 0.25), transparent 30rem),
     radial-gradient(circle at 94% 88%, rgba(183, 201, 188, 0.23), transparent 33rem),
     linear-gradient(145deg, #f2f6f1 0%, #edf1ed 52%, #f1f4ef 100%);
+}
+
+#app {
+  height: 100%;
+  min-height: 0;
 }
 
 button,
@@ -61,7 +67,8 @@ textarea:focus-visible {
 }
 
 .page-shell {
-  min-height: 100vh;
+  height: 100%;
+  min-height: 0;
   display: block;
   padding: 0;
 }
@@ -71,8 +78,8 @@ textarea:focus-visible {
   --conversation-width: 920px;
   --conversation-gutter: max(32px, calc((100vw - var(--sidebar-width) - var(--conversation-width)) / 2));
   width: 100%;
-  height: 100svh;
-  min-height: 560px;
+  height: 100%;
+  min-height: 0;
   display: grid;
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
   overflow: hidden;
@@ -84,6 +91,7 @@ textarea:focus-visible {
 
 .sidebar {
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   padding: 22px 18px 18px;
@@ -91,6 +99,8 @@ textarea:focus-visible {
     linear-gradient(180deg, rgba(246, 250, 245, 0.97), rgba(236, 243, 236, 0.94)),
     #edf3ed;
   border-right: 1px solid var(--line);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .brand {
@@ -340,6 +350,7 @@ textarea:focus-visible {
   min-height: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
   background:
     linear-gradient(rgba(249, 252, 248, 0.96), rgba(249, 252, 248, 0.96)),
     var(--paper-solid);
@@ -453,6 +464,8 @@ textarea:focus-visible {
 .messages {
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
   padding: 34px var(--conversation-gutter) 40px;
   scroll-behavior: smooth;
   scrollbar-color: rgba(92, 126, 99, 0.2) transparent;
@@ -945,7 +958,7 @@ kbd {
     --conversation-gutter: 16px;
     width: 100%;
     height: 100svh;
-    min-height: 560px;
+    min-height: 0;
     grid-template-columns: 1fr;
     grid-template-rows: auto minmax(0, 1fr);
     border: 0;
@@ -2232,13 +2245,19 @@ kbd {
 /* Readability scale: roomier desktop chat without changing the mobile layout model. */
 @media (min-width: 901px) {
   .page-shell {
-    padding: 18px;
+    padding: 0;
   }
 
   .app-window {
-    width: min(1480px, 100%);
-    height: min(960px, calc(100vh - 36px));
-    grid-template-columns: clamp(296px, 21vw, 326px) minmax(0, 1fr);
+    --sidebar-width: 320px;
+    --conversation-width: 960px;
+    --conversation-gutter: max(
+      36px,
+      calc((100vw - var(--sidebar-width) - var(--conversation-width)) / 2)
+    );
+    width: 100%;
+    height: 100svh;
+    grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
   }
 
   .sidebar {
@@ -2323,7 +2342,7 @@ kbd {
   }
 
   .conversation-header {
-    padding: 25px 36px 23px;
+    padding: 20px var(--conversation-gutter);
   }
 
   .conversation-identity {
@@ -2350,7 +2369,7 @@ kbd {
   }
 
   .messages {
-    padding: 30px clamp(32px, 4.4vw, 68px) 34px;
+    padding: 30px var(--conversation-gutter) 34px;
   }
 
   .date-separator {
@@ -2421,7 +2440,7 @@ kbd {
   }
 
   .input-dock {
-    padding: 14px 36px 22px;
+    padding: 14px var(--conversation-gutter) 22px;
   }
 
   .composer {

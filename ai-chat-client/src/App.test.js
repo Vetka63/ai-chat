@@ -40,7 +40,7 @@ const profiles = [
     experienceType: 'temperature-experiment',
     defaultResponseMode: 'experiment',
     responseModes: [
-      { id: 'experiment', name: 'Сравнение температур', description: 'Три температуры' },
+      { id: 'experiment', name: 'Сравнение температур', description: 'Четыре температуры' },
     ],
   },
 ]
@@ -387,7 +387,7 @@ describe('App', () => {
 
   it('runs the Day 4 experiment and supports a manual comparison', async () => {
     const metrics = {
-      apiCalls: 3,
+      apiCalls: 4,
       elapsedMs: 900,
       apiDurationMs: 840,
       promptTokens: 300,
@@ -402,6 +402,7 @@ describe('App', () => {
       { id: 'precise', title: 'Точный', description: 'Предсказуемый', temperature: 0 },
       { id: 'balanced', title: 'Сбалансированный', description: 'Баланс', temperature: 0.7 },
       { id: 'creative', title: 'Творческий', description: 'Необычные идеи', temperature: 1.2 },
+      { id: 'experimental', title: 'Экспериментальный', description: 'Максимальная вариативность', temperature: 2 },
     ]
     const experiment = {
       experimentId: 'temp1234-0000-0000-0000-000000000000',
@@ -417,9 +418,30 @@ describe('App', () => {
       })),
       metrics,
     }
+    const judge = {
+      winnerVariantId: 'creative',
+      winnerTitle: 'Творческий',
+      winnerTemperature: 1.2,
+      evaluations: variants.map((variant) => ({
+        variantId: variant.id,
+        title: variant.title,
+        temperature: variant.temperature,
+        scores: { accuracy: 8, creativity: 9, instructionFollowing: 8 },
+        average: 8.3,
+        strengths: 'Полезный ответ',
+        weaknesses: 'Можно уточнить детали',
+      })),
+      diversityScore: 8,
+      diversityExplanation: 'Ответы заметно различаются',
+      explanation: 'Творческий вариант лучше сочетает качество и оригинальность',
+      metrics: { ...metrics, apiCalls: 1, totalTokens: 220 },
+      model: 'deepseek-v4-pro',
+      finishReason: 'stop',
+    }
     vi.stubGlobal('fetch', vi.fn()
       .mockResolvedValueOnce({ ok: true, json: async () => profiles })
-      .mockResolvedValueOnce({ ok: true, json: async () => experiment }))
+      .mockResolvedValueOnce({ ok: true, json: async () => experiment })
+      .mockResolvedValueOnce({ ok: true, json: async () => judge }))
 
     const wrapper = mount(App)
     await flushPromises()
@@ -443,10 +465,11 @@ describe('App', () => {
         }),
       }),
     )
-    expect(wrapper.findAll('.temperature-card')).toHaveLength(3)
+    expect(wrapper.findAll('.temperature-card')).toHaveLength(4)
     expect(wrapper.text()).toContain('Ответ 0')
     expect(wrapper.text()).toContain('Ответ 0.7')
     expect(wrapper.text()).toContain('Ответ 1.2')
+    expect(wrapper.text()).toContain('Ответ 2')
     expect(wrapper.get('.experiment-metrics').text()).toContain('540')
 
     const creativeFive = wrapper.get('[aria-label="Креативность: 5 из 5 для Творческий"]')
@@ -460,5 +483,27 @@ describe('App', () => {
       .toContain('Выбран лучшим')
     expect(wrapper.get('[aria-label="Разнообразие: 5 из 5"]').attributes('aria-pressed'))
       .toBe('true')
+
+    await wrapper.get('.temperature-judge__button').trigger('click')
+    await flushPromises()
+
+    expect(fetch).toHaveBeenNthCalledWith(
+      3,
+      '/api/temperature-experiments/judge',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          task: 'Придумай название приложения',
+          profileId: 'day4-temperature',
+          candidates: experiment.results.map((result) => ({
+            variantId: result.id,
+            answer: result.answer,
+          })),
+        }),
+      }),
+    )
+    expect(wrapper.get('.temperature-judge__winner').text()).toContain('Творческий')
+    expect(wrapper.get('.temperature-judge__winner').text()).toContain('Совпадает с вашим выбором')
+    expect(wrapper.get('.temperature-judge__metrics').text()).toContain('deepseek-v4-pro')
   })
 })

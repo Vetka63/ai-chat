@@ -10,7 +10,8 @@ import java.util.List;
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public record TemperatureExperimentConfig(
         List<TemperatureVariantConfig> temperatures,
-        Integer maxTokens
+        Integer maxTokens,
+        TemperatureJudgeConfig judge
 ) {
     public TemperatureExperimentConfig {
         temperatures = temperatures == null ? List.of() : List.copyOf(temperatures);
@@ -23,6 +24,10 @@ public record TemperatureExperimentConfig(
         if (maxTokens == null || maxTokens < 1 || maxTokens > 8_000) {
             throw new IllegalArgumentException("Invalid temperature max_tokens: " + profileId);
         }
+        if (judge == null) {
+            throw new IllegalArgumentException("Missing temperature judge config: " + profileId);
+        }
+        judge.validate(profileId);
         var ids = new HashSet<String>();
         var values = new HashSet<Double>();
         for (var temperature : temperatures) {

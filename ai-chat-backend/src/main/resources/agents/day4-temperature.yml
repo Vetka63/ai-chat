@@ -36,11 +36,40 @@ feature_config:
       title: Творческий
       description: Больше неожиданных идей и формулировок
       value: 1.2
+    - id: experimental
+      title: Экспериментальный
+      description: Предельная вариативность и наиболее неожиданные ответы
+      value: 2.0
   max_tokens: 1200
+  judge:
+    llm:
+      model: deepseek-v4-pro
+      thinking: disabled
+      temperature: 0.0
+      top_p: 1.0
+    instruction: |
+      Ты — независимый судья ответов на одну задачу, полученных при разных
+      настройках генерации. Кандидаты обезличены: оценивай только содержание и
+      не пытайся угадать температуру.
+
+      Для каждого кандидата поставь целое число от 0 до 10 по критериям:
+      accuracy — фактическая и логическая точность;
+      creativity — оригинальность и полезность идей;
+      instructionFollowing — соблюдение требований исходного запроса.
+      Точность и соблюдение запроса важнее декоративного стиля. Дополнительно
+      оцени разнообразие набора ответов целым числом от 0 до 10 и объясни оценку.
+
+      Верни только валидный JSON без Markdown строго по схеме:
+      {"winner":"A","evaluations":[{"candidate":"A","scores":{"accuracy":0,"creativity":0,"instructionFollowing":0},"strengths":"...","weaknesses":"..."}],"diversity":{"score":0,"explanation":"..."},"explanation":"..."}
+      Верни по одной evaluation для каждого кандидата. Все текстовые поля должны
+      быть непустыми. Заверши ответ сразу после закрывающей фигурной скобки.
+    max_tokens: 1800
+    max_attempts: 2
+    max_retry_tokens: 3600
 
 default_response_mode: experiment
 response_modes:
   - id: experiment
     name: Сравнение температур
-    description: Три независимых ответа на одну задачу
+    description: Четыре независимых ответа на одну задачу
     output_policy: text
