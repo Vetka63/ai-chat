@@ -177,6 +177,8 @@ class ArchitectureRulesTest {
                 PACKAGE_ROOT.resolve("task/day2/answer/README.md"),
                 PACKAGE_ROOT.resolve("task/day3/reasoning/README.md"),
                 PACKAGE_ROOT.resolve("task/day3/reasoning/llmjudge/README.md"),
+                PACKAGE_ROOT.resolve("task/day4/temperature/README.md"),
+                PACKAGE_ROOT.resolve("task/day4/temperature/llmjudge/README.md"),
                 Path.of("src/main/resources/agents/README.md")
         )).allMatch(Files::isRegularFile);
     }

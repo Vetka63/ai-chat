@@ -7,6 +7,7 @@ import com.example.aichat.common.profile.registry.AgentRegistry;
 import com.example.aichat.task.day3.reasoning.config.ReasoningConfigProvider;
 import com.example.aichat.task.day3.reasoning.config.ReasoningExperimentConfig;
 import com.example.aichat.task.day3.reasoning.config.JudgeConfig;
+import com.example.aichat.task.day3.reasoning.config.JudgeLlmConfig;
 import com.example.aichat.task.day3.reasoning.llmjudge.model.ReasoningJudgeCandidate;
 import com.example.aichat.task.day3.reasoning.llmjudge.model.ReasoningJudgeEvaluation;
 import com.example.aichat.common.llm.LlmClient;
@@ -49,6 +50,8 @@ class ReasoningJudgeServiceTest {
         assertThat(result.evaluations()).extracting(ReasoningJudgeEvaluation::strategy)
                 .containsExactly("direct", "step-by-step");
         assertThat(result.evaluations().get(1).average()).isEqualTo(9.0);
+        assertThat(client.calls.getFirst().model()).isEqualTo("deepseek-v4-pro");
+        assertThat(client.calls.getFirst().thinking()).isEqualTo("disabled");
         var providerInput = client.calls.getFirst().messages().get(1).content();
         assertThat(providerInput)
                 .contains("\"candidate\":\"A\"")
@@ -80,6 +83,8 @@ class ReasoningJudgeServiceTest {
         assertThat(result.metrics().apiCalls()).isEqualTo(2);
         assertThat(client.calls).extracting(Call::operation)
                 .containsExactly("reasoning-judge", "reasoning-judge-retry");
+        assertThat(client.calls).extracting(Call::model)
+                .containsOnly("deepseek-v4-pro");
     }
 
     private static AgentRegistry registry() {
@@ -111,6 +116,7 @@ class ReasoningJudgeServiceTest {
                         null,
                         null,
                         new JudgeConfig(
+                                new JudgeLlmConfig("deepseek-v4-pro", "disabled", null),
                                 "Оцени обезличенные ответы",
                                 1_800,
                                 2,
@@ -165,13 +171,20 @@ class ReasoningJudgeServiceTest {
 
         @Override
         public LlmResult complete(LlmCompletionRequest request) {
-            calls.add(new Call(request.operation(), request.messages()));
+            calls.add(new Call(
+                    request.operation(),
+                    request.model(),
+                    request.thinking(),
+                    request.messages()
+            ));
             return responses.removeFirst();
         }
     }
 
     private record Call(
             String operation,
+            String model,
+            String thinking,
             List<LlmMessage> messages
     ) {
     }

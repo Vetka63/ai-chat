@@ -17,3 +17,8 @@
 ссылки на validators, output policies, тип пространства и его типизированную
 конфигурацию. Новый сложный день должен хранить свои поля только в
 `feature_config`, а не расширять `AgentProfile`.
+
+Например, `day4-temperature.yml` хранит в `feature_config.temperatures` весь
+набор вариантов эксперимента. `day3-reasoning.yml` содержит отдельный блок
+`feature_config.judge.llm`: он меняет модель только у судьи, сохраняя общие
+DeepSeek endpoint и API-ключ.

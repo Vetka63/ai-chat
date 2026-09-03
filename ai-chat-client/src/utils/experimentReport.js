@@ -13,22 +13,30 @@ const metricKeys = [
 export function combineMetrics(values = []) {
   const combined = Object.fromEntries(metricKeys.map((key) => [key, 0]))
   let estimatedCostUsd = 0
-  let hasCost = false
+  let hasCalls = false
+  let allCallCostsAvailable = true
 
   for (const value of values) {
     if (!value) continue
     for (const key of metricKeys) {
       combined[key] += Number(value[key]) || 0
     }
-    if (value.estimatedCostUsd !== null && value.estimatedCostUsd !== undefined) {
+    if ((Number(value.apiCalls) || 0) > 0) {
+      hasCalls = true
+    }
+    if ((Number(value.apiCalls) || 0) > 0
+      && (value.estimatedCostUsd === null || value.estimatedCostUsd === undefined)) {
+      allCallCostsAvailable = false
+    } else if (value.estimatedCostUsd !== null && value.estimatedCostUsd !== undefined) {
       estimatedCostUsd += Number(value.estimatedCostUsd) || 0
-      hasCost = true
     }
   }
 
   return {
     ...combined,
-    estimatedCostUsd: hasCost ? Number(estimatedCostUsd.toFixed(8)) : null,
+    estimatedCostUsd: hasCalls && allCallCostsAvailable
+      ? Number(estimatedCostUsd.toFixed(8))
+      : null,
   }
 }
 

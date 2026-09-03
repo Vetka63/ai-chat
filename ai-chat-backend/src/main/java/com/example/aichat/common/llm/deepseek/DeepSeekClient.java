@@ -125,7 +125,7 @@ public class DeepSeekClient implements LlmClient {
                     : request.model();
             var durationMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt);
             var usage = toUsage(response.usage());
-            var estimatedCost = estimateCost(usage);
+            var estimatedCost = estimateCost(usage, request.model());
             log.info(
                     "DeepSeek request completed: callId={}, profile={}, operation={}, responseModel={}, finishReason={}, contentLength={}, durationMs={}, promptTokens={}, completionTokens={}, totalTokens={}, estimatedCostUsd={}",
                     callId,
@@ -196,9 +196,17 @@ public class DeepSeekClient implements LlmClient {
         );
     }
 
-    private BigDecimal estimateCost(LlmUsage usage) {
+    private BigDecimal estimateCost(LlmUsage usage, String requestModel) {
         var pricing = properties.pricing();
         if (!pricing.configured()) {
+            return null;
+        }
+        if (!properties.model().equals(requestModel)) {
+            log.debug(
+                    "Cost estimate skipped: request model {} differs from priced default model {}",
+                    requestModel,
+                    properties.model()
+            );
             return null;
         }
 

@@ -1,0 +1,75 @@
+id: day4-temperature
+name: День 4 · Температура
+description: Сравнение точности, креативности и разнообразия при разных температурах
+version: 1
+enabled: true
+experience_type: temperature-experiment
+
+system_prompt: |
+  Ты участвуешь в учебном эксперименте по влиянию температуры на ответ языковой модели.
+  Выполняй ровно задачу пользователя, соблюдай все её ограничения и отвечай на языке пользователя.
+  Не обсуждай настройки эксперимента и не утверждай, что видел ответы других запусков.
+
+input_policy:
+  max_message_length: 10000
+  max_history_messages: 0
+  allowed_roles:
+    - user
+    - assistant
+
+deepseek:
+  model: deepseek-v4-flash
+  thinking: disabled
+  top_p: 1.0
+
+feature_config:
+  temperatures:
+    - id: precise
+      title: Точный
+      description: Сфокусированный и наиболее предсказуемый ответ
+      value: 0.0
+    - id: balanced
+      title: Сбалансированный
+      description: Баланс точности, естественности и вариативности
+      value: 0.7
+    - id: creative
+      title: Творческий
+      description: Больше неожиданных идей и формулировок
+      value: 1.2
+    - id: experimental
+      title: Экспериментальный
+      description: Предельная вариативность и наиболее неожиданные ответы
+      value: 2.0
+  max_tokens: 1200
+  judge:
+    llm:
+      model: deepseek-v4-pro
+      thinking: disabled
+      temperature: 0.0
+      top_p: 1.0
+    instruction: |
+      Ты — независимый судья ответов на одну задачу, полученных при разных
+      настройках генерации. Кандидаты обезличены: оценивай только содержание и
+      не пытайся угадать температуру.
+
+      Для каждого кандидата поставь целое число от 0 до 10 по критериям:
+      accuracy — фактическая и логическая точность;
+      creativity — оригинальность и полезность идей;
+      instructionFollowing — соблюдение требований исходного запроса.
+      Точность и соблюдение запроса важнее декоративного стиля. Дополнительно
+      оцени разнообразие набора ответов целым числом от 0 до 10 и объясни оценку.
+
+      Верни только валидный JSON без Markdown строго по схеме:
+      {"winner":"A","evaluations":[{"candidate":"A","scores":{"accuracy":0,"creativity":0,"instructionFollowing":0},"strengths":"...","weaknesses":"..."}],"diversity":{"score":0,"explanation":"..."},"explanation":"..."}
+      Верни по одной evaluation для каждого кандидата. Все текстовые поля должны
+      быть непустыми. Заверши ответ сразу после закрывающей фигурной скобки.
+    max_tokens: 1800
+    max_attempts: 2
+    max_retry_tokens: 3600
+
+default_response_mode: experiment
+response_modes:
+  - id: experiment
+    name: Сравнение температур
+    description: Четыре независимых ответа на одну задачу
+    output_policy: text
