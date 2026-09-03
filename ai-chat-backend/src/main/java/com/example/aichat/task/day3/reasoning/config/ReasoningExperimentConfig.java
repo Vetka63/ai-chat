@@ -3,7 +3,7 @@ package com.example.aichat.task.day3.reasoning.config;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
 
-/** Immutable configuration model for ReasoningExperiment settings. */
+/** Содержит неизменяемые настройки ReasoningExperiment. */
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public record ReasoningExperimentConfig(
         ReasoningStrategyConfig direct,

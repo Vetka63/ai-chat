@@ -3,7 +3,7 @@ package com.example.aichat.common.outputpolicy;
 import com.example.aichat.common.llm.model.LlmResult;
 import com.example.aichat.common.outputpolicy.model.OutputPolicyResult;
 
-/** Applies the configurable processing rule represented by OutputPolicy. */
+/** Задаёт расширяемый контракт проверки и преобразования ответа LLM. */
 public interface OutputPolicy {
     String type();
 

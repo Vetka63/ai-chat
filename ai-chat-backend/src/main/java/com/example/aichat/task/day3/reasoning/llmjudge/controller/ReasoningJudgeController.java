@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** HTTP adapter that validates and maps requests for the ReasoningJudgeController boundary. */
+/** Принимает, проверяет и преобразует HTTP-запросы на границе ReasoningJudgeController. */
 @RestController
 @RequestMapping("/api/reasoning-experiments/judge")
 public class ReasoningJudgeController {

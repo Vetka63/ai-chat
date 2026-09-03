@@ -4,7 +4,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
-/** HTTP request DTO for the JudgeCandidate operation. */
+/** Описывает один кандидатский ответ, передаваемый LLM-судье. */
 public record JudgeCandidateRequest(
         @NotBlank(message = "Candidate strategy must not be blank")
         @Pattern(

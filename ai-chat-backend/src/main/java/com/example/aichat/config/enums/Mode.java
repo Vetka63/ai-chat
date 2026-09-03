@@ -1,6 +1,6 @@
 package com.example.aichat.config.enums;
 
-/** Closed set of supported values represented by Mode. */
+/** Перечисляет поддерживаемые значения Mode. */
 
 public enum Mode {
     FALLBACK,

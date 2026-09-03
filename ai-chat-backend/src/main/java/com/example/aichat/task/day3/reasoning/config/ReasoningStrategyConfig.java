@@ -3,7 +3,7 @@ package com.example.aichat.task.day3.reasoning.config;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
 
-/** Immutable configuration model for ReasoningStrategy settings. */
+/** Содержит неизменяемые настройки ReasoningStrategy. */
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public record ReasoningStrategyConfig(String instruction, Integer maxTokens) {
     public void validate(String profileId, boolean instructionRequired) {

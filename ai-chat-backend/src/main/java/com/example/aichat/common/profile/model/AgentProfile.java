@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/** Immutable server-side agent profile loaded from YAML configuration. */
+/** Представляет неизменяемый серверный профиль агента, загруженный из YAML. */
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public record AgentProfile(
         String id,

@@ -23,7 +23,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
 
-/** Validates an incoming request before the main LLM generation is executed. */
+/** Проверяет пользовательский запрос до запуска основной генерации LLM. */
 @Component
 public class RecipeIntentRequestGuard implements RequestGuard {
 

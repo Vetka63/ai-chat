@@ -1,6 +1,6 @@
 package com.example.aichat.task.chat.controller.dto;
 
-/** Represents the ChatMeta concept within its owning domain. */
+/** Содержит метаданные выполнения запроса чата и применённых ограничений ответа. */
 public record ChatMeta(
         String model,
         String finishReason,

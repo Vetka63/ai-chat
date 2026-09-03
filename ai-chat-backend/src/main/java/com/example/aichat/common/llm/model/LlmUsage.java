@@ -1,6 +1,6 @@
 package com.example.aichat.common.llm.model;
 
-/** Provider token-usage data returned by an LLM call. */
+/** Содержит статистику использования токенов, возвращённую провайдером LLM. */
 public record LlmUsage(
         long promptTokens,
         long completionTokens,

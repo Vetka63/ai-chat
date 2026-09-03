@@ -5,7 +5,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 
-/** Spring Boot entry point that starts the AI chat backend. */
+/** Запускает Java backend как приложение Spring Boot. */
 @SpringBootApplication
 @EnableConfigurationProperties(ChatProperties.class)
 public class AiChatBackendApplication {

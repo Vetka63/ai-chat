@@ -3,7 +3,7 @@ package com.example.aichat.task.day3.reasoning.config;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
 
-/** Immutable configuration model for MetaPrompt settings. */
+/** Содержит неизменяемые настройки MetaPrompt. */
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public record MetaPromptConfig(
         String builderInstruction,

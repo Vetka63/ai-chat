@@ -5,7 +5,7 @@ import com.example.aichat.common.llm.model.LlmMessage;
 
 import java.util.List;
 
-/** Provides shared helpers used by the Day 3 reasoning strategy executors. */
+/** Предоставляет общие вспомогательные операции стратегиям рассуждения Дня 3. */
 final class StrategySupport {
 
     private StrategySupport() {

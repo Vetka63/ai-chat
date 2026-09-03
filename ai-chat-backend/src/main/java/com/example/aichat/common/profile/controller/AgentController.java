@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-/** HTTP adapter that validates and maps requests for the AgentController boundary. */
+/** Принимает, проверяет и преобразует HTTP-запросы на границе AgentController. */
 @RestController
 @RequestMapping("/api/profiles")
 public class AgentController {

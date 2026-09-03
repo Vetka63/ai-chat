@@ -11,7 +11,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
 
-/** Applies the configurable processing rule represented by AnswerJsonOutputPolicy. */
+/** Проверяет и преобразует строгий JSON-ответ общего назначения из задания Дня 2. */
 @Component
 public class AnswerJsonOutputPolicy implements OutputPolicy {
 

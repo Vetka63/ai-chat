@@ -2,7 +2,7 @@ package com.example.aichat.task.day2.responseformat.outputpolicy.dto;
 
 import java.util.List;
 
-/** Validated structured payload for the Recipe output format. */
+/** Представляет проверенный рецепт с названием, ингредиентами и временем готовки. */
 public record RecipePayload(
         String dishName,
         List<String> requiredIngredients,

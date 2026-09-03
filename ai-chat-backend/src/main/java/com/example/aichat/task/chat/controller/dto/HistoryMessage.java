@@ -5,7 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
-/** Immutable message model used at the History boundary. */
+/** Описывает сообщение истории, полученное через HTTP API чата. */
 public record HistoryMessage(
         @NotNull(message = "History role is required")
         HistoryRole role,

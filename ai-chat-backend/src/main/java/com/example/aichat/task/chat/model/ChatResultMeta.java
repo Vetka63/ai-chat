@@ -1,6 +1,6 @@
 package com.example.aichat.task.chat.model;
 
-/** Represents the ChatResultMeta concept within its owning domain. */
+/** Содержит внутренние метаданные результата генерации чата. */
 public record ChatResultMeta(
         String model,
         String finishReason,

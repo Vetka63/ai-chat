@@ -23,7 +23,7 @@ import java.util.concurrent.Future;
 
 import static com.example.aichat.common.profile.service.AgentLlmRequestFactory.create;
 
-/** Executes the ExpertPanel reasoning strategy for Day 3. */
+/** Выполняет стратегию экспертной группы с отдельными ролями и итоговым синтезом. */
 @Component
 public class ExpertPanelStrategyExecutor implements ReasoningStrategyExecutor {
 

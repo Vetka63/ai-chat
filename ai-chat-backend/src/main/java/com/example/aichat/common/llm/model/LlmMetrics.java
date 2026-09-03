@@ -2,7 +2,7 @@ package com.example.aichat.common.llm.model;
 
 import java.math.BigDecimal;
 
-/** Aggregated execution metrics for Llm calls. */
+/** Содержит агрегированные метрики выполнения одного вызова LLM. */
 public record LlmMetrics(
         long durationMs,
         LlmUsage usage,

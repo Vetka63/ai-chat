@@ -3,7 +3,7 @@ package com.example.aichat.task.day2.responseformat.outputpolicy.dto;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/** Validated structured payload for the Answer output format. */
+/** Представляет проверенный структурированный ответ общего назначения. */
 public record AnswerPayload(String answer) {
     private static final Logger log = LoggerFactory.getLogger(AnswerPayload.class);
     private static final int MAX_ANSWER_LENGTH = 500;

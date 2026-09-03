@@ -4,7 +4,7 @@ import com.example.aichat.task.day3.reasoning.enums.ReasoningStrategy;
 import com.example.aichat.task.day3.reasoning.model.ReasoningExperimentContext;
 import com.example.aichat.task.day3.reasoning.model.ReasoningStrategyResult;
 
-/** Executes the Reasoning reasoning strategy for Day 3. */
+/** Задаёт общий контракт подключаемой стратегии рассуждения Дня 3. */
 public interface ReasoningStrategyExecutor {
     ReasoningStrategy strategy();
 

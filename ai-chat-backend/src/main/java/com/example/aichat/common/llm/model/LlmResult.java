@@ -1,6 +1,6 @@
 package com.example.aichat.common.llm.model;
 
-/** Immutable application result produced by the Llm workflow. */
+/** Содержит нормализованный результат вызова LLM и связанные метаданные. */
 public record LlmResult(
         String content,
         String model,

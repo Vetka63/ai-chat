@@ -1,6 +1,6 @@
 package com.example.aichat.task.chat.model;
 
-/** Immutable application result produced by the Chat workflow. */
+/** Содержит результат прикладного сценария чата до преобразования в HTTP DTO. */
 public record ChatResult(
         String reply,
         Object structuredReply,

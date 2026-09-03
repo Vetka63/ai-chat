@@ -11,7 +11,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 
-/** Applies the configurable processing rule represented by TextOutputPolicy. */
+/** Преобразует обычный текстовый ответ LLM без структурной JSON-валидации. */
 @Component
 public class TextOutputPolicy implements OutputPolicy {
 

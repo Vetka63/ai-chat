@@ -2,7 +2,7 @@ package com.example.aichat.common.llm.model;
 
 import java.util.List;
 
-/** HTTP request DTO for the LlmCompletion operation. */
+/** Содержит независимые от провайдера параметры одного запроса на генерацию LLM. */
 public record LlmCompletionRequest(
         String profileId,
         String operation,

@@ -4,7 +4,7 @@ import com.example.aichat.task.day3.reasoning.model.ExperimentMetrics;
 
 import java.util.List;
 
-/** Immutable application result produced by the ReasoningJudge workflow. */
+/** Содержит проверенный результат автоматического сравнения вариантов рассуждения. */
 public record ReasoningJudgeResult(
         String winnerStrategy,
         String winnerTitle,

@@ -7,7 +7,7 @@ import jakarta.validation.constraints.Size;
 
 import java.util.List;
 
-/** HTTP request DTO for the Chat operation. */
+/** Описывает входной HTTP-запрос на отправку сообщения в чат. */
 public record ChatRequest(
         @NotBlank(message = "Message must not be blank")
         @Size(max = 100_000, message = "Message must not exceed 100000 characters")

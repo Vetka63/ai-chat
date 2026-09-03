@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.annotation.JsonNaming;
 
 import java.util.List;
 
-/** Immutable configuration model for ResponseMode settings. */
+/** Содержит неизменяемые настройки ResponseMode. */
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public record ResponseModeConfig(
         String id,

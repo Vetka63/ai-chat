@@ -5,7 +5,7 @@ import com.example.aichat.common.llm.model.LlmResult;
 import java.math.BigDecimal;
 import java.util.Collection;
 
-/** Aggregated execution metrics for Experiment calls. */
+/** Содержит агрегированные метрики всех LLM-вызовов эксперимента. */
 public record ExperimentMetrics(
         int apiCalls,
         long elapsedMs,

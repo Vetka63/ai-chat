@@ -1,6 +1,6 @@
 package com.example.aichat.task.recipe.enums;
 
-/** Closed set of supported values represented by RecipeIntentVerdict. */
+/** Перечисляет поддерживаемые значения RecipeIntentVerdict. */
 
 public enum RecipeIntentVerdict {
     ALLOW_RECIPE,

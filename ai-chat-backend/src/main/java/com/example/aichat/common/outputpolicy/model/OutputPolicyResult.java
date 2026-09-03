@@ -1,5 +1,5 @@
 package com.example.aichat.common.outputpolicy.model;
 
-/** Immutable application result produced by the OutputPolicy workflow. */
+/** Содержит отображаемый и, при наличии, структурированный результат output-policy. */
 public record OutputPolicyResult(String reply, Object structuredReply) {
 }

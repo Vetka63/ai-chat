@@ -2,7 +2,7 @@ package com.example.aichat.common.profile.validator;
 
 import com.example.aichat.common.profile.model.AgentProfile;
 
-/** Validates task-specific profile configuration during application startup. */
+/** Задаёт контракт проверки специфичной для задачи конфигурации профиля при запуске. */
 public interface AgentFeatureConfigValidator {
     String experienceType();
 

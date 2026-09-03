@@ -10,7 +10,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Map;
 
-/** Represents the ApiExceptionHandler concept within its owning domain. */
+/** Преобразует исключения API в единообразные HTTP-ответы с ошибками. */
 @RestControllerAdvice
 public class ApiExceptionHandler {
 

@@ -6,7 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Indexes input-policy implementations by type and provides fail-fast lookup. */
+/** Индексирует реализации input-policy по типу и обеспечивает немедленную проверку конфигурации. */
 @Component
 public class InputPolicyRegistry {
 
@@ -22,7 +22,7 @@ public class InputPolicyRegistry {
         this.policies = Map.copyOf(indexed);
     }
 
-    /** Returns a registered policy or rejects invalid profile configuration. */
+    /** Возвращает зарегистрированную политику или отклоняет некорректную конфигурацию профиля. */
     public InputPolicy get(String type) {
         var policy = policies.get(type);
         if (policy == null) {
@@ -31,7 +31,7 @@ public class InputPolicyRegistry {
         return policy;
     }
 
-    /** Verifies that a policy exists during application startup. */
+    /** Проверяет при запуске приложения, что указанная политика зарегистрирована. */
     public void requireRegistered(String type) {
         get(type);
     }

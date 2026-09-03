@@ -4,7 +4,7 @@ import com.example.aichat.common.inputpolicy.model.InputHistoryMessage;
 
 import java.util.List;
 
-/** Immutable application command for the Chat workflow. */
+/** Содержит нормализованные входные данные прикладного сценария чата. */
 public record ChatCommand(
         String message,
         String profileId,

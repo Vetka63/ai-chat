@@ -25,7 +25,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
-/** Coordinates the application workflow implemented by ReasoningExperimentService. */
+/** Выбирает стратегии Дня 3, запускает их параллельно и объединяет результаты. */
 @Service
 public class ReasoningExperimentService {
 

@@ -3,7 +3,7 @@ package com.example.aichat.task.day3.reasoning.model;
 import com.example.aichat.common.profile.model.AgentProfile;
 import com.example.aichat.task.day3.reasoning.config.ReasoningExperimentConfig;
 
-/** Immutable execution context shared with Day 3 reasoning strategies. */
+/** Содержит неизменяемый контекст выполнения стратегий рассуждения Дня 3. */
 public record ReasoningExperimentContext(
         AgentProfile profile,
         ReasoningExperimentConfig config,

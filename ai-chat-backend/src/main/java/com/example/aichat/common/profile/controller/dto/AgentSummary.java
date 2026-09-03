@@ -4,7 +4,7 @@ import com.example.aichat.common.profile.model.AgentProfile;
 
 import java.util.List;
 
-/** Public summary DTO for Agent metadata. */
+/** Содержит публичные метаданные профиля без системного промпта и секретов. */
 public record AgentSummary(
         String id,
         String name,

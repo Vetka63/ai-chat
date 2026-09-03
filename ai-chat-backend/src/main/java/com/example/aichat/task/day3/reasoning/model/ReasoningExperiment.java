@@ -2,7 +2,7 @@ package com.example.aichat.task.day3.reasoning.model;
 
 import java.util.List;
 
-/** Aggregate result of a Day 3 multi-strategy reasoning experiment. */
+/** Содержит совокупный результат эксперимента Дня 3 по нескольким стратегиям. */
 public record ReasoningExperiment(
         String experimentId,
         String profileId,

@@ -7,7 +7,7 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-/** Indexes OutputPolicy implementations and provides fail-fast lookup by stable identifier. */
+/** Индексирует output-policy и обеспечивает их поиск по стабильному идентификатору. */
 @Component
 public class OutputPolicyRegistry {
 

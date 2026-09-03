@@ -8,7 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Indexes RequestGuard implementations and provides fail-fast lookup by stable identifier. */
+/** Индексирует валидаторы запросов и находит их по стабильному идентификатору. */
 @Component
 public class RequestGuardRegistry {
 

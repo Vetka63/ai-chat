@@ -36,7 +36,7 @@ import java.util.concurrent.TimeUnit;
 
 import static com.example.aichat.common.profile.service.AgentLlmRequestFactory.create;
 
-/** Coordinates the application workflow implemented by ReasoningJudgeService. */
+/** Обезличивает кандидатов, вызывает LLM-судью и проверяет его структурированный ответ. */
 @Service
 public class ReasoningJudgeService implements LlmJudge<ReasoningJudgeCommand, ReasoningJudgeResult> {
 

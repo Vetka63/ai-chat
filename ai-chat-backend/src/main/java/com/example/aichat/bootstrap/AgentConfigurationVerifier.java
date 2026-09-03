@@ -13,7 +13,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Validates cross-module profile references after all Spring components are registered. */
+/** Проверяет межмодульные ссылки профилей после регистрации всех компонентов Spring. */
 @Component
 public class AgentConfigurationVerifier implements SmartInitializingSingleton {
 

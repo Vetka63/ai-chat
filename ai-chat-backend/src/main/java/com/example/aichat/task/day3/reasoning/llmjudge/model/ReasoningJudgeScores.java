@@ -1,6 +1,6 @@
 package com.example.aichat.task.day3.reasoning.llmjudge.model;
 
-/** Validated score breakdown returned by the Day 3 LLM judge. */
+/** Содержит проверенные оценки кандидата по критериям LLM-судьи. */
 public record ReasoningJudgeScores(
         int correctness,
         int clarity,

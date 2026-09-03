@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component;
 
 import static com.example.aichat.common.profile.service.AgentLlmRequestFactory.create;
 
-/** Executes the DirectAnswer reasoning strategy for Day 3. */
+/** Выполняет стратегию прямого ответа без дополнительных инструкций. */
 @Component
 public class DirectAnswerStrategyExecutor implements ReasoningStrategyExecutor {
 

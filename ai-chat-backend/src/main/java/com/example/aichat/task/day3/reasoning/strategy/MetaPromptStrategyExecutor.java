@@ -13,7 +13,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import static com.example.aichat.common.profile.service.AgentLlmRequestFactory.create;
 
-/** Executes the MetaPrompt reasoning strategy for Day 3. */
+/** Сначала создаёт метапромпт, а затем использует его для решения задачи. */
 @Component
 public class MetaPromptStrategyExecutor implements ReasoningStrategyExecutor {
 

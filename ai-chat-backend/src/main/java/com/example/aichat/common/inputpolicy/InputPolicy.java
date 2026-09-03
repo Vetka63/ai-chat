@@ -7,15 +7,15 @@ import com.example.aichat.common.profile.model.ResponseModeConfig;
 import java.util.List;
 
 /**
- * Converts a user request and optional history into provider-neutral LLM messages.
- * Implementations are selected by {@link InputPolicyRegistry} through profile configuration.
+ * Преобразует запрос пользователя и необязательную историю в независимые от провайдера сообщения LLM.
+ * Конкретная реализация выбирается через {@link InputPolicyRegistry} согласно настройкам профиля.
  */
 public interface InputPolicy {
 
-    /** Returns the stable configuration identifier of this policy. */
+    /** Возвращает стабильный идентификатор политики, используемый в конфигурации. */
     String type();
 
-    /** Builds and validates the messages sent to the LLM provider. */
+    /** Формирует и проверяет сообщения перед отправкой провайдеру LLM. */
     List<LlmMessage> buildMessages(
             AgentProfile profile,
             ResponseModeConfig responseMode,

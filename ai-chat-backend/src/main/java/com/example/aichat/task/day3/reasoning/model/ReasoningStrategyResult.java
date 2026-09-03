@@ -5,7 +5,7 @@ import com.example.aichat.common.llm.model.LlmResult;
 
 import java.util.List;
 
-/** Immutable application result produced by the ReasoningStrategy workflow. */
+/** Содержит результат выполнения одной стратегии рассуждения и её метрики. */
 public record ReasoningStrategyResult(
         String strategy,
         String title,

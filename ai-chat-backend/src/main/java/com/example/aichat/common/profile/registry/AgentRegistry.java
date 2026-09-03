@@ -18,7 +18,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Indexes Agent implementations and provides fail-fast lookup by stable identifier. */
+/** Загружает YAML-профили агентов, проверяет их и индексирует по идентификатору. */
 @Component
 public class AgentRegistry {
 

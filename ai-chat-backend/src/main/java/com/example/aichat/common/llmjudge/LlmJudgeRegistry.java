@@ -6,7 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Registry for independently pluggable LLM judges with runtime type validation. */
+/** Хранит подключаемые LLM-судьи и проверяет совместимость их входных и выходных типов. */
 @Component
 public class LlmJudgeRegistry {
 
@@ -22,7 +22,7 @@ public class LlmJudgeRegistry {
         this.judges = Map.copyOf(indexed);
     }
 
-    /** Returns a judge only when its declared command and result types match. */
+    /** Возвращает судью, только если объявленные типы команды и результата совпадают. */
     @SuppressWarnings("unchecked")
     public <I, O> LlmJudge<I, O> get(String type, Class<I> inputType, Class<O> resultType) {
         var judge = judges.get(type);

@@ -12,8 +12,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Default input policy that enforces configured size and role limits and combines
- * the profile prompt, response-mode instruction, conversation history and latest message.
+ * Стандартная входная политика: проверяет ограничения длины и ролей,
+ * объединяет системный промпт профиля, инструкцию режима, историю и последнее сообщение.
  */
 @Component
 public class StandardInputPolicy implements InputPolicy {

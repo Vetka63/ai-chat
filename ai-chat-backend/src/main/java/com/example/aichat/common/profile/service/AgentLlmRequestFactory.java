@@ -7,7 +7,7 @@ import com.example.aichat.common.llm.model.LlmMessage;
 
 import java.util.List;
 
-/** Creates provider-neutral request objects for the responsibility represented by AgentLlmRequestFactory. */
+/** Преобразует настройки профиля и режима в независимый от провайдера запрос LLM. */
 public final class AgentLlmRequestFactory {
 
     private AgentLlmRequestFactory() {

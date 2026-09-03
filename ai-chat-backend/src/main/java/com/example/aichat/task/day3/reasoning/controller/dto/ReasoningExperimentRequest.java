@@ -6,7 +6,7 @@ import jakarta.validation.constraints.Size;
 
 import java.util.List;
 
-/** HTTP request DTO for the ReasoningExperiment operation. */
+/** Описывает HTTP-запрос на запуск нескольких стратегий рассуждения. */
 public record ReasoningExperimentRequest(
         @NotBlank(message = "Task must not be blank")
         @Size(max = 10000, message = "Task must not exceed 10000 characters")

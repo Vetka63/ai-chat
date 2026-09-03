@@ -1,5 +1,5 @@
 package com.example.aichat.common.llm.model;
 
-/** Immutable message model used at the Llm boundary. */
+/** Представляет сообщение с ролью и содержимым в запросе или ответе LLM. */
 public record LlmMessage(String role, String content) {
 }

@@ -3,7 +3,7 @@ package com.example.aichat.common.profile.model;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
 
-/** Immutable configuration model for RequestGuard settings. */
+/** Содержит неизменяемые настройки RequestGuard. */
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public record RequestGuardConfig(
         String type,

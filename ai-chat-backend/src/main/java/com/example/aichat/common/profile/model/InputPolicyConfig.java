@@ -6,7 +6,7 @@ import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import java.util.List;
 import java.util.Set;
 
-/** Immutable configuration model for InputPolicy settings. */
+/** Содержит неизменяемые настройки InputPolicy. */
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public record InputPolicyConfig(
         String type,

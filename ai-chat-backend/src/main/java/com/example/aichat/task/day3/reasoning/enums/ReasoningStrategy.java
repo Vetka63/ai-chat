@@ -2,7 +2,7 @@ package com.example.aichat.task.day3.reasoning.enums;
 
 import java.util.Arrays;
 
-/** Closed set of supported values represented by ReasoningStrategy. */
+/** Перечисляет поддерживаемые значения ReasoningStrategy. */
 
 public enum ReasoningStrategy {
     DIRECT(

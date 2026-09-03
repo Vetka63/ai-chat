@@ -1,22 +1,22 @@
 package com.example.aichat.common.llmjudge;
 
 /**
- * Generic extension point for task-specific LLM judges.
+ * Универсальная точка расширения для LLM-судей конкретных задач.
  *
- * @param <I> judge command type
- * @param <O> validated judge result type
+ * @param <I> тип входной команды судьи
+ * @param <O> тип проверенного результата судьи
  */
 public interface LlmJudge<I, O> {
 
-    /** Returns the stable registry identifier. */
+    /** Возвращает стабильный идентификатор реализации в registry. */
     String type();
 
-    /** Declares the supported command type for safe registry lookup. */
+    /** Объявляет поддерживаемый тип команды для безопасного поиска в registry. */
     Class<I> inputType();
 
-    /** Declares the produced result type for safe registry lookup. */
+    /** Объявляет тип результата для безопасного поиска в registry. */
     Class<O> resultType();
 
-    /** Evaluates a task-specific command and returns a validated result. */
+    /** Оценивает команду конкретной задачи и возвращает проверенный результат. */
     O judge(I input);
 }

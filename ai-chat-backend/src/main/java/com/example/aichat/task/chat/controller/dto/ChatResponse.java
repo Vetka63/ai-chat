@@ -1,6 +1,6 @@
 package com.example.aichat.task.chat.controller.dto;
 
-/** HTTP response DTO for the Chat operation. */
+/** Описывает HTTP-ответ чата, включая структурированный результат и метаданные. */
 public record ChatResponse(
         String reply,
         Object structuredReply,

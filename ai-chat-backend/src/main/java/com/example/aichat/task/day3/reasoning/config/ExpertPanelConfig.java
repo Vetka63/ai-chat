@@ -7,7 +7,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-/** Immutable configuration model for ExpertPanel settings. */
+/** Содержит неизменяемые настройки ExpertPanel. */
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public record ExpertPanelConfig(
         String commonInstruction,

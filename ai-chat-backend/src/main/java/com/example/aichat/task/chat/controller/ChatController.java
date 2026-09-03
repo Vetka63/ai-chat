@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** HTTP adapter that validates and maps requests for the ChatController boundary. */
+/** Принимает, проверяет и преобразует HTTP-запросы на границе ChatController. */
 @RestController
 @RequestMapping("/api/chat")
 public class ChatController {

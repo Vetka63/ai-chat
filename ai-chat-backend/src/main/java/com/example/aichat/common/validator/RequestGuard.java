@@ -6,7 +6,7 @@ import com.example.aichat.common.llm.model.LlmMessage;
 
 import java.util.List;
 
-/** Validates an incoming request before the main LLM generation is executed. */
+/** Проверяет пользовательский запрос до запуска основной генерации LLM. */
 public interface RequestGuard {
 
     String type();

@@ -1,6 +1,6 @@
 package com.example.aichat.task.day3.reasoning.llmjudge.model;
 
-/** Evaluation of one candidate returned by the Day 3 LLM judge. */
+/** Содержит оценку одного кандидата, сформированную LLM-судьёй Дня 3. */
 public record ReasoningJudgeEvaluation(
         String strategy,
         String title,

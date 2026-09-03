@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** HTTP adapter that validates and maps requests for the ReasoningExperimentController boundary. */
+/** Принимает, проверяет и преобразует HTTP-запросы на границе ReasoningExperimentController. */
 @RestController
 @RequestMapping("/api/reasoning-experiments")
 public class ReasoningExperimentController {

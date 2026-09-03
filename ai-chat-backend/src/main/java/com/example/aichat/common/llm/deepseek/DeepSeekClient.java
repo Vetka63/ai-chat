@@ -27,7 +27,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
-/** Defines or implements the provider boundary represented by DeepSeekClient. */
+/** Реализует контракт LLM через совместимый с OpenAI API провайдера DeepSeek. */
 @Component
 public class DeepSeekClient implements LlmClient {
 

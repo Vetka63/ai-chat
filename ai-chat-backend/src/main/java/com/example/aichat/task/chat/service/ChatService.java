@@ -28,7 +28,7 @@ import java.util.List;
 
 import static com.example.aichat.common.profile.service.AgentLlmRequestFactory.create;
 
-/** Coordinates the application workflow implemented by ChatService. */
+/** Координирует полный pipeline чата: input, validation, LLM и output-policy. */
 @Service
 public class ChatService {
 

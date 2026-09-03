@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.annotation.JsonNaming;
 
 import java.util.Set;
 
-/** Immutable configuration model for DeepSeek settings. */
+/** Содержит неизменяемые настройки DeepSeek. */
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public record DeepSeekConfig(
         String model,

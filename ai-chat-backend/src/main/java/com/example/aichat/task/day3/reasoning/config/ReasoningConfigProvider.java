@@ -6,7 +6,7 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
 
-/** Represents the ReasoningConfigProvider concept within its owning domain. */
+/** Читает и проверяет типизированную конфигурацию эксперимента Дня 3 из профиля. */
 @Component
 public class ReasoningConfigProvider implements AgentFeatureConfigValidator {
 

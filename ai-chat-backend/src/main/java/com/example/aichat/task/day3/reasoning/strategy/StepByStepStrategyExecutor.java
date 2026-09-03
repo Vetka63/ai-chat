@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component;
 
 import static com.example.aichat.common.profile.service.AgentLlmRequestFactory.create;
 
-/** Executes the StepByStep reasoning strategy for Day 3. */
+/** Выполняет стратегию решения задачи с явной пошаговой инструкцией. */
 @Component
 public class StepByStepStrategyExecutor implements ReasoningStrategyExecutor {
 

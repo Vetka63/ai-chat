@@ -8,7 +8,7 @@ import jakarta.validation.constraints.Size;
 
 import java.util.List;
 
-/** HTTP request DTO for the ReasoningJudge operation. */
+/** Описывает HTTP-запрос на автоматическое сравнение результатов рассуждения. */
 public record ReasoningJudgeRequest(
         @NotBlank(message = "Task must not be blank")
         @Size(max = 10000, message = "Task must not exceed 10000 characters")
