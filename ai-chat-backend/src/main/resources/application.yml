@@ -19,6 +19,9 @@ app:
       prompt-cache-hit-per-million-usd: ${LLM_PRICE_INPUT_CACHE_HIT_PER_MILLION_USD:0}
       output-per-million-usd: ${LLM_PRICE_OUTPUT_PER_MILLION_USD:0}
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:8080}
+  mistral:
+    base-url: ${MISTRAL_BASE_URL:https://api.mistral.ai/v1}
+    api-key: ${MISTRAL_API_KEY:}
 
 management:
   endpoints:

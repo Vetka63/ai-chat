@@ -96,6 +96,8 @@ Vue показывает текст или карточку рецепта
 - `recipe` — кулинарный профиль;
 - `day3-reasoning` — эксперимент с четырьмя способами решения одной задачи;
 - `day4-temperature` — сравнение одной задачи при четырёх температурах;
+- `day5-model-comparison` — сравнение одной задачи на Mistral 3B, DeepSeek
+  Flash и DeepSeek Pro;
 - архитектура допускает добавление новых YAML-профилей.
 
 Если `profileId` или `responseMode` неизвестен, backend возвращает ошибку и не
@@ -206,8 +208,8 @@ API-ключ не журналируются. Поскольку пользов�
 чувствительным, этот режим предназначен для локальной отладки и по умолчанию
 выключен.
 
-Ключ берётся из `LLM_API_KEY`. Он не включается в ответ API и не передаётся во
-frontend.
+Ключ DeepSeek берётся из `LLM_API_KEY`, а отдельный ключ Mistral — из
+`MISTRAL_API_KEY`. Они не включаются в ответ API и не передаются во frontend.
 
 В режиме `CHAT_MODE=fallback` внешний вызов не выполняется. `ChatService`
 возвращает локальный тестовый ответ той же формы, чтобы интерфейс можно было
@@ -378,6 +380,8 @@ CHAT_MODE=llm
 LLM_BASE_URL=https://api.deepseek.com
 LLM_API_KEY=ваш_ключ
 LLM_MODEL=deepseek-v4-flash
+MISTRAL_BASE_URL=https://api.mistral.ai/v1
+MISTRAL_API_KEY=ваш_отдельный_ключ
 LLM_LOG_PAYLOADS=true
 ```
 
@@ -601,6 +605,56 @@ JSON проходит схематическую проверку; при пов
 Основные проверки находятся в `TemperatureExperimentServiceTest`,
 `TemperatureExperimentConfigTest`, `TemperatureJudgeServiceTest`,
 `temperatureReport.test.js` и `App.test.js`.
+
+## День 5: сравнение версий моделей
+
+Профиль `day5-model-comparison` использует endpoint
+`POST /api/model-comparisons`. История не отправляется: backend создаёт один
+system message и один user message, после чего без изменений использует их во
+всех трёх вызовах.
+
+Общий `LlmProviderRegistry` выбирает адаптер по значению `provider` из
+`feature_config.models`:
+
+```text
+mistral  -> MistralClient  -> https://api.mistral.ai/v1/chat/completions
+deepseek -> DeepSeekClient -> https://api.deepseek.com/chat/completions
+```
+
+`DeepSeekClient` продолжает реализовывать прежний `LlmClient`, поэтому чат,
+рецепты, рассуждения, температурный эксперимент и оба судьи работают как раньше.
+Mistral используется только новым сценарием и получает собственные
+`MISTRAL_BASE_URL` и `MISTRAL_API_KEY`.
+
+`ModelComparisonService` последовательно вызывает `ministral-3b-2512`,
+`deepseek-v4-flash` и `deepseek-v4-pro`. У всех одинаковы задача, системный
+промпт, `temperature: 0`, `top_p: 1`, `max_tokens: 1200` и текстовый формат.
+Thinking у DeepSeek отключён, а в Mistral-запрос специфичные поля DeepSeek не
+попадают.
+
+Каждый результат содержит время, входные и выходные токены, общее usage и
+расчётную стоимость. `ModelCostCalculator` применяет отдельный тариф варианта;
+для DeepSeek в профиле используется Peak-тариф как консервативная оценка.
+Frontend автоматически определяет лидеров по скорости, токенам и стоимости.
+Качество можно оценить вручную и отдельным запросом
+`POST /api/model-comparisons/judge`. Судья DeepSeek Pro получает варианты под
+кодами A/B/C без названий моделей и метрик, оценивает точность, следование
+задаче, полноту и ясность, выбирает победителя и формирует короткий вывод.
+Схема JSON проверяется backend; при повреждённом ответе выполняется одна
+повторная попытка. Расходы судьи считаются и показываются отдельно.
+
+Обезличивание снижает влияние названия модели, однако DeepSeek Pro оценивает в
+том числе собственный ответ. Поэтому UI сохраняет независимый ручной выбор и
+показывает, совпал ли он с решением судьи.
+
+Кнопка «Скачать Markdown» создаёт
+`day5-model-comparison-<id запуска>.md` с ответами, метриками, ручными оценками,
+решением и расходами судьи, заключением и официальными ссылками. В отчёте явно указано, что единичное время
+зависит от нагрузки API, а токены разных провайдеров не полностью эквивалентны.
+
+Проверки находятся в `LlmProviderRegistryTest`, `MistralClientTest`,
+`ModelComparisonConfigTest`, `ModelComparisonServiceTest`, `ModelComparisonJudgeServiceTest`,
+`modelComparisonReport.test.js` и `App.test.js`.
 
 ## Как добавить новый профиль
 

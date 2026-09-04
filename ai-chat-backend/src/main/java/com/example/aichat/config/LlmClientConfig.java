@@ -12,16 +12,25 @@ import java.time.Duration;
 @Configuration
 public class LlmClientConfig {
 
-    @Bean
-    RestClient llmRestClient(ChatProperties properties) {
+    @Bean("deepSeekRestClient")
+    RestClient deepSeekRestClient(ChatProperties properties) {
+        return createClient(properties.baseUrl(), properties.apiKey());
+    }
+
+    @Bean("mistralRestClient")
+    RestClient mistralRestClient(MistralProperties properties) {
+        return createClient(properties.baseUrl(), properties.apiKey());
+    }
+
+    private static RestClient createClient(String baseUrl, String apiKey) {
         var requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(Duration.ofSeconds(10));
         requestFactory.setReadTimeout(Duration.ofSeconds(120));
 
         return RestClient.builder()
                 .requestFactory(requestFactory)
-                .baseUrl(properties.baseUrl())
-                .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + properties.apiKey())
+                .baseUrl(baseUrl)
+                .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + apiKey)
                 .build();
     }
 }

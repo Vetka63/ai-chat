@@ -43,6 +43,16 @@ const profiles = [
       { id: 'experiment', name: 'Сравнение температур', description: 'Четыре температуры' },
     ],
   },
+  {
+    id: 'day5-model-comparison',
+    name: 'День 5 · Версии моделей',
+    description: 'Сравнение качества, скорости, токенов и стоимости',
+    experienceType: 'model-comparison',
+    defaultResponseMode: 'experiment',
+    responseModes: [
+      { id: 'experiment', name: 'Сравнение моделей', description: 'Три модели' },
+    ],
+  },
 ]
 
 async function chooseDropdownOption(wrapper, label, optionName) {
@@ -505,5 +515,115 @@ describe('App', () => {
     expect(wrapper.get('.temperature-judge__winner').text()).toContain('Творческий')
     expect(wrapper.get('.temperature-judge__winner').text()).toContain('Совпадает с вашим выбором')
     expect(wrapper.get('.temperature-judge__metrics').text()).toContain('deepseek-v4-pro')
+  })
+
+  it('runs one task on three models and renders objective metrics', async () => {
+    const variants = [
+      { id: 'weak', title: 'Слабая модель', description: 'Компактная', provider: 'mistral', model: 'ministral-3b-2512' },
+      { id: 'medium', title: 'Средняя модель', description: 'Быстрая', provider: 'deepseek', model: 'deepseek-v4-flash' },
+      { id: 'strong', title: 'Сильная модель', description: 'Мощная', provider: 'deepseek', model: 'deepseek-v4-pro' },
+    ]
+    const experiment = {
+      experimentId: 'models12-0000-0000-0000-000000000000',
+      profileId: 'day5-model-comparison',
+      task: 'Объясни бинарный поиск',
+      results: variants.map((variant, index) => ({
+        ...variant,
+        status: 'success',
+        answer: `Ответ ${variant.model}`,
+        modelUrl: 'https://example.com/model',
+        pricingUrl: 'https://example.com/pricing',
+        pricingLabel: 'Тестовый тариф',
+        metrics: {
+          apiCalls: 1,
+          elapsedMs: 300 - index * 50,
+          promptTokens: 100,
+          completionTokens: 30 - index * 5,
+          totalTokens: 130 - index * 5,
+          estimatedCostUsd: 0.00001 * (index + 1),
+        },
+        responseModel: variant.model,
+        finishReason: 'stop',
+      })),
+      metrics: {
+        apiCalls: 3,
+        elapsedMs: 750,
+        totalTokens: 375,
+        estimatedCostUsd: 0.00006,
+      },
+    }
+    const judge = {
+      winnerModelId: 'strong',
+      winnerTitle: 'Сильная модель',
+      evaluations: variants.map((variant, index) => ({
+        modelId: variant.id,
+        title: variant.title,
+        scores: { accuracy: 8 + index, instructionFollowing: 8, completeness: 8, clarity: 9 },
+        average: 8.25 + index * 0.25,
+        strengths: 'Корректный ответ',
+        weaknesses: 'Можно добавить деталей',
+      })),
+      summary: 'Сильная модель дала самый точный и полный ответ.',
+      metrics: { apiCalls: 1, totalTokens: 260, estimatedCostUsd: 0.0014 },
+      model: 'deepseek-v4-pro',
+      finishReason: 'stop',
+    }
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => profiles })
+      .mockResolvedValueOnce({ ok: true, json: async () => experiment })
+      .mockResolvedValueOnce({ ok: true, json: async () => judge }))
+
+    const wrapper = mount(App)
+    await flushPromises()
+    await chooseDropdownOption(wrapper, 'Профиль чата', 'День 5')
+
+    expect(wrapper.find('.model-workspace').exists()).toBe(true)
+    expect(wrapper.find('[aria-label="Режим ответа"]').exists()).toBe(false)
+    await wrapper.get('#model-comparison-task').setValue('Объясни бинарный поиск')
+    await wrapper.get('.model-form').trigger('submit')
+    await flushPromises()
+
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      '/api/model-comparisons',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          task: 'Объясни бинарный поиск',
+          profileId: 'day5-model-comparison',
+        }),
+      }),
+    )
+    expect(wrapper.findAll('.model-card')).toHaveLength(3)
+    expect(wrapper.text()).toContain('Ответ ministral-3b-2512')
+    expect(wrapper.text()).toContain('375')
+
+    await wrapper.get('[aria-label="Качество: 5 из 5 для Сильная модель"]').trigger('click')
+    await wrapper.get('.model-card--strong .model-winner').trigger('click')
+    expect(wrapper.get('.model-card--strong').classes()).toContain('model-card--winner')
+    expect(wrapper.get('.model-leaders').text()).toContain('Сильная модель')
+
+    await wrapper.get('.model-judge > header > button').trigger('click')
+    await flushPromises()
+
+    expect(fetch).toHaveBeenNthCalledWith(
+      3,
+      '/api/model-comparisons/judge',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          task: 'Объясни бинарный поиск',
+          profileId: 'day5-model-comparison',
+          candidates: experiment.results.map((result) => ({
+            modelId: result.id,
+            answer: result.answer,
+          })),
+        }),
+      }),
+    )
+    expect(wrapper.get('.model-judge__winner').text()).toContain('Сильная модель')
+    expect(wrapper.get('.model-judge__winner').text()).toContain('Совпадает с вашим выбором')
+    expect(wrapper.get('.model-judge__summary').text()).toContain('самый точный')
+    expect(wrapper.get('.model-judge__metrics').text()).toContain('deepseek-v4-pro')
   })
 })

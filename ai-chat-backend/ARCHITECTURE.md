@@ -12,7 +12,7 @@ com.example.aichat
 ├── bootstrap/                      проверка связей при запуске
 ├── common/                         стабильные переиспользуемые контракты
 │   ├── profile/                    профили агентов и их registry
-│   ├── llm/                        нейтральный LLM port + DeepSeek adapter
+│   ├── llm/                        LLM port, provider registry и адаптеры API
 │   ├── inputpolicy/                InputPolicy + registry + стандартная политика
 │   ├── outputpolicy/               OutputPolicy + registry + text policy
 │   ├── validator/                  RequestGuard + registry
@@ -25,7 +25,8 @@ com.example.aichat
     │   ├── recipe/                 semantic guard + строгий JSON-рецепт
     │   └── answer/                 универсальный строгий JSON-ответ
     ├── day3/reasoning/              четыре стратегии и LLM-as-judge
-    └── day4/temperature/            четыре температуры и отдельный LLM-as-judge
+    ├── day4/temperature/            четыре температуры и отдельный LLM-as-judge
+    └── day5/modelcomparison/        сравнение Mistral и двух моделей DeepSeek
 ```
 
 В Java-именах используются `inputpolicy`, `outputpolicy` и `llmjudge`, потому
@@ -40,6 +41,8 @@ com.example.aichat
 - DTO HTTP-контроллера остаются в `controller/dto`; сервисы получают внутренние
   command/model и не зависят от HTTP.
 - `LlmClient` работает с `LlmCompletionRequest` и не знает о профилях и днях.
+- `LlmProviderRegistry` выбирает `LlmProviderClient` для многопровайдерных
+  сценариев; адаптеры DeepSeek и Mistral не знают о задаче Дня 5.
 - `LlmRequestOverrides` позволяет задаче изменить только нужные параметры
   конкретного вызова, не создавая новый клиент и не изменяя весь профиль.
 - `bootstrap` может видеть модули для fail-fast проверки, но модули не знают о
@@ -80,4 +83,5 @@ LLM-as-judge, не переписывая центральный chat pipeline.
 `/api/chat`, `/api/profiles`, `/api/reasoning-experiments` и
 `/api/reasoning-experiments/judge` остаются совместимыми с клиентом. День 4
 добавляет контракты `POST /api/temperature-experiments` и
-`POST /api/temperature-experiments/judge`.
+`POST /api/temperature-experiments/judge`, День 5 —
+`POST /api/model-comparisons` и `POST /api/model-comparisons/judge`.

@@ -118,3 +118,42 @@ export async function judgeTemperatureExperiment({ task, profileId, candidates }
 
   return payload
 }
+
+export async function runModelComparison({
+  task,
+  profileId = 'day5-model-comparison',
+}) {
+  const response = await fetch('/api/model-comparisons', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ task, profileId }),
+  })
+
+  const payload = await readPayload(response)
+
+  if (!response.ok) {
+    throw new Error(payload.error || 'Не удалось выполнить сравнение моделей')
+  }
+
+  return payload
+}
+
+export async function judgeModelComparison({ task, profileId, candidates }) {
+  const response = await fetch('/api/model-comparisons/judge', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ task, profileId, candidates }),
+  })
+
+  const payload = await readPayload(response)
+
+  if (!response.ok) {
+    throw new Error(payload.error || 'Не удалось получить оценку сравнения моделей')
+  }
+
+  return payload
+}

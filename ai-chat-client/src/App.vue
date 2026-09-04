@@ -5,6 +5,7 @@ import AppDropdown from './components/AppDropdown.vue'
 import ReasoningExperimentWorkspace from './components/ReasoningExperimentWorkspace.vue'
 import SeasonalEffects from './components/SeasonalEffects.vue'
 import TemperatureExperimentWorkspace from './components/TemperatureExperimentWorkspace.vue'
+import ModelComparisonWorkspace from './components/ModelComparisonWorkspace.vue'
 import { findTheme, THEME_STORAGE_KEY, themeOptions } from './config/themes.js'
 
 const defaultResponseModes = [
@@ -47,8 +48,12 @@ const isTemperatureExperiment = computed(() => (
   selectedProfile.value?.experienceType === 'temperature-experiment'
 ))
 
+const isModelComparison = computed(() => (
+  selectedProfile.value?.experienceType === 'model-comparison'
+))
+
 const isSpecialExperience = computed(() => (
-  isReasoningExperiment.value || isTemperatureExperiment.value
+  isReasoningExperiment.value || isTemperatureExperiment.value || isModelComparison.value
 ))
 
 const responseModes = computed(() => (
@@ -350,6 +355,13 @@ function handleKeydown(event) {
 
       <TemperatureExperimentWorkspace
         v-else-if="isTemperatureExperiment"
+        :profile="selectedProfile"
+        :backend-state="backendState"
+        :backend-status-label="backendStatusLabel"
+      />
+
+      <ModelComparisonWorkspace
+        v-else-if="isModelComparison"
         :profile="selectedProfile"
         :backend-state="backendState"
         :backend-status-label="backendStatusLabel"

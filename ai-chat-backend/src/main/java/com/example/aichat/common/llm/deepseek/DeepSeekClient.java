@@ -1,6 +1,8 @@
 package com.example.aichat.common.llm.deepseek;
 
 import com.example.aichat.common.llm.LlmClient;
+import com.example.aichat.common.llm.LlmProviderClient;
+import com.example.aichat.common.llm.enums.LlmProvider;
 import com.example.aichat.common.llm.model.LlmCompletionRequest;
 import com.example.aichat.common.llm.model.LlmMessage;
 import com.example.aichat.common.llm.model.LlmMetrics;
@@ -13,6 +15,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -29,7 +32,7 @@ import java.util.concurrent.TimeUnit;
 
 /** Реализует контракт LLM через совместимый с OpenAI API провайдера DeepSeek. */
 @Component
-public class DeepSeekClient implements LlmClient {
+public class DeepSeekClient implements LlmClient, LlmProviderClient {
 
     private static final Logger log = LoggerFactory.getLogger(DeepSeekClient.class);
     private static final BigDecimal TOKENS_PER_MILLION = BigDecimal.valueOf(1_000_000);
@@ -40,12 +43,17 @@ public class DeepSeekClient implements LlmClient {
 
     public DeepSeekClient(
             ChatProperties properties,
-            RestClient restClient,
+            @Qualifier("deepSeekRestClient") RestClient restClient,
             ObjectMapper objectMapper
     ) {
         this.properties = properties;
         this.restClient = restClient;
         this.objectMapper = objectMapper;
+    }
+
+    @Override
+    public LlmProvider provider() {
+        return LlmProvider.DEEPSEEK;
     }
 
     @Override
