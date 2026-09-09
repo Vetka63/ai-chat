@@ -1,6 +1,14 @@
 <script setup>
-defineProps({ agents: Array, selected: String, theme: String, open: Boolean })
-defineEmits(['select', 'new', 'theme', 'close'])
+defineProps({
+  agents: Array,
+  selectedAgent: String,
+  conversations: Array,
+  selectedConversation: String,
+  theme: String,
+  open: Boolean,
+  busy: Boolean,
+})
+defineEmits(['select-agent', 'select-conversation', 'delete-conversation', 'new', 'theme', 'close'])
 
 const themes = [
   { id: 'light', label: 'Светлая', icon: '☀' },
@@ -13,11 +21,13 @@ const themes = [
   <aside class="sidebar" :class="{ open }">
     <div class="brand">
       <span class="brand-mark">A</span>
-      <div><strong>AI Agents</strong><small>Python · День 6</small></div>
+      <div><strong>AI Agents</strong><small>Python · День 7</small></div>
       <button class="mobile-close" aria-label="Закрыть меню" @click="$emit('close')">×</button>
     </div>
 
-    <button class="new-chat" @click="$emit('new')"><span>＋</span> Новый чат</button>
+    <button class="new-chat" :disabled="busy || !selectedAgent" @click="$emit('new')">
+      <span>＋</span> Новый чат
+    </button>
 
     <section class="sidebar-section">
       <p class="section-title">Агенты</p>
@@ -25,13 +35,37 @@ const themes = [
         v-for="agent in agents"
         :key="agent.id"
         class="agent-card"
-        :class="{ active: agent.id === selected }"
-        @click="$emit('select', agent.id)"
+        :class="{ active: agent.id === selectedAgent }"
+        :disabled="busy"
+        @click="$emit('select-agent', agent.id)"
       >
         <span class="agent-avatar">✦</span>
         <span><strong>{{ agent.name }}</strong><small>{{ agent.description }}</small></span>
       </button>
       <p v-if="!agents?.length" class="muted">Агенты не загружены</p>
+    </section>
+
+    <section class="sidebar-section conversations-section">
+      <p class="section-title">Сохранённые чаты</p>
+      <nav class="conversation-list" aria-label="Сохранённые чаты">
+        <p v-if="!conversations?.length" class="empty-conversations">После первого сообщения чат появится здесь</p>
+        <div
+          v-for="item in conversations"
+          :key="item.id"
+          class="conversation-item"
+          :class="{ active: item.id === selectedConversation }"
+        >
+          <button class="conversation-title" :disabled="busy" @click="$emit('select-conversation', item.id)">
+            <span>◌</span><strong>{{ item.title }}</strong>
+          </button>
+          <button
+            class="delete-conversation"
+            :disabled="busy"
+            :aria-label="`Удалить чат «${item.title}»`"
+            @click="$emit('delete-conversation', item)"
+          >×</button>
+        </div>
+      </nav>
     </section>
 
     <section class="sidebar-section theme-section">
@@ -47,7 +81,7 @@ const themes = [
       </div>
     </section>
 
-    <div class="day-note"><strong>Итерация Day 6</strong><span>История пока не сохраняется и не передаётся модели.</span></div>
+    <div class="day-note"><strong>Итерация Day 7</strong><span>История хранится в SQLite и восстанавливается после перезапуска.</span></div>
   </aside>
 </template>
 

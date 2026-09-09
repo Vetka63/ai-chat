@@ -4,6 +4,7 @@ from pathlib import Path
 
 import httpx
 
+from agent_core.contracts import ConversationStore
 from agent_core.registry import AgentRegistry
 from agents.dialogue.config import DialogueAgentConfig
 from agents.dialogue.factory import build_dialogue_agent
@@ -11,7 +12,11 @@ from application.settings import Settings
 from infrastructure.deepseek import DeepSeekClient, DemoClient
 
 
-def build_registry(settings: Settings, http: httpx.AsyncClient) -> AgentRegistry:
+def build_registry(
+    settings: Settings,
+    http: httpx.AsyncClient,
+    store: ConversationStore,
+) -> AgentRegistry:
     """Создаёт реестр; HTTP-маршруты не знают о DeepSeek и промптах."""
 
     llm = (
@@ -24,5 +29,5 @@ def build_registry(settings: Settings, http: httpx.AsyncClient) -> AgentRegistry
         model=settings.model,
         system_prompt=prompt_path.read_text(encoding="utf-8").strip(),
     )
-    return AgentRegistry([build_dialogue_agent(config, llm)])
+    return AgentRegistry([build_dialogue_agent(config, llm, store)])
 

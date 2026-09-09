@@ -1,5 +1,6 @@
 """Настройки процесса из переменных окружения; секреты не входят в агента."""
 
+from pathlib import Path
 from typing import Literal
 
 from pydantic import AliasChoices, Field, SecretStr
@@ -7,7 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Конфигурация Python-сервиса Day 6."""
+    """Конфигурация Python-сервиса Day 7."""
 
     model_config = SettingsConfigDict(
         env_prefix="PY_AGENT_",
@@ -31,8 +32,8 @@ class Settings(BaseSettings):
     )
     request_timeout_seconds: float = Field(default=90, gt=0, le=300)
     cors_origins: str = "http://localhost:5174,http://localhost:8083"
+    database_path: Path = Path("data/agents.sqlite3")
 
     @property
     def origins(self) -> list[str]:
         return [value.strip() for value in self.cors_origins.split(",") if value.strip()]
-

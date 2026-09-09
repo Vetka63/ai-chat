@@ -16,7 +16,6 @@ function submit(event) {
       <textarea v-model="model" rows="1" maxlength="10000" placeholder="Напишите сообщение агенту…" :disabled="disabled" @keydown.enter="submit"></textarea>
       <button type="submit" aria-label="Отправить" :disabled="disabled || !model.trim()">{{ sending ? '•••' : '↑' }}</button>
     </form>
-    <p>Enter — отправить · Shift + Enter — новая строка · история не сохраняется</p>
+    <p>Enter — отправить · Shift + Enter — новая строка · история сохраняется на сервере</p>
   </div>
 </template>
-

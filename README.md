@@ -5,7 +5,7 @@
 
 - **ai-chat-backend** — активный Java 21 + Spring Boot backend;
 - **ai-chat-client** — Vue 3 + Vite интерфейс;
-- **ai-agents-backend** — новый FastAPI backend с изолированным агентом Дня 6;
+- **ai-agents-backend** — FastAPI backend с изолированным агентом Дней 6–7;
 - **ai-agents-client** — отдельный Vue 3 интерфейс для Python-агентов;
 - API-ключ и системные промпты не передаются в браузер;
 - профиль рецептов отдельным вызовом DeepSeek отклоняет некулинарные запросы;
@@ -23,7 +23,7 @@ docker compose up --build
 <http://localhost:8081>. Новый интерфейс Python-агента доступен на
 <http://localhost:8083>, его API — на <http://localhost:8082>.
 
-Чтобы запустить только задание Дня 6:
+Чтобы запустить Python-линию заданий Дней 6–7:
 
 ~~~bash
 docker compose up -d --build agents-backend agents-client
@@ -72,6 +72,16 @@ MISTRAL_API_KEY=ваш_отдельный_ключ_Mistral
 История, хранение диалогов, токены, structured output и LLM-as-judge намеренно не
 входят в ветку Дня 6. Обновление страницы нового клиента очищает сообщения — так
 следующая итерация Дня 7 сможет наглядно добавить сохранение контекста.
+
+## День 7: сохранение контекста
+
+В ветке `ai-challenge-day-7` агент хранит диалоги и сообщения в SQLite. Новый
+запрос содержит только `conversation_id` и текущее сообщение: историю загружает
+сам backend, после чего `FullHistoryContextPolicy` передаёт её модели по порядку.
+
+Docker использует именованный volume `agents-data`. Обычные `restart`, `stop` и
+повторный `up --build` историю не удаляют. Команду `docker compose down -v`
+следует использовать только когда базу действительно нужно стереть.
 
 ## Локальный запуск
 

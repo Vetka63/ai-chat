@@ -44,6 +44,9 @@ services:
       PY_AGENT_MODEL: ${PY_AGENT_MODEL:-${LLM_MODEL:-deepseek-v4-flash}}
       PY_AGENT_REQUEST_TIMEOUT_SECONDS: ${PY_AGENT_REQUEST_TIMEOUT_SECONDS:-90}
       PY_AGENT_CORS_ORIGINS: ${PY_AGENT_CORS_ORIGINS:-http://localhost:5174,http://localhost:8083}
+      PY_AGENT_DATABASE_PATH: /app/data/agents.sqlite3
+    volumes:
+      - agents-data:/app/data
     ports:
       - "8082:8080"
     healthcheck:
@@ -61,3 +64,6 @@ services:
         condition: service_healthy
     ports:
       - "8083:80"
+
+volumes:
+  agents-data:

@@ -11,6 +11,7 @@
 **/*.egg-info/
 .pytest_cache/
 ai-agents-backend/.venv/
+ai-agents-backend/data/
 ai-chat-backend/target/
 ai-chat-client/node_modules/
 ai-chat-client/dist/

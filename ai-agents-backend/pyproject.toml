@@ -1,9 +1,10 @@
 [project]
 name = "ai-agents-backend"
-version = "0.1.0"
-description = "Изолированный Python-агент для задания Дня 6"
+version = "0.2.0"
+description = "Python-агент с постоянным контекстом для задания Дня 7"
 requires-python = ">=3.12"
 dependencies = [
+  "aiosqlite==0.21.0",
   "fastapi==0.116.1",
   "httpx==0.28.1",
   "pydantic-settings==2.10.1",
@@ -25,4 +26,3 @@ testpaths = ["tests"]
 [build-system]
 requires = ["setuptools>=80"]
 build-backend = "setuptools.build_meta"
-

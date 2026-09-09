@@ -2,7 +2,15 @@
 
 from typing import Protocol
 
-from agent_core.models import AgentCommand, AgentInfo, AgentResult, Completion, Message
+from agent_core.models import (
+    AgentCommand,
+    AgentInfo,
+    AgentResult,
+    Completion,
+    Conversation,
+    ConversationSummary,
+    Message,
+)
 
 
 class Agent(Protocol):
@@ -50,3 +58,25 @@ class OutputValidator(Protocol):
 
     def validate(self, text: str) -> None: ...
 
+
+class ContextPolicy(Protocol):
+    """Определяет, какую сохранённую историю конкретный агент отправляет модели."""
+
+    def build(self, system_prompt: str, history: list[Message], text: str) -> list[Message]: ...
+
+
+class ConversationStore(Protocol):
+    """Порт постоянного хранилища, не привязанный к SQLite в коде агента."""
+
+    async def initialize(self) -> None: ...
+    async def create(self, agent_id: str, title: str) -> ConversationSummary: ...
+    async def list(self, agent_id: str) -> list[ConversationSummary]: ...
+    async def get(self, agent_id: str, conversation_id: str) -> Conversation: ...
+    async def delete(self, agent_id: str, conversation_id: str) -> None: ...
+    async def append_exchange(
+        self,
+        agent_id: str,
+        conversation_id: str,
+        user_message: str,
+        assistant_message: str,
+    ) -> None: ...

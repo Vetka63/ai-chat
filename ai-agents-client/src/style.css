@@ -67,6 +67,7 @@ body {
 .mobile-close { display: none; margin-left: auto; border: 0; background: transparent; font-size: 26px; }
 .new-chat { display: flex; align-items: center; gap: 10px; width: 100%; padding: 13px 15px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); cursor: pointer; box-shadow: 0 4px 16px rgba(40,60,50,.04); font-weight: 600; }
 .new-chat:hover, .theme-grid button:hover { border-color: var(--accent); transform: translateY(-1px); }
+.new-chat:disabled, .agent-card:disabled, .theme-grid button:disabled { opacity: .5; cursor: default; transform: none; }
 .new-chat span { font-size: 20px; color: var(--accent); }
 .sidebar-section { display: flex; flex-direction: column; gap: 7px; }
 .section-title { margin: 0 8px 5px; color: var(--muted); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; font-weight: 700; }
@@ -76,7 +77,19 @@ body {
 .agent-avatar { display: grid; flex: 0 0 34px; place-items: center; height: 34px; border-radius: 11px; color: var(--accent); background: var(--accent-soft); }
 .agent-card > span:last-child { display: flex; flex-direction: column; min-width: 0; }
 .agent-card small { line-height: 1.35; }
-.theme-section { margin-top: auto; }
+.conversations-section { min-height: 120px; flex: 1; overflow: hidden; }
+.conversation-list { display: flex; flex-direction: column; gap: 4px; min-height: 0; overflow-y: auto; padding-right: 2px; }
+.empty-conversations { margin: 8px; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.conversation-item { display: grid; grid-template-columns: minmax(0, 1fr) 30px; align-items: center; border: 1px solid transparent; border-radius: 11px; }
+.conversation-item:hover { background: color-mix(in srgb, var(--panel) 65%, transparent); }
+.conversation-item.active { background: var(--panel); border-color: var(--line); }
+.conversation-title { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 9px 7px 9px 10px; border: 0; background: transparent; cursor: pointer; text-align: left; }
+.conversation-title span { flex: 0 0 auto; color: var(--accent); }
+.conversation-title strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 500; }
+.delete-conversation { width: 27px; height: 27px; border: 0; border-radius: 8px; color: var(--muted); background: transparent; cursor: pointer; font-size: 17px; opacity: 0; transition: opacity .15s, background .15s; }
+.conversation-item:hover .delete-conversation, .delete-conversation:focus { opacity: 1; }
+.delete-conversation:hover { color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, transparent); }
+.theme-section { flex: 0 0 auto; }
 .theme-grid { display: grid; gap: 6px; }
 .theme-grid button { display: flex; align-items: center; gap: 9px; padding: 9px 11px; border: 1px solid transparent; border-radius: 11px; background: transparent; cursor: pointer; text-align: left; transition: .2s; }
 .theme-grid button.active { background: var(--panel); border-color: var(--line); }
@@ -147,10 +160,10 @@ body {
   .composer-wrap > p { display: none; }
   .welcome { padding-inline: 20px; }
   .suggestions { display: none; }
+  .delete-conversation { opacity: 1; }
   .garland { left: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
-

@@ -14,6 +14,7 @@ async function request(path, options = {}) {
     const payload = await response.json().catch(() => ({}))
     throw new ApiError(payload.error || 'Сервис временно недоступен', payload.code, response.status)
   }
+  if (response.status === 204) return null
   return response.json()
 }
 
@@ -21,11 +22,33 @@ export async function listAgents() {
   return request('/agents')
 }
 
-export async function runAgent(agentId, message) {
-  return request(`/agents/${encodeURIComponent(agentId)}/runs`, {
+const conversationsPath = (agentId, conversationId = '') =>
+  `/agents/${encodeURIComponent(agentId)}/conversations${conversationId ? `/${encodeURIComponent(conversationId)}` : ''}`
+
+export async function listConversations(agentId) {
+  return request(conversationsPath(agentId))
+}
+
+export async function createConversation(agentId, title = 'Новый чат') {
+  return request(conversationsPath(agentId), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ title }),
   })
 }
 
+export async function getConversation(agentId, conversationId) {
+  return request(conversationsPath(agentId, conversationId))
+}
+
+export async function deleteConversation(agentId, conversationId) {
+  return request(conversationsPath(agentId, conversationId), { method: 'DELETE' })
+}
+
+export async function runConversationAgent(agentId, conversationId, message) {
+  return request(`/agents/${encodeURIComponent(agentId)}/runs`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ conversation_id: conversationId, message }),
+  })
+}

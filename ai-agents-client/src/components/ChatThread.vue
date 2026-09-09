@@ -6,9 +6,9 @@ defineProps({ messages: Array, agentName: String, sending: Boolean })
   <section class="thread" aria-live="polite">
     <div v-if="!messages.length" class="welcome">
       <span class="welcome-orbit"><i>✦</i></span>
-      <p class="eyebrow">ПЕРВЫЙ PYTHON-АГЕНТ</p>
+      <p class="eyebrow">АГЕНТ С ПОСТОЯННЫМ КОНТЕКСТОМ</p>
       <h1>О чём поговорим?</h1>
-      <p>{{ agentName || 'Агент' }} получит текущее сообщение, вызовет DeepSeek и покажет ответ здесь.</p>
+      <p>{{ agentName || 'Агент' }} сохранит сообщения в SQLite и вспомнит их даже после перезапуска приложения.</p>
       <div class="suggestions">
         <span>Объясни простую тему</span><span>Предложи три идеи</span><span>Помоги составить план</span>
       </div>
@@ -29,4 +29,3 @@ defineProps({ messages: Array, agentName: String, sending: Boolean })
     </div>
   </section>
 </template>
-

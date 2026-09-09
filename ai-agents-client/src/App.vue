@@ -16,6 +16,15 @@ function chooseAgent(id) {
   chat.selectAgent(id)
   sidebarOpen.value = false
 }
+
+function chooseConversation(id) {
+  chat.selectConversation(id)
+  sidebarOpen.value = false
+}
+
+async function removeConversation(item) {
+  if (window.confirm(`Удалить чат «${item.title}»?`)) await chat.removeConversation(item.id)
+}
 </script>
 
 <template>
@@ -24,24 +33,28 @@ function chooseAgent(id) {
     <button v-if="sidebarOpen" class="scrim" aria-label="Закрыть меню" @click="sidebarOpen = false"></button>
     <AgentSidebar
       :agents="chat.agents.value"
-      :selected="chat.agentId.value"
+      :selected-agent="chat.agentId.value"
+      :conversations="chat.conversations.value"
+      :selected-conversation="chat.conversation.value?.id"
       :theme="theme"
       :open="sidebarOpen"
+      :busy="chat.loading.value || chat.sending.value"
       @new="chat.newChat"
-      @select="chooseAgent"
+      @select-agent="chooseAgent"
+      @select-conversation="chooseConversation"
+      @delete-conversation="removeConversation"
       @theme="theme = $event"
       @close="sidebarOpen = false"
     />
     <main class="main-panel">
       <header class="chat-header">
         <button class="menu-button" aria-label="Открыть меню" @click="sidebarOpen = true">☰</button>
-        <div><strong>{{ chat.agent.value?.name || 'AI Agents' }}</strong><span><i></i>{{ chat.loading.value ? 'Подключение…' : 'Готов к запросу' }}</span></div>
-        <span class="day-badge">DAY 6</span>
+        <div><strong>{{ chat.conversation.value?.title || chat.agent.value?.name || 'AI Agents' }}</strong><span><i></i>{{ chat.loading.value ? 'Загрузка истории…' : 'Контекст сохранён' }}</span></div>
+        <span class="day-badge">DAY 7</span>
       </header>
       <div v-if="chat.error.value" class="error-banner" role="alert">{{ chat.error.value }} <button @click="chat.initialize">Повторить</button></div>
       <ChatThread :messages="chat.messages.value" :agent-name="chat.agent.value?.name" :sending="chat.sending.value" />
-      <MessageComposer v-model="chat.draft.value" :disabled="chat.sending.value || !chat.agentId.value" :sending="chat.sending.value" @send="chat.send" />
+      <MessageComposer v-model="chat.draft.value" :disabled="chat.sending.value || chat.loading.value || !chat.agentId.value" :sending="chat.sending.value" @send="chat.send" />
     </main>
   </div>
 </template>
-
