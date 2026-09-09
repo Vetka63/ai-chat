@@ -1,11 +1,12 @@
 # AI Chat
 
-Чат с Vue frontend, Spring Boot backend и серверными профилями агентов для
-DeepSeek и Mistral.
+Репозиторий учебного чата: прежнее Java-приложение для Дней 1–5 и новая
+последовательная линия Python-агентов, начинающаяся с Дня 6.
 
 - **ai-chat-backend** — активный Java 21 + Spring Boot backend;
 - **ai-chat-client** — Vue 3 + Vite интерфейс;
-- **ai-chat-backend-python** — параллельный FastAPI backend, который не удаляется;
+- **ai-agents-backend** — новый FastAPI backend с изолированным агентом Дня 6;
+- **ai-agents-client** — отдельный Vue 3 интерфейс для Python-агентов;
 - API-ключ и системные промпты не передаются в браузер;
 - профиль рецептов отдельным вызовом DeepSeek отклоняет некулинарные запросы;
 - по умолчанию включён fallback-режим без внешних запросов.
@@ -18,8 +19,15 @@ DeepSeek и Mistral.
 docker compose up --build
 ~~~
 
-Откройте <http://localhost:8080>. Backend доступен напрямую на
-<http://localhost:8081>.
+Прежний Java-чат доступен на <http://localhost:8080>, Java backend — на
+<http://localhost:8081>. Новый интерфейс Python-агента доступен на
+<http://localhost:8083>, его API — на <http://localhost:8082>.
+
+Чтобы запустить только задание Дня 6:
+
+~~~bash
+docker compose up -d --build agents-backend agents-client
+~~~
 
 ~~~bash
 curl http://localhost:8081/api/profiles
@@ -44,6 +52,26 @@ MISTRAL_API_KEY=ваш_отдельный_ключ_Mistral
 
 Файл **.env** игнорируется Git. Не записывайте ключи в YAML-профили, исходный
 код или **.env.example**. После изменения конфигурации перезапустите приложение.
+
+Для Python-агента можно использовать тот же ключ `LLM_API_KEY` либо отдельную
+переменную `PY_AGENT_API_KEY`. Режим `PY_AGENT_MODE=llm` выполняет настоящий
+вызов DeepSeek; `PY_AGENT_MODE=demo` предназначен только для локальной проверки.
+
+## День 6: первый агент на Python
+
+`DialogueAgent` — отдельная сущность: он сам применяет input/output policy,
+валидаторы, добавляет серверный системный промпт, вызывает абстракцию `LlmClient`
+и возвращает `AgentResult`. FastAPI-контроллер лишь выбирает агента из реестра.
+
+Публичный запрос содержит только текущее сообщение:
+
+~~~json
+{"message":"Объясни, что такое REST"}
+~~~
+
+История, хранение диалогов, токены, structured output и LLM-as-judge намеренно не
+входят в ветку Дня 6. Обновление страницы нового клиента очищает сообщения — так
+следующая итерация Дня 7 сможет наглядно добавить сохранение контекста.
 
 ## Локальный запуск
 

@@ -8,8 +8,11 @@
 .pnpm-store/
 **/__pycache__/
 *.py[cod]
+**/*.egg-info/
 .pytest_cache/
-ai-chat-backend-python/.venv/
+ai-agents-backend/.venv/
 ai-chat-backend/target/
 ai-chat-client/node_modules/
 ai-chat-client/dist/
+ai-agents-client/node_modules/
+ai-agents-client/dist/

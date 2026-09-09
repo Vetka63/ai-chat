@@ -33,3 +33,31 @@ services:
         condition: service_healthy
     ports:
       - "8080:80"
+
+  agents-backend:
+    build:
+      context: ./ai-agents-backend
+    environment:
+      PY_AGENT_MODE: ${PY_AGENT_MODE:-llm}
+      PY_AGENT_API_KEY: ${PY_AGENT_API_KEY:-${LLM_API_KEY:-}}
+      PY_AGENT_BASE_URL: ${PY_AGENT_BASE_URL:-${LLM_BASE_URL:-https://api.deepseek.com}}
+      PY_AGENT_MODEL: ${PY_AGENT_MODEL:-${LLM_MODEL:-deepseek-v4-flash}}
+      PY_AGENT_REQUEST_TIMEOUT_SECONDS: ${PY_AGENT_REQUEST_TIMEOUT_SECONDS:-90}
+      PY_AGENT_CORS_ORIGINS: ${PY_AGENT_CORS_ORIGINS:-http://localhost:5174,http://localhost:8083}
+    ports:
+      - "8082:8080"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 8s
+
+  agents-client:
+    build:
+      context: ./ai-agents-client
+    depends_on:
+      agents-backend:
+        condition: service_healthy
+    ports:
+      - "8083:80"
