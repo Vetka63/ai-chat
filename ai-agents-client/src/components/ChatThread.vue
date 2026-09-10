@@ -1,9 +1,27 @@
 <script setup>
-defineProps({ messages: Array, agentName: String, sending: Boolean })
+import { nextTick, ref, watch } from 'vue'
+
+const props = defineProps({ messages: Array, agentName: String, sending: Boolean })
+const thread = ref(null)
+
+async function scrollToBottom(smooth = true) {
+  await nextTick()
+  if (!thread.value) return
+
+  const options = { top: thread.value.scrollHeight, behavior: smooth ? 'smooth' : 'auto' }
+  if (typeof thread.value.scrollTo === 'function') thread.value.scrollTo(options)
+  else thread.value.scrollTop = options.top
+}
+
+watch(
+  () => [props.messages, props.messages?.length, props.sending],
+  (_, previous) => scrollToBottom(Boolean(previous)),
+  { immediate: true },
+)
 </script>
 
 <template>
-  <section class="thread" aria-live="polite">
+  <section ref="thread" class="thread" aria-live="polite">
     <div v-if="!messages.length" class="welcome">
       <span class="welcome-orbit"><i>✦</i></span>
       <p class="eyebrow">АГЕНТ С ПОСТОЯННЫМ КОНТЕКСТОМ</p>
