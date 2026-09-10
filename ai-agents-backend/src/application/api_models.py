@@ -10,3 +10,8 @@ class CreateConversation(StrictModel):
 
     title: str = Field(default="Новый чат", min_length=1, max_length=120)
 
+
+class SelectModel(StrictModel):
+    """Смена разрешённой модели для следующих сообщений чата."""
+    model_id: str
+

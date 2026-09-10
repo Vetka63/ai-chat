@@ -1,0 +1,20 @@
+[
+  {
+    "id": "deepseek-v4-flash", "provider": "deepseek", "model": "deepseek-v4-flash",
+    "title": "DeepSeek Flash", "context_window": 1000000, "max_output_tokens": 384000,
+    "model_url": "https://api-docs.deepseek.com/quick_start/pricing/",
+    "pricing": {"input_usd": "0.30", "cached_input_usd": "0.006", "output_usd": "1.20", "label": "DeepSeek Flash Peak · оценка по тарифу", "source": "https://api-docs.deepseek.com/quick_start/pricing/", "checked_at": "2026-09-10"}
+  },
+  {
+    "id": "deepseek-v4-pro", "provider": "deepseek", "model": "deepseek-v4-pro",
+    "title": "DeepSeek Pro", "context_window": 1000000, "max_output_tokens": 384000,
+    "model_url": "https://api-docs.deepseek.com/quick_start/pricing/",
+    "pricing": {"input_usd": "1.32", "cached_input_usd": "0.044", "output_usd": "3.96", "label": "DeepSeek Peak · оценка по тарифу", "source": "https://api-docs.deepseek.com/quick_start/pricing/", "checked_at": "2026-09-10"}
+  },
+  {
+    "id": "ministral-3b-2512", "provider": "mistral", "model": "ministral-3b-2512",
+    "title": "Ministral 3B", "context_window": 131072, "max_output_tokens": 131072,
+    "model_url": "https://docs.mistral.ai/models/ministral-3-3b-25-12",
+    "pricing": {"input_usd": "0.10", "cached_input_usd": "0.01", "output_usd": "0.10", "label": "Mistral Standard · оценка, не списание с бесплатного плана", "source": "https://docs.mistral.ai/inference/pricing", "checked_at": "2026-09-10"}
+  }
+]

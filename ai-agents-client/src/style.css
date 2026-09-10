@@ -51,6 +51,7 @@
 html, body, #app { margin: 0; min-width: 320px; height: 100%; overflow: hidden; }
 button, textarea { font: inherit; }
 button { color: inherit; }
+button:focus-visible, summary:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
 body {
   background:
@@ -139,6 +140,42 @@ body {
 .error-banner { position: absolute; z-index: 8; top: 78px; left: 50%; transform: translateX(-50%); padding: 10px 14px; border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent); border-radius: 12px; color: var(--danger); background: var(--panel); box-shadow: var(--shadow); font-size: 12px; }
 .error-banner button { border: 0; color: var(--danger); background: transparent; text-decoration: underline; cursor: pointer; }
 .scrim { display: none; }
+
+/* Подключаемая панель наблюдения: независимая прокрутка, единые токены тем. */
+.sidebar { overflow-y: auto; min-height: 0; }
+.sidebar > * { flex-shrink: 0; }
+.conversations-section { flex: 1 0 160px; max-height: 280px; }
+.main-panel { grid-template-rows: auto minmax(0, 1fr) auto; }
+.composer-wrap { position: static; width: min(820px, calc(100% - 48px)); margin: 0 auto; transform: none; }
+.message-list { padding-bottom: 28px; }
+.chat-header > div { min-width: 0; }
+.chat-header strong { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.token-panel { font-size: 12px; line-height: 1.5; }
+.model-choices { display: grid; gap: 5px; }
+.model-choices button { display: flex; flex-direction: column; padding: 9px 11px; text-align: left; border: 1px solid var(--line); border-radius: 10px; background: transparent; cursor: pointer; }
+.model-choices button.active { background: var(--accent-soft); border-color: var(--accent); }
+.model-choices button:disabled { opacity: .5; cursor: default; }
+.model-choices small { color: var(--muted); }
+.token-details { padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+.token-details summary, .run-metrics summary { cursor: pointer; }
+.token-details small { display: block; margin-top: 5px; }
+.token-grid { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px 8px; margin: 10px 0; font-size: 11px; }
+.token-grid dt { color: var(--muted); }
+.token-grid dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.token-panel meter { width: 100%; height: 12px; accent-color: var(--accent); }
+.token-warning { color: var(--danger); }
+.usage-table-wrap { max-height: 180px; overflow: auto; margin: 8px 0; }
+.usage-table { width: 100%; border-collapse: collapse; font-size: 11px; font-variant-numeric: tabular-nums; }
+.usage-table caption { text-align: left; color: var(--muted); margin-bottom: 6px; }
+.usage-table th, .usage-table td { padding: 4px; border-bottom: 1px solid var(--line); text-align: right; }
+.report-button { padding: 7px 10px; margin-top: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--accent-soft); font-size: 11px; cursor: pointer; }
+.report-button:disabled { opacity: .5; cursor: default; }
+.pricing-link { color: var(--accent); font-size: 11px; }
+.run-metrics { margin-top: 12px; font-size: 11px; color: var(--muted); }
+.run-metrics details { padding: 8px 10px; background: var(--page); border: 1px solid var(--line); border-radius: 9px; }
+.run-metrics .token-warning { font-size: 12px; }
+.message-body > strong { display: block; }
+.message.user .message-body > p { display: block; width: fit-content; max-width: 100%; }
 
 .garland { position: fixed; z-index: 50; top: 0; left: 292px; right: 0; display: flex; justify-content: space-around; height: 20px; pointer-events: none; border-top: 2px solid #315e58; }
 .garland i { width: 9px; height: 14px; border-radius: 3px 3px 8px 8px; background: #ffd154; box-shadow: 0 3px 14px 4px rgba(255,209,84,.75); animation: twinkle 2s infinite alternate; }

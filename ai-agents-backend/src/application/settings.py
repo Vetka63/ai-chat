@@ -8,7 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Конфигурация Python-сервиса Day 7."""
+    """Конфигурация Python-сервиса Day 8."""
 
     model_config = SettingsConfigDict(
         env_prefix="PY_AGENT_",
@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     request_timeout_seconds: float = Field(default=90, gt=0, le=300)
     cors_origins: str = "http://localhost:5174,http://localhost:8083"
     database_path: Path = Path("data/agents.sqlite3")
+    mistral_api_key: SecretStr = Field(default=SecretStr(""), validation_alias="MISTRAL_API_KEY")
+    mistral_base_url: str = Field(default="https://api.mistral.ai/v1", validation_alias="MISTRAL_BASE_URL")
+    mistral_tokenizer_path: str = ""
 
     @property
     def origins(self) -> list[str]:

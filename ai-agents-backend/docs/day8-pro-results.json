@@ -1,0 +1,55 @@
+{
+  "conversation_id": "04dc5136-76c9-4f4c-a583-60c94443e7a3",
+  "model": "deepseek-v4-pro",
+  "results": [
+    {
+      "scenario": "short",
+      "http_status": 200,
+      "run": {
+        "id": "59babbea-444c-4ba4-bf45-ea3b17dfe157",
+        "agent_id": "dialogue",
+        "conversation_id": "04dc5136-76c9-4f4c-a583-60c94443e7a3",
+        "created_at": "2026-09-10T16:21:39.543945+00:00",
+        "model_id": "deepseek-v4-pro",
+        "provider": "deepseek",
+        "requested_model": "deepseek-v4-pro",
+        "returned_model": "deepseek-v4-pro",
+        "user_index": 0,
+        "assistant_index": 1,
+        "status": "success",
+        "estimate": {
+          "current_message_tokens": 19,
+          "history_tokens": 0,
+          "system_tokens": 247,
+          "prompt_tokens": 277,
+          "reserved_output_tokens": 1200,
+          "context_window": 1000000,
+          "occupancy_percent": 0.15,
+          "exceeds_context": false,
+          "method": "Приблизительно: UTF-8 / 3 + служебные токены; не tokenizer модели"
+        },
+        "usage": {
+          "prompt_tokens": 140,
+          "completion_tokens": 4,
+          "total_tokens": 144,
+          "cached_tokens": 0,
+          "reasoning_tokens": null
+        },
+        "estimated_cost_usd": "0.00010032",
+        "pricing": {
+          "input_usd": "0.660",
+          "cached_input_usd": "0.0220",
+          "output_usd": "1.980",
+          "label": "DeepSeek Off-peak · оценка по тарифу",
+          "source": "https://api-docs.deepseek.com/quick_start/pricing/",
+          "checked_at": "2026-09-10"
+        },
+        "finish_reason": "stop",
+        "duration_ms": 1025,
+        "error_code": null,
+        "error_message": null,
+        "provider_status": null
+      }
+    }
+  ]
+}

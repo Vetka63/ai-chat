@@ -1,7 +1,7 @@
 [project]
 name = "ai-agents-backend"
-version = "0.2.0"
-description = "Python-агент с постоянным контекстом для задания Дня 7"
+version = "0.3.0"
+description = "Python-агент с постоянным контекстом для задания Дня 8"
 requires-python = ">=3.12"
 dependencies = [
   "aiosqlite==0.21.0",
@@ -9,6 +9,7 @@ dependencies = [
   "httpx==0.28.1",
   "pydantic-settings==2.10.1",
   "uvicorn[standard]==0.35.0",
+  "mistral-common[image,hf-hub]==1.11.7",
 ]
 
 [project.optional-dependencies]

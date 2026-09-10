@@ -5,6 +5,7 @@ from typing import Literal
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
+from capabilities.token_accounting.models import RunRecord, TokenUsage
 
 
 class StrictModel(BaseModel):
@@ -38,13 +39,23 @@ class Completion(StrictModel):
     content: str
     model: str
     source: Literal["llm", "demo"] = "llm"
+    usage: TokenUsage | None = None
+    finish_reason: str | None = None
 
 
 class AgentCommand(StrictModel):
     """Команда агенту: идентификатор серверного диалога и новое сообщение."""
 
     conversation_id: str = Field(min_length=1, max_length=64)
-    message: str = Field(min_length=1, max_length=10_000)
+    message: str = Field(min_length=1)
+    model_id: str | None = None
+
+
+class PreviewCommand(StrictModel):
+    """Черновик запроса, включая ещё не созданный диалог; без записи в историю."""
+    conversation_id: str | None = None
+    message: str = ""
+    model_id: str | None = None
 
 
 class AgentResult(StrictModel):
@@ -54,6 +65,7 @@ class AgentResult(StrictModel):
     reply: str
     model: str
     source: Literal["llm", "demo"] = "llm"
+    run: RunRecord | None = None
 
 
 class AgentInfo(StrictModel):
@@ -72,19 +84,22 @@ class ConversationSummary(StrictModel):
     title: str
     created_at: str
     updated_at: str
+    selected_model_id: str | None = None
 
 
 class Conversation(ConversationSummary):
     """Диалог с упорядоченной историей сообщений."""
 
     messages: list[Message]
+    runs: list[RunRecord] = Field(default_factory=list)
 
 
 class AgentError(Exception):
     """Ожидаемая ошибка с безопасным сообщением для пользователя."""
 
-    def __init__(self, code: str, message: str, status: int = 422):
+    def __init__(self, code: str, message: str, status: int = 422, provider_status: int | None = None):
         self.code = code
         self.message = message
         self.status = status
+        self.provider_status = provider_status
         super().__init__(message)

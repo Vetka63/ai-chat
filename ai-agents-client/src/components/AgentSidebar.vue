@@ -21,7 +21,7 @@ const themes = [
   <aside class="sidebar" :class="{ open }">
     <div class="brand">
       <span class="brand-mark">A</span>
-      <div><strong>AI Agents</strong><small>Python · День 7</small></div>
+      <div><strong>AI Agents</strong><small>Python · День 8</small></div>
       <button class="mobile-close" aria-label="Закрыть меню" @click="$emit('close')">×</button>
     </div>
 
@@ -45,6 +45,7 @@ const themes = [
       <p v-if="!agents?.length" class="muted">Агенты не загружены</p>
     </section>
 
+    <slot />
     <section class="sidebar-section conversations-section">
       <p class="section-title">Сохранённые чаты</p>
       <nav class="conversation-list" aria-label="Сохранённые чаты">
@@ -81,7 +82,7 @@ const themes = [
       </div>
     </section>
 
-    <div class="day-note"><strong>Итерация Day 7</strong><span>История хранится в SQLite и восстанавливается после перезапуска.</span></div>
+    <div class="day-note"><strong>Итерация Day 8</strong><span>Полная история · наблюдение за токенами · без обрезки контекста.</span></div>
   </aside>
 </template>
 

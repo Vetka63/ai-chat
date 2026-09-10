@@ -4,6 +4,7 @@ import AgentSidebar from './components/AgentSidebar.vue'
 import ChatThread from './components/ChatThread.vue'
 import MessageComposer from './components/MessageComposer.vue'
 import { useAgentChat } from './composables/useAgentChat'
+import TokenPanel from './features/tokens/TokenPanel.vue'
 
 const chat = useAgentChat()
 const sidebarOpen = ref(false)
@@ -45,15 +46,19 @@ async function removeConversation(item) {
       @delete-conversation="removeConversation"
       @theme="theme = $event"
       @close="sidebarOpen = false"
-    />
+    >
+      <TokenPanel :models="chat.models.value" :model-id="chat.modelId.value" :runs="chat.runs.value"
+        :estimate="chat.estimate.value" :estimating="chat.estimating.value" :preview-error="chat.previewError.value"
+        :busy="chat.loading.value || chat.sending.value" :title="chat.conversation.value?.title" @model="chat.changeModel" />
+    </AgentSidebar>
     <main class="main-panel">
       <header class="chat-header">
         <button class="menu-button" aria-label="Открыть меню" @click="sidebarOpen = true">☰</button>
         <div><strong>{{ chat.conversation.value?.title || chat.agent.value?.name || 'AI Agents' }}</strong><span><i></i>{{ chat.loading.value ? 'Загрузка истории…' : 'Контекст сохранён' }}</span></div>
-        <span class="day-badge">DAY 7</span>
+        <span class="day-badge">DAY 8</span>
       </header>
       <div v-if="chat.error.value" class="error-banner" role="alert">{{ chat.error.value }} <button @click="chat.initialize">Повторить</button></div>
-      <ChatThread :messages="chat.messages.value" :agent-name="chat.agent.value?.name" :sending="chat.sending.value" />
+      <ChatThread :messages="chat.messages.value" :runs="chat.runs.value" :agent-name="chat.agent.value?.name" :sending="chat.sending.value" />
       <MessageComposer v-model="chat.draft.value" :disabled="chat.sending.value || chat.loading.value || !chat.agentId.value" :sending="chat.sending.value" @send="chat.send" />
     </main>
   </div>

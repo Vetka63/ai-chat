@@ -12,11 +12,13 @@ const summary = {
   created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
 }
 
-describe('Day 7 client', () => {
+describe('Day 8 client', () => {
   beforeEach(() => {
     localStorage.clear()
     vi.stubGlobal('confirm', vi.fn(() => true))
     vi.stubGlobal('fetch', vi.fn().mockImplementation((url, options = {}) => {
+      if (url.endsWith('/models')) return response({ models: [{ id: 'flash', title: 'Flash', available: true, pricing: {} }], default_model_id: 'flash' })
+      if (url.endsWith('/preview')) return response({})
       if (url.endsWith('/agents')) return response({ agents: [agent] })
       if (url.endsWith('/conversations') && !options.method) return response([])
       if (url.endsWith('/conversations') && options.method === 'POST') return response(summary, true, 201)
@@ -35,12 +37,14 @@ describe('Day 7 client', () => {
     await flushPromises()
 
     const runCall = fetch.mock.calls.find(([url]) => url.includes('/runs'))
-    expect(JSON.parse(runCall[1].body)).toEqual({ conversation_id: 'chat-1', message: 'Привет' })
+    expect(JSON.parse(runCall[1].body)).toEqual({ conversation_id: 'chat-1', message: 'Привет', model_id: 'flash' })
     expect(wrapper.text()).toContain('Ответ')
   })
 
   it('loads persisted messages when the page starts', async () => {
     fetch.mockImplementation((url) => {
+      if (url.endsWith('/models')) return response({ models: [{ id: 'flash', title: 'Flash', available: true, pricing: {} }], default_model_id: 'flash' })
+      if (url.endsWith('/preview')) return response({})
       if (url.endsWith('/agents')) return response({ agents: [agent] })
       if (url.endsWith('/conversations')) return response([summary])
       if (url.endsWith('/conversations/chat-1')) {
@@ -66,6 +70,8 @@ describe('Day 7 client', () => {
   it('prevents a second request while the first one is pending', async () => {
     let resolveRun
     fetch.mockImplementation((url, options = {}) => {
+      if (url.endsWith('/models')) return response({ models: [{ id: 'flash', title: 'Flash', available: true, pricing: {} }], default_model_id: 'flash' })
+      if (url.endsWith('/preview')) return response({})
       if (url.endsWith('/agents')) return response({ agents: [agent] })
       if (url.endsWith('/conversations') && !options.method) return response([])
       if (url.endsWith('/conversations') && options.method === 'POST') return response(summary, true, 201)
@@ -90,6 +96,8 @@ describe('Day 7 client', () => {
 
   it('keeps the persisted user message visible when the LLM request fails', async () => {
     fetch.mockImplementation((url, options = {}) => {
+      if (url.endsWith('/models')) return response({ models: [{ id: 'flash', title: 'Flash', available: true, pricing: {} }], default_model_id: 'flash' })
+      if (url.endsWith('/preview')) return response({})
       if (url.endsWith('/agents')) return response({ agents: [agent] })
       if (url.endsWith('/conversations') && !options.method) return response([])
       if (url.endsWith('/conversations') && options.method === 'POST') return response(summary, true, 201)

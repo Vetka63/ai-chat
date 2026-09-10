@@ -13,7 +13,7 @@ function submit(event) {
 <template>
   <div class="composer-wrap">
     <form class="composer" @submit.prevent="$emit('send')">
-      <textarea v-model="model" rows="1" maxlength="10000" placeholder="Напишите сообщение агенту…" :disabled="disabled" @keydown.enter="submit"></textarea>
+      <textarea v-model="model" rows="1" aria-label="Сообщение агенту" placeholder="Напишите сообщение агенту…" :disabled="disabled" @keydown.enter="submit"></textarea>
       <button type="submit" aria-label="Отправить" :disabled="disabled || !model.trim()">{{ sending ? '•••' : '↑' }}</button>
     </form>
     <p>Enter — отправить · Shift + Enter — новая строка · история сохраняется на сервере</p>

@@ -1,5 +1,19 @@
 # AI Chat
 
+## Текущая итерация: День 8 (Python)
+
+Ветка `ai-challenge-day-8`: выбор DeepSeek Flash/Pro и Ministral, подключаемый учёт
+токенов, стоимость, сохранение метрик в SQLite и MD-отчёт. Своего лимита контекста нет.
+Подробности и результаты реального переполнения: [руководство Дня 8](ai-agents-backend/docs/day8-guide.md).
+
+```powershell
+docker compose -p ai-chat-day-8 up -d --build agents-backend agents-client
+```
+
+Клиент — http://localhost:8083. Если эти порты заняты Днём 7, сначала остановите
+его контейнеры (`docker compose -p ai-chat-day-7 stop agents-client agents-backend`).
+История лежит в отдельных томах для каждого Compose-проекта. Java-проекты ниже сохранены.
+
 Репозиторий учебного чата: прежнее Java-приложение для Дней 1–5 и новая
 последовательная линия Python-агентов, начинающаяся с Дня 6.
 

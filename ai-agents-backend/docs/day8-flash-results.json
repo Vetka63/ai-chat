@@ -1,0 +1,55 @@
+{
+  "conversation_id": "c517c89c-139c-4729-9555-a6a4e518e7bc",
+  "model": "deepseek-v4-flash",
+  "results": [
+    {
+      "scenario": "short",
+      "http_status": 200,
+      "run": {
+        "id": "06d05bb3-9966-4189-90c0-d820d8eb4a61",
+        "agent_id": "dialogue",
+        "conversation_id": "c517c89c-139c-4729-9555-a6a4e518e7bc",
+        "created_at": "2026-09-10T16:21:37.700185+00:00",
+        "model_id": "deepseek-v4-flash",
+        "provider": "deepseek",
+        "requested_model": "deepseek-v4-flash",
+        "returned_model": "deepseek-flash",
+        "user_index": 0,
+        "assistant_index": 1,
+        "status": "success",
+        "estimate": {
+          "current_message_tokens": 19,
+          "history_tokens": 0,
+          "system_tokens": 247,
+          "prompt_tokens": 277,
+          "reserved_output_tokens": 1200,
+          "context_window": 1000000,
+          "occupancy_percent": 0.15,
+          "exceeds_context": false,
+          "method": "Приблизительно: UTF-8 / 3 + служебные токены; не tokenizer модели"
+        },
+        "usage": {
+          "prompt_tokens": 141,
+          "completion_tokens": 4,
+          "total_tokens": 145,
+          "cached_tokens": 0,
+          "reasoning_tokens": null
+        },
+        "estimated_cost_usd": "0.00002355",
+        "pricing": {
+          "input_usd": "0.150",
+          "cached_input_usd": "0.0030",
+          "output_usd": "0.600",
+          "label": "DeepSeek Flash Off-peak · оценка по тарифу",
+          "source": "https://api-docs.deepseek.com/quick_start/pricing/",
+          "checked_at": "2026-09-10"
+        },
+        "finish_reason": "stop",
+        "duration_ms": 1375,
+        "error_code": null,
+        "error_message": null,
+        "provider_status": null
+      }
+    }
+  ]
+}

@@ -45,6 +45,9 @@ services:
       PY_AGENT_REQUEST_TIMEOUT_SECONDS: ${PY_AGENT_REQUEST_TIMEOUT_SECONDS:-90}
       PY_AGENT_CORS_ORIGINS: ${PY_AGENT_CORS_ORIGINS:-http://localhost:5174,http://localhost:8083}
       PY_AGENT_DATABASE_PATH: /app/data/agents.sqlite3
+      MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
+      MISTRAL_BASE_URL: ${MISTRAL_BASE_URL:-https://api.mistral.ai/v1}
+      PY_AGENT_MISTRAL_TOKENIZER_PATH: /app/tokenizers/ministral-3b/tekken.json
     volumes:
       - agents-data:/app/data
     ports:

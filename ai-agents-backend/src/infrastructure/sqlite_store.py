@@ -48,6 +48,9 @@ class SqliteConversationStore:
                     ON messages(conversation_id, sequence);
                 """
             )
+            columns = await (await database.execute("PRAGMA table_info(conversations)")).fetchall()
+            if "selected_model_id" not in {column["name"] for column in columns}:
+                await database.execute("ALTER TABLE conversations ADD COLUMN selected_model_id TEXT")
             await database.commit()
 
     async def create(self, agent_id: str, title: str) -> ConversationSummary:
@@ -71,7 +74,7 @@ class SqliteConversationStore:
         async with self.connection() as database:
             rows = await (
                 await database.execute(
-                    """SELECT id, agent_id, title, created_at, updated_at
+                    """SELECT id, agent_id, title, created_at, updated_at, selected_model_id
                        FROM conversations WHERE agent_id=? ORDER BY updated_at DESC, id DESC""",
                     (agent_id,),
                 )
@@ -82,7 +85,7 @@ class SqliteConversationStore:
         async with self.connection() as database:
             row = await (
                 await database.execute(
-                    """SELECT id, agent_id, title, created_at, updated_at
+                    """SELECT id, agent_id, title, created_at, updated_at, selected_model_id
                        FROM conversations WHERE id=? AND agent_id=?""",
                     (conversation_id, agent_id),
                 )
@@ -109,6 +112,15 @@ class SqliteConversationStore:
             if cursor.rowcount == 0:
                 raise AgentError("conversation_not_found", "Диалог не найден у выбранного агента", 404)
             await database.commit()
+
+    async def select_model(self, agent_id: str, conversation_id: str, model_id: str) -> None:
+        """Запоминает модель для следующих сообщений, не меняя старые ответы."""
+        async with self.connection() as db:
+            cursor = await db.execute("UPDATE conversations SET selected_model_id=? WHERE id=? AND agent_id=?",
+                                     (model_id, conversation_id, agent_id))
+            if cursor.rowcount == 0:
+                raise AgentError("conversation_not_found", "Диалог не найден", 404)
+            await db.commit()
 
     async def append_message(
         self,

@@ -45,10 +45,19 @@ export async function deleteConversation(agentId, conversationId) {
   return request(conversationsPath(agentId, conversationId), { method: 'DELETE' })
 }
 
-export async function runConversationAgent(agentId, conversationId, message) {
+export async function runConversationAgent(agentId, conversationId, message, modelId) {
   return request(`/agents/${encodeURIComponent(agentId)}/runs`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ conversation_id: conversationId, message }),
+    body: JSON.stringify({ conversation_id: conversationId, message, model_id: modelId }),
   })
 }
+
+export const listModels = () => request('/models')
+export const selectModel = (agentId, conversationId, modelId) => request(`${conversationsPath(agentId, conversationId)}/model`, {
+  method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model_id: modelId }),
+})
+export const previewTokens = (agentId, conversationId, message, modelId, signal) => request(`/agents/${encodeURIComponent(agentId)}/preview`, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ conversation_id: conversationId || null, message, model_id: modelId }), signal,
+})

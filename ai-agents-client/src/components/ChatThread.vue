@@ -1,8 +1,12 @@
 <script setup>
-import { nextTick, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
+import RunMetrics from '../features/tokens/RunMetrics.vue'
 
-const props = defineProps({ messages: Array, agentName: String, sending: Boolean })
+const props = defineProps({ messages: Array, runs: Array, agentName: String, sending: Boolean })
 const thread = ref(null)
+const expanded = ref(new Set())
+const metrics = computed(() => new Map((props.runs || []).map((r) => [r.assistant_index ?? r.user_index, r])))
+watch(() => props.messages, () => { expanded.value = new Set() })
 
 async function scrollToBottom(smooth = true) {
   await nextTick()
@@ -33,12 +37,14 @@ watch(
     </div>
 
     <div v-else class="message-list">
-      <article v-for="message in messages" :key="message.id" class="message" :class="message.role">
+      <article v-for="(message, index) in messages" :key="index" class="message" :class="message.role">
         <div class="message-avatar">{{ message.role === 'user' ? 'В' : message.role === 'error' ? '!' : '✦' }}</div>
         <div class="message-body">
           <strong>{{ message.role === 'user' ? 'Вы' : message.role === 'error' ? 'Ошибка' : agentName }}</strong>
-          <p>{{ message.content }}</p>
+          <p>{{ expanded.has(index) || message.content.length <= 5000 ? message.content : message.content.slice(0, 1200) + '…' }}</p>
+          <button v-if="message.content.length > 5000" class="report-button" @click="expanded.has(index) ? expanded.delete(index) : expanded.add(index)">{{ expanded.has(index) ? 'Свернуть' : `Показать весь текст (${message.content.length.toLocaleString('ru-RU')} символов)` }}</button>
           <small v-if="message.model">{{ message.model }}<template v-if="message.source === 'demo'"> · demo</template></small>
+          <RunMetrics :run="metrics.get(index)" />
         </div>
       </article>
       <article v-if="sending" class="message assistant pending">
