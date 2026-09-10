@@ -2,6 +2,7 @@
 
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Literal
 
 import aiosqlite
 
@@ -9,7 +10,7 @@ from agent_core.models import AgentError, Conversation, ConversationSummary, Mes
 
 
 class SqliteConversationStore:
-    """Изолирует диалоги по agent_id и сохраняет каждую успешную пару сообщений."""
+    """Изолирует диалоги по agent_id и независимо сохраняет каждое сообщение."""
 
     def __init__(self, path: Path):
         self.path = path
@@ -109,13 +110,15 @@ class SqliteConversationStore:
                 raise AgentError("conversation_not_found", "Диалог не найден у выбранного агента", 404)
             await database.commit()
 
-    async def append_exchange(
+    async def append_message(
         self,
         agent_id: str,
         conversation_id: str,
-        user_message: str,
-        assistant_message: str,
+        role: Literal["user", "assistant"],
+        content: str,
     ) -> None:
+        """Сохраняет сообщение сразу, чтобы вопрос пользователя не терялся при сбое LLM."""
+
         timestamp = now()
         async with self.connection() as database:
             await database.execute("BEGIN IMMEDIATE")
@@ -127,16 +130,13 @@ class SqliteConversationStore:
             ).fetchone()
             if row is None:
                 raise AgentError("conversation_not_found", "Диалог не найден у выбранного агента", 404)
-            await database.executemany(
+            await database.execute(
                 "INSERT INTO messages(conversation_id, role, content, created_at) VALUES(?,?,?,?)",
-                [
-                    (conversation_id, "user", user_message, timestamp),
-                    (conversation_id, "assistant", assistant_message, timestamp),
-                ],
+                (conversation_id, role, content, timestamp),
             )
             title = row["title"]
-            if title == "Новый чат":
-                title = " ".join(user_message.split())[:60] or title
+            if role == "user" and title == "Новый чат":
+                title = " ".join(content.split())[:60] or title
             await database.execute(
                 "UPDATE conversations SET title=?, updated_at=? WHERE id=?",
                 (title, timestamp, conversation_id),

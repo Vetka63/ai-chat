@@ -129,7 +129,15 @@ export function useAgentChat() {
       if (summary) Object.assign(target, summary)
     } catch (cause) {
       error.value = cause.message || 'Не удалось получить ответ'
-      if (conversation.value?.messages.at(-1)?.role === 'user') conversation.value.messages.pop()
+      // Сервер сохраняет вопрос до обращения к LLM. Перечитываем диалог, чтобы
+      // при ошибке модели пользовательское сообщение не исчезало с экрана.
+      if (conversation.value?.id) {
+        try {
+          conversation.value = await api.getConversation(agentId.value, conversation.value.id)
+        } catch {
+          // При сетевой ошибке оставляем оптимистично добавленный вопрос на экране.
+        }
+      }
       if (createdForMessage && !conversation.value?.messages.length) {
         // Пустой созданный чат остаётся доступным для повторной отправки.
       }

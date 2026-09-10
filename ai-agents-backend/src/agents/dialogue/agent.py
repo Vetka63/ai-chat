@@ -56,6 +56,14 @@ class DialogueAgent:
                 conversation.messages,
                 text,
             )
+            # Вопрос является частью истории независимо от доступности внешней LLM.
+            # Запрос к модели строится до сохранения, поэтому текущий текст не дублируется.
+            await self.store.append_message(
+                self.config.id,
+                command.conversation_id,
+                "user",
+                text,
+            )
             completion = await self.llm.complete(
                 messages,
                 model=self.config.model,
@@ -66,10 +74,10 @@ class DialogueAgent:
             reply = self.output_policy.present(completion.content)
             for validator in self.output_validators:
                 validator.validate(reply)
-            await self.store.append_exchange(
+            await self.store.append_message(
                 self.config.id,
                 command.conversation_id,
-                text,
+                "assistant",
                 reply,
             )
 

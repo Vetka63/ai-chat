@@ -30,6 +30,9 @@ class DeepSeekClient:
         payload = {
             "model": model,
             "messages": [message.model_dump() for message in messages],
+            # У V4 thinking включён по умолчанию. Для обычного чат-агента он может
+            # израсходовать весь max_tokens до формирования видимого ответа.
+            "thinking": {"type": "disabled"},
             "temperature": temperature,
             "max_tokens": max_tokens,
         }
@@ -42,8 +45,24 @@ class DeepSeekClient:
             )
             response.raise_for_status()
             data = response.json()
-            content = data["choices"][0]["message"]["content"]
+            choice = data["choices"][0]
+            message = choice["message"]
+            content = message.get("content") or ""
+            if not isinstance(content, str):
+                raise TypeError("LLM content must be a string or null")
             returned_model = data.get("model") or model
+            reasoning = message.get("reasoning_content") or ""
+            usage = data.get("usage") or {}
+            logger.info(
+                "llm_response provider=deepseek model=%s finish_reason=%s "
+                "content_chars=%s reasoning_chars=%s prompt_tokens=%s completion_tokens=%s",
+                returned_model,
+                choice.get("finish_reason"),
+                len(content),
+                len(reasoning) if isinstance(reasoning, str) else 0,
+                usage.get("prompt_tokens"),
+                usage.get("completion_tokens"),
+            )
         except (httpx.HTTPError, KeyError, IndexError, TypeError, ValueError) as exc:
             logger.exception("llm_error provider=deepseek model=%s", model)
             raise AgentError("llm_unavailable", "Не удалось получить ответ от LLM", 502) from exc
@@ -68,4 +87,3 @@ class DemoClient:
             model=f"demo/{model}",
             source="demo",
         )
-

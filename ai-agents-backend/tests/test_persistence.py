@@ -40,7 +40,7 @@ async def test_history_is_loaded_after_store_and_agent_restart(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_invalid_output_is_not_saved(tmp_path):
+async def test_invalid_output_keeps_user_message_without_assistant_message(tmp_path):
     store = SqliteConversationStore(tmp_path / "safe.sqlite3")
     await store.initialize()
     conversation = await store.create("dialogue", "Новый чат")
@@ -51,7 +51,8 @@ async def test_invalid_output_is_not_saved(tmp_path):
     with pytest.raises(AgentError, match="пустой ответ"):
         await agent.run(AgentCommand(conversation_id=conversation.id, message="Запрос"))
 
-    assert (await store.get("dialogue", conversation.id)).messages == []
+    saved = await store.get("dialogue", conversation.id)
+    assert [(item.role, item.content) for item in saved.messages] == [("user", "Запрос")]
 
 
 @pytest.mark.asyncio

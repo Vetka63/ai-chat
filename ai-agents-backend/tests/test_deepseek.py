@@ -29,4 +29,4 @@ async def test_deepseek_payload_contains_only_current_system_and_user_messages()
         {"role": "system", "content": "prompt"},
         {"role": "user", "content": "question"},
     ]
-
+    assert captured["thinking"] == {"type": "disabled"}

@@ -1,6 +1,6 @@
 """Интерфейсы, позволяющие подключать новых агентов и LLM-провайдеров."""
 
-from typing import Protocol
+from typing import Literal, Protocol
 
 from agent_core.models import (
     AgentCommand,
@@ -73,10 +73,10 @@ class ConversationStore(Protocol):
     async def list(self, agent_id: str) -> list[ConversationSummary]: ...
     async def get(self, agent_id: str, conversation_id: str) -> Conversation: ...
     async def delete(self, agent_id: str, conversation_id: str) -> None: ...
-    async def append_exchange(
+    async def append_message(
         self,
         agent_id: str,
         conversation_id: str,
-        user_message: str,
-        assistant_message: str,
+        role: Literal["user", "assistant"],
+        content: str,
     ) -> None: ...

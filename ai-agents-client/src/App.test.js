@@ -87,5 +87,29 @@ describe('Day 7 client', () => {
     resolveRun()
     await flushPromises()
   })
+
+  it('keeps the persisted user message visible when the LLM request fails', async () => {
+    fetch.mockImplementation((url, options = {}) => {
+      if (url.endsWith('/agents')) return response({ agents: [agent] })
+      if (url.endsWith('/conversations') && !options.method) return response([])
+      if (url.endsWith('/conversations') && options.method === 'POST') return response(summary, true, 201)
+      if (url.includes('/runs')) {
+        return response({ code: 'empty_output', error: 'Модель вернула пустой ответ' }, false, 502)
+      }
+      if (url.endsWith('/conversations/chat-1')) {
+        return response({ ...summary, messages: [{ role: 'user', content: 'Какой город самый горячий?' }] })
+      }
+      throw new Error(`Unexpected request: ${url}`)
+    })
+
+    const wrapper = mount(App)
+    await flushPromises()
+    await wrapper.get('textarea').setValue('Какой город самый горячий?')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Какой город самый горячий?')
+    expect(wrapper.text()).toContain('Модель вернула пустой ответ')
+  })
 })
 
