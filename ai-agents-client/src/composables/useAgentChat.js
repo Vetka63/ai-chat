@@ -16,16 +16,17 @@ export function useAgentChat() {
   const estimate = ref(null)
   const previewError = ref('')
   const estimating = ref(false)
+  const contextSettings = ref({ mode: 'full', keep_last: 10, summarize_every: 10 })
   const runs = computed(() => conversation.value?.runs || [])
   const selectedModel = computed(() => models.value.find((m) => m.id === modelId.value))
 
   const agent = computed(() => agents.value.find((item) => item.id === agentId.value))
   const messages = computed(() => conversation.value?.messages || [])
-  const selectedKey = (id) => `day8:selected:${id}`
+  const selectedKey = (id) => `day9:selected:${id}`
 
   // Старый результат оценки не может заменить оценку нового черновика/модели.
   let previewController, previewTimer, revision = 0
-  watch([draft, modelId, agentId, conversation, sending], () => {
+  watch([draft, modelId, agentId, conversation, sending, contextSettings], () => {
     const requestRevision = ++revision
     clearTimeout(previewTimer)
     previewController?.abort()
@@ -65,6 +66,7 @@ export function useAgentChat() {
   async function loadConversation(id) {
     conversation.value = await api.getConversation(agentId.value, id)
     modelId.value = conversation.value.selected_model_id || defaultModelId.value
+    contextSettings.value = conversation.value.context_settings || { mode: 'full', keep_last: 10, summarize_every: 10 }
     localStorage.setItem(selectedKey(agentId.value), id)
   }
 
@@ -126,7 +128,7 @@ export function useAgentChat() {
     loading.value = true
     error.value = ''
     try {
-      const created = await api.createConversation(agentId.value)
+      const created = await api.createConversation(agentId.value, 'Новый чат', contextSettings.value)
       conversations.value.unshift(created)
       conversation.value = { ...created, messages: [] }
       localStorage.setItem(selectedKey(agentId.value), created.id)
@@ -165,7 +167,7 @@ export function useAgentChat() {
     let createdForMessage = false
     try {
       if (!conversation.value) {
-        const created = await api.createConversation(agentId.value, text.slice(0, 60))
+        const created = await api.createConversation(agentId.value, text.slice(0, 60), contextSettings.value)
         conversations.value.unshift(created)
         conversation.value = { ...created, messages: [] }
         localStorage.setItem(selectedKey(agentId.value), created.id)
@@ -176,7 +178,8 @@ export function useAgentChat() {
       draft.value = ''
       const result = await api.runConversationAgent(agentId.value, target.id, text, modelId.value)
       target.messages.push({ role: 'assistant', content: result.reply, model: result.model, source: result.source })
-      target.runs = [...(target.runs || []), ...(result.run ? [result.run] : [])]
+      target.runs = [...(target.runs || []), ...(result.additional_runs || []), ...(result.run ? [result.run] : [])]
+      target.summary = result.summary || null
       target.selected_model_id = modelId.value
       conversations.value = await api.listConversations(agentId.value)
       const summary = conversations.value.find((item) => item.id === target.id)
@@ -205,5 +208,36 @@ export function useAgentChat() {
     loading, sending, error, initialize, selectAgent, selectConversation,
     newChat, removeConversation, send,
     models, modelId, selectedModel, runs, estimate, estimating, previewError, changeModel,
+    contextSettings, changeContext, forkChat,
+  }
+
+  async function changeContext(settings) {
+    if (loading.value || sending.value) return
+    loading.value = true
+    try {
+      if (conversation.value) {
+        await api.configureContext(agentId.value, conversation.value.id, settings)
+        conversation.value.context_settings = { ...settings }
+        const item = conversations.value.find((c) => c.id === conversation.value.id)
+        if (item) item.context_settings = { ...settings }
+      }
+      contextSettings.value = { ...settings }
+      error.value = ''
+    } catch (cause) { error.value = cause.message }
+    finally { loading.value = false }
+  }
+
+  async function forkChat() {
+    if (loading.value || sending.value || !conversation.value) return
+    loading.value = true
+    try {
+      const settings = { ...contextSettings.value, mode: contextSettings.value.mode === 'full' ? 'summary' : 'full' }
+      const created = await api.forkConversation(agentId.value, conversation.value.id, settings)
+      conversations.value = await api.listConversations(agentId.value)
+      await loadConversation(created.id)
+      draft.value = ''
+      error.value = ''
+    } catch (cause) { error.value = cause.message }
+    finally { loading.value = false }
   }
 }

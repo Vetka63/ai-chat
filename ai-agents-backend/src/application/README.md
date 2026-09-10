@@ -1,5 +1,11 @@
 # Сборка приложения и HTTP API
 
+День 9: bootstrap подключает ContextMemory и LlmSummarizer к тому же агенту.
+Lifespan создаёт отдельный SqliteSummaryRepository. PATCH conversations/{id}/context
+сохраняет ContextSettings; POST conversations/{id}/fork создаёт независимую копию
+истории без старых runs и summary. Оба действия не вызывают LLM. GET диалога
+дополнительно возвращает summary. Возможности агента перечислены в AgentInfo.capabilities.
+
 bootstrap.py — единственное место сборки агента, его политик и общих адаптеров.
 settings.py читает локальные переменные окружения, ключи представлены SecretStr.
 models.json — серверный allowlist моделей, контекстных окон и тарифов с источниками.

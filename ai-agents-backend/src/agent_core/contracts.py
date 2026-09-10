@@ -1,6 +1,7 @@
 """Интерфейсы, позволяющие подключать новых агентов и LLM-провайдеров."""
 
 from typing import Literal, Protocol
+from capabilities.context_memory.models import ContextSettings
 
 from agent_core.models import (
     AgentCommand,
@@ -74,6 +75,8 @@ class ConversationStore(Protocol):
     async def get(self, agent_id: str, conversation_id: str) -> Conversation: ...
     async def delete(self, agent_id: str, conversation_id: str) -> None: ...
     async def select_model(self, agent_id: str, conversation_id: str, model_id: str) -> None: ...
+    async def configure_context(self, agent_id: str, conversation_id: str, settings: ContextSettings) -> None: ...
+    async def fork(self, source: Conversation, settings: ContextSettings) -> ConversationSummary: ...
     async def append_message(
         self,
         agent_id: str,

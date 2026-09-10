@@ -1,6 +1,8 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App.vue'
+
+enableAutoUnmount(afterEach)
 
 function response(body, ok = true, status = 200) {
   return Promise.resolve({ ok, status, json: () => Promise.resolve(body) })
@@ -12,7 +14,7 @@ const summary = {
   created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
 }
 
-describe('Day 8 client', () => {
+describe('Day 9 client', () => {
   beforeEach(() => {
     localStorage.clear()
     vi.stubGlobal('confirm', vi.fn(() => true))
@@ -29,11 +31,47 @@ describe('Day 8 client', () => {
 
   afterEach(() => vi.unstubAllGlobals())
 
+  it('separates chats from settings and keeps the model beside the composer', async () => {
+    const wrapper = mount(App)
+    await flushPromises()
+    expect(wrapper.find('.chat-sidebar .conversation-list').exists()).toBe(true)
+    expect(wrapper.find('.chat-sidebar .token-panel').exists()).toBe(false)
+    expect(wrapper.find('.composer .model-picker').exists()).toBe(true)
+    expect(wrapper.find('.settings-sidebar .agent-card').exists()).toBe(true)
+    expect(wrapper.get('.theme-section').attributes('open')).toBeUndefined()
+    await wrapper.get('textarea').setValue('Не потерять черновик')
+    await wrapper.get('.settings-toggle').trigger('click')
+    expect(wrapper.get('.settings-toggle').attributes('aria-expanded')).toBe('true')
+    await wrapper.get('[aria-label="Скрыть настройки"]').trigger('click')
+    expect(wrapper.get('.settings-toggle').attributes('aria-expanded')).toBe('false')
+    expect(wrapper.get('textarea').element.value).toBe('Не потерять черновик')
+    wrapper.unmount()
+  })
+
+  it('opens mobile drawers one at a time and restores focus on Escape', async () => {
+    vi.stubGlobal('innerWidth', 390)
+    const wrapper = mount(App, { attachTo: document.body })
+    await flushPromises()
+    expect(wrapper.get('.settings-sidebar').isVisible()).toBe(false)
+    await wrapper.get('.menu-button').trigger('click')
+    expect(wrapper.get('.chat-sidebar').attributes('role')).toBe('dialog')
+    expect(wrapper.get('main').attributes('aria-hidden')).toBe('true')
+    await wrapper.get('[aria-label="Закрыть список чатов"]').trigger('keydown', { key: 'Escape' })
+    expect(wrapper.get('.chat-sidebar').classes()).not.toContain('open')
+    expect(document.activeElement).toBe(wrapper.get('.menu-button').element)
+    await wrapper.get('.settings-toggle').trigger('click')
+    expect(wrapper.get('.settings-sidebar').attributes('role')).toBe('dialog')
+    expect(wrapper.get('.chat-sidebar').attributes('aria-hidden')).toBe('true')
+    await wrapper.get('[aria-label="Скрыть настройки"]').trigger('keydown', { key: 'Escape' })
+    expect(wrapper.get('.settings-sidebar').isVisible()).toBe(false)
+    expect(document.activeElement).toBe(wrapper.get('.settings-toggle').element)
+  })
+
   it('creates a conversation and sends its id with the current message', async () => {
     const wrapper = mount(App)
     await flushPromises()
     await wrapper.get('textarea').setValue('Привет')
-    await wrapper.get('form').trigger('submit')
+    await wrapper.get('form.composer').trigger('submit')
     await flushPromises()
 
     const runCall = fetch.mock.calls.find(([url]) => url.includes('/runs'))
@@ -86,9 +124,9 @@ describe('Day 8 client', () => {
     const wrapper = mount(App)
     await flushPromises()
     await wrapper.get('textarea').setValue('Запрос')
-    await wrapper.get('form').trigger('submit')
+    await wrapper.get('form.composer').trigger('submit')
     await flushPromises()
-    await wrapper.get('form').trigger('submit')
+    await wrapper.get('form.composer').trigger('submit')
     expect(fetch.mock.calls.filter(([url]) => url.includes('/runs'))).toHaveLength(1)
     resolveRun()
     await flushPromises()
@@ -113,7 +151,7 @@ describe('Day 8 client', () => {
     const wrapper = mount(App)
     await flushPromises()
     await wrapper.get('textarea').setValue('Какой город самый горячий?')
-    await wrapper.get('form').trigger('submit')
+    await wrapper.get('form.composer').trigger('submit')
     await flushPromises()
 
     expect(wrapper.text()).toContain('Какой город самый горячий?')

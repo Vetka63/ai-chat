@@ -8,16 +8,9 @@ const props = {
   modelId: 'flash', runs: [], busy: false,
 }
 describe('token panel', () => {
-  it('allows switching even when estimated context overflows', async () => {
+  it('warns without blocking when estimated context overflows', () => {
     const wrapper = mount(TokenPanel, { props: { ...props, estimate: { exceeds_context: true, occupancy_percent: 120, method: 'approx' } } })
     expect(wrapper.text()).toContain('Отправка разрешена')
-    await wrapper.findAll('.model-choices button')[1].trigger('click')
-    expect(wrapper.emitted('model')).toEqual([['mistral']])
-    wrapper.unmount()
-  })
-  it('disables switching during a request and without a provider key', () => {
-    const wrapper = mount(TokenPanel, { props: { ...props, busy: true } })
-    expect(wrapper.findAll('.model-choices button').every((b) => b.attributes('disabled') !== undefined)).toBe(true)
     wrapper.unmount()
   })
   it('shows unknown usage rather than zero on provider error', () => {

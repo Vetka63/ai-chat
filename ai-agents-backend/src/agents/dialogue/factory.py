@@ -18,6 +18,7 @@ def build_dialogue_agent(
     catalog=None,
     accounting: TokenAccounting | None = None,
     context_policy=None,
+    memory=None,
 ) -> DialogueAgent:
     """Создаёт полностью настроенный агент без участия HTTP-контроллера."""
 
@@ -32,4 +33,5 @@ def build_dialogue_agent(
         output_validators=[NonEmptyOutputValidator()],
         catalog=catalog,
         accounting=accounting,
+        memory=memory,
     )

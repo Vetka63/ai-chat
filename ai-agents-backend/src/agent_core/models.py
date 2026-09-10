@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 from capabilities.token_accounting.models import RunRecord, TokenUsage
+from capabilities.context_memory.models import ContextSettings, SummaryState
 
 
 class StrictModel(BaseModel):
@@ -66,6 +67,8 @@ class AgentResult(StrictModel):
     model: str
     source: Literal["llm", "demo"] = "llm"
     run: RunRecord | None = None
+    additional_runs: list[RunRecord] = Field(default_factory=list)
+    summary: SummaryState | None = None
 
 
 class AgentInfo(StrictModel):
@@ -74,6 +77,7 @@ class AgentInfo(StrictModel):
     id: str
     name: str
     description: str
+    capabilities: list[str] = Field(default_factory=list)
 
 
 class ConversationSummary(StrictModel):
@@ -85,6 +89,7 @@ class ConversationSummary(StrictModel):
     created_at: str
     updated_at: str
     selected_model_id: str | None = None
+    context_settings: ContextSettings = Field(default_factory=ContextSettings)
 
 
 class Conversation(ConversationSummary):
@@ -92,6 +97,7 @@ class Conversation(ConversationSummary):
 
     messages: list[Message]
     runs: list[RunRecord] = Field(default_factory=list)
+    summary: SummaryState | None = None
 
 
 class AgentError(Exception):

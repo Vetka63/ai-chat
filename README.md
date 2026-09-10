@@ -1,6 +1,18 @@
 # AI Chat
 
-## Текущая итерация: День 8 (Python)
+## Текущая итерация: День 9 (Python)
+
+Ветка `ai-challenge-day-9`: две стратегии одного агента — полная история и summary
+с несжатым хвостом. Оригиналы сохраняются; учёт токенов включает стоимость сжатия.
+Настройки памяти, просмотр сводки и копирование чата доступны в боковой панели.
+[Руководство и фактическое сравнение](ai-agents-backend/docs/day9-guide.md).
+
+```powershell
+docker compose -p ai-chat-day-8 stop agents-client agents-backend
+docker compose -p ai-chat-day-9 up -d --build agents-backend agents-client
+```
+
+## Предыдущая итерация: День 8 (Python)
 
 Ветка `ai-challenge-day-8`: выбор DeepSeek Flash/Pro и Ministral, подключаемый учёт
 токенов, стоимость, сохранение метрик в SQLite и MD-отчёт. Своего лимита контекста нет.

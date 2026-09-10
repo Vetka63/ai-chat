@@ -5,7 +5,8 @@ import RunMetrics from '../features/tokens/RunMetrics.vue'
 const props = defineProps({ messages: Array, runs: Array, agentName: String, sending: Boolean })
 const thread = ref(null)
 const expanded = ref(new Set())
-const metrics = computed(() => new Map((props.runs || []).map((r) => [r.assistant_index ?? r.user_index, r])))
+const metrics = computed(() => new Map((props.runs || []).filter((r) => r.purpose !== 'summary').map((r) => [r.assistant_index ?? r.user_index, r])))
+const summariesAt = (index) => (props.runs || []).filter((r) => r.purpose === 'summary' && r.user_index === index)
 watch(() => props.messages, () => { expanded.value = new Set() })
 
 async function scrollToBottom(smooth = true) {
@@ -45,6 +46,7 @@ watch(
           <button v-if="message.content.length > 5000" class="report-button" @click="expanded.has(index) ? expanded.delete(index) : expanded.add(index)">{{ expanded.has(index) ? 'Свернуть' : `Показать весь текст (${message.content.length.toLocaleString('ru-RU')} символов)` }}</button>
           <small v-if="message.model">{{ message.model }}<template v-if="message.source === 'demo'"> · demo</template></small>
           <RunMetrics :run="metrics.get(index)" />
+          <RunMetrics v-for="run in summariesAt(index)" :key="run.id" :run="run" />
         </div>
       </article>
       <article v-if="sending" class="message assistant pending">

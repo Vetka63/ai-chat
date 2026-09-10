@@ -16,6 +16,7 @@ from agent_core.models import AgentCommand, AgentError, AgentInfo, AgentResult, 
 from agents.dialogue.config import DialogueAgentConfig
 from capabilities.token_accounting.models import RunRecord
 from capabilities.token_accounting.service import TokenAccounting
+from capabilities.context_memory.models import ContextSettings
 
 
 class DialogueAgent:
@@ -33,6 +34,7 @@ class DialogueAgent:
         output_validators: list[OutputValidator],
         catalog=None,
         accounting: TokenAccounting | None = None,
+        memory=None,
     ):
         self.config = config
         self.llm = llm
@@ -44,11 +46,17 @@ class DialogueAgent:
         self.output_validators = output_validators
         self.catalog = catalog
         self.accounting = accounting
+        self.memory = memory
         self._conversation_locks: dict[str, asyncio.Lock] = {}
 
     @property
     def info(self) -> AgentInfo:
-        return AgentInfo(id=self.config.id, name=self.config.name, description=self.config.description)
+        features = ["persistent_history"]
+        if self.accounting:
+            features.append("token_accounting")
+        if self.memory:
+            features.append("context_memory")
+        return AgentInfo(id=self.config.id, name=self.config.name, description=self.config.description, capabilities=features)
 
     async def run(self, command: AgentCommand) -> AgentResult:
         text = self.input_policy.prepare(command.message)
@@ -66,23 +74,21 @@ class DialogueAgent:
                 conversation.messages,
                 text,
             )
+            # Сохраняем вопрос до сжатия: summary тоже может завершиться ошибкой API.
+            if spec:
+                await self.store.select_model(self.config.id, command.conversation_id, model_id)
+            await self.store.append_message(self.config.id, command.conversation_id, "user", text)
+            prepared = await self.memory.prepare(conversation, system_prompt, text, model_id, generate=True) if self.memory else None
+            baseline = messages
+            if prepared:
+                messages = prepared.messages
             run = None
             if self.accounting and spec:
-                estimate = await asyncio.to_thread(self.accounting.estimate, messages, conversation.messages, text, spec, self.config.max_tokens)
+                estimate = await self.estimate_context(messages, baseline, conversation.messages, text, spec, prepared, conversation.context_settings.mode)
                 run = RunRecord(id=new_id(), agent_id=self.config.id, conversation_id=command.conversation_id,
                     created_at=now(), model_id=spec.id, provider=spec.provider, requested_model=spec.model,
                     user_index=len(conversation.messages), estimate=estimate, pricing=self.catalog.pricing_at(model_id, now()))
                 await self.accounting.record(run)
-            if spec:
-                await self.store.select_model(self.config.id, command.conversation_id, model_id)
-            # Вопрос является частью истории независимо от доступности внешней LLM.
-            # Запрос к модели строится до сохранения, поэтому текущий текст не дублируется.
-            await self.store.append_message(
-                self.config.id,
-                command.conversation_id,
-                "user",
-                text,
-            )
             started = perf_counter()
             try:
                 completion = await self.llm.complete(messages, model=model_id,
@@ -113,7 +119,38 @@ class DialogueAgent:
             model=completion.model,
             source=completion.source,
             run=run,
+            additional_runs=prepared.new_runs if prepared else [],
+            summary=await self.memory.repository.get(self.config.id, command.conversation_id) if self.memory else None,
         )
+
+    async def configure_context(self, conversation_id: str, settings: ContextSettings):
+        """Меняет стратегию между запусками; текущий запрос не меняется посередине."""
+        if settings.mode == "summary" and not self.memory:
+            raise AgentError("context_not_supported", "К агенту не подключено сжатие контекста", 501)
+        async with self._conversation_locks.setdefault(conversation_id, asyncio.Lock()):
+            await self.store.configure_context(self.config.id, conversation_id, settings)
+
+    async def fork_conversation(self, conversation_id: str, settings: ContextSettings):
+        """Копия одного согласованного снимка, без вызовов LLM и без изменения оригинала."""
+        async with self._conversation_locks.setdefault(conversation_id, asyncio.Lock()):
+            source = await self.store.get(self.config.id, conversation_id)
+            return await self.store.fork(source, settings)
+
+    async def estimate_context(self, messages, baseline, history, text, spec, prepared, mode):
+        """Сопоставляет полный и реально отправляемый контекст одним tokenizer."""
+        def calculate():
+            result = self.accounting.estimate(messages, history, text, spec, self.config.max_tokens)
+            counter = self.accounting.estimators[spec.provider]
+            result.context_mode = mode
+            result.full_prompt_tokens = counter.count_messages(baseline)
+            if prepared:
+                result.pending_summary = prepared.pending_summary
+                if prepared.summary:
+                    result.summary_tokens = counter.count_text(prepared.summary.text)
+                    result.summarized_messages = prepared.summary.covered_messages
+                    result.summary_revision = prepared.summary.revision
+            return result
+        return await asyncio.to_thread(calculate)
 
     async def preview(self, command: PreviewCommand):
         """Оценивает будущий запрос без сохранения сообщения и обращения к LLM."""
@@ -125,4 +162,6 @@ class DialogueAgent:
         spec = self.catalog.get(command.model_id or selected or self.config.model, False)
         text = self.input_policy.prepare(command.message)
         messages = self.context_policy.build(self.config.system_prompt.replace("{provider}", spec.provider), history, text)
-        return await asyncio.to_thread(self.accounting.estimate, messages, history, text, spec, self.config.max_tokens)
+        prepared = await self.memory.prepare(conversation, self.config.system_prompt.replace("{provider}", spec.provider), text, spec.id, generate=False) if self.memory and conversation else None
+        return await self.estimate_context(prepared.messages if prepared else messages, messages, history, text, spec,
+                                          prepared, conversation.context_settings.mode if conversation else "full")

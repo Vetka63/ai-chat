@@ -14,6 +14,7 @@ from infrastructure.completions import ChatCompletionsClient
 from infrastructure.model_catalog import ModelCatalog, ProviderRouter
 from infrastructure.tokenizers import ByteEstimate, MistralEstimate
 from capabilities.token_accounting.service import TokenAccounting
+from capabilities.context_memory.service import ContextMemory, LlmSummarizer
 
 
 def build_registry(
@@ -22,6 +23,7 @@ def build_registry(
     store: ConversationStore,
     catalog: ModelCatalog | None = None,
     usage_repository=None,
+    summary_repository=None,
 ) -> AgentRegistry:
     """Создаёт реестр; HTTP-маршруты не знают о DeepSeek и промптах."""
 
@@ -36,5 +38,6 @@ def build_registry(
         model=settings.model,
         system_prompt=prompt_path.read_text(encoding="utf-8").strip(),
     )
-    return AgentRegistry([build_dialogue_agent(config, llm, store, catalog=catalog, accounting=accounting)])
+    memory = ContextMemory(summary_repository, LlmSummarizer(llm, accounting, catalog)) if summary_repository else None
+    return AgentRegistry([build_dialogue_agent(config, llm, store, catalog=catalog, accounting=accounting, memory=memory)])
 

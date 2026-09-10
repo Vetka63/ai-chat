@@ -29,11 +29,11 @@ export async function listConversations(agentId) {
   return request(conversationsPath(agentId))
 }
 
-export async function createConversation(agentId, title = 'Новый чат') {
+export async function createConversation(agentId, title = 'Новый чат', contextSettings) {
   return request(conversationsPath(agentId), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ title }),
+    body: JSON.stringify({ title, context_settings: contextSettings }),
   })
 }
 
@@ -54,6 +54,12 @@ export async function runConversationAgent(agentId, conversationId, message, mod
 }
 
 export const listModels = () => request('/models')
+export const configureContext = (agentId, conversationId, settings) => request(`${conversationsPath(agentId, conversationId)}/context`, {
+  method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(settings),
+})
+export const forkConversation = (agentId, conversationId, settings) => request(`${conversationsPath(agentId, conversationId)}/fork`, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(settings),
+})
 export const selectModel = (agentId, conversationId, modelId) => request(`${conversationsPath(agentId, conversationId)}/model`, {
   method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model_id: modelId }),
 })

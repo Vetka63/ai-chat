@@ -47,6 +47,12 @@ class ContextEstimate(BaseModel):
     occupancy_percent: float
     exceeds_context: bool
     method: str
+    context_mode: Literal["full", "summary"] = "full"
+    full_prompt_tokens: int | None = None
+    summary_tokens: int = 0
+    summarized_messages: int = 0
+    summary_revision: int | None = None
+    pending_summary: bool = False
 
 
 class RunRecord(BaseModel):
@@ -71,3 +77,4 @@ class RunRecord(BaseModel):
     error_code: str | None = None
     error_message: str | None = None
     provider_status: int | None = None
+    purpose: Literal["dialogue", "summary"] = "dialogue"
