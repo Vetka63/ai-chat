@@ -38,7 +38,10 @@ def main():
     parser.add_argument('--model', default='deepseek-v4-flash')
     parser.add_argument('--execute', action='store_true')
     parser.add_argument('--output', default='docs/day9-results.json')
+    parser.add_argument('--max-output-tokens', type=int, default=None, help='Лимит ответа для теста, например 1200; иначе настройки API')
     args = parser.parse_args()
+    if args.max_output_tokens is not None and args.max_output_tokens < 1:
+        parser.error('--max-output-tokens must be positive')
     print(f'Day 9 comparison on {args.model}; about 13 API calls only with --execute.', flush=True)
     if not args.execute:
         return
@@ -59,7 +62,7 @@ def main():
         ]
         for index, text in enumerate(seeds):
             result = client.post('/api/v1/agents/dialogue/runs', json={'conversation_id': source['id'],
-                'model_id': args.model, 'message': text + notes + '\nЗапомни важные факты. Ответь только: принято.'})
+                'model_id': args.model, 'max_output_tokens': args.max_output_tokens, 'message': text + notes + '\nЗапомни важные факты. Ответь только: принято.'})
             result.raise_for_status()
             print(f'Seed {index + 1}/5 saved.', flush=True)
         baseline = client.get(root+'/'+source['id']).raise_for_status().json()
@@ -72,7 +75,7 @@ def main():
             results = []
             for iteration in range(3):
                 response = client.post('/api/v1/agents/dialogue/runs', json={'conversation_id': fork['id'],
-                    'model_id': args.model, 'message': QUESTION})
+                    'model_id': args.model, 'max_output_tokens': args.max_output_tokens, 'message': QUESTION})
                 if response.is_error:
                     results.append({'iteration': iteration + 1, 'error': response.json()})
                     break

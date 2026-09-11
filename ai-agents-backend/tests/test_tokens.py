@@ -9,8 +9,8 @@ from agents.dialogue.config import DialogueAgentConfig
 from agents.dialogue.factory import build_dialogue_agent
 from application.main import create_app
 from application.settings import Settings
-from capabilities.token_accounting.models import TokenUsage
-from capabilities.token_accounting.service import TokenAccounting, calculate_cost
+from capabilities.token_accounting.models import ContextEstimate, RunRecord, TokenUsage
+from capabilities.token_accounting.service import TokenAccounting, calculate_cost, calculate_token_savings
 from infrastructure.completions import ChatCompletionsClient
 from infrastructure.model_catalog import ModelCatalog
 from infrastructure.sqlite_store import SqliteConversationStore
@@ -30,6 +30,51 @@ def test_price_time_and_actual_alias():
     assert models.pricing_at('deepseek-v4-pro', '2026-09-10T02:00:00Z').input_usd == Decimal('1.32')
     assert models.pricing_at('deepseek-v4-pro', '2026-09-10T12:00:00Z').input_usd == Decimal('0.66')
     assert models.pricing_at('deepseek-v4-pro', '2026-09-10T02:00:00Z', 'deepseek-flash').input_usd == Decimal('.30')
+
+
+def savings_run(identifier, purpose, prompt, full_prompt=None, total=100, model_id='deepseek-v4-flash'):
+    spec = catalog().get(model_id)
+    return RunRecord(
+        id=identifier, agent_id='dialogue', conversation_id='conversation', created_at='2026-09-11T00:00:00Z',
+        model_id=spec.id, provider=spec.provider, requested_model=spec.model, user_index=0,
+        purpose=purpose,
+        estimate=ContextEstimate(
+            current_message_tokens=1, history_tokens=1, system_tokens=1,
+            prompt_tokens=prompt, full_prompt_tokens=full_prompt,
+            context_window=spec.context_window, occupancy_percent=1, exceeds_context=False,
+            method=f'{spec.provider}-test', context_mode='summary' if purpose == 'dialogue' else 'full',
+        ),
+        usage=TokenUsage(prompt_tokens=max(total - 10, 0), completion_tokens=min(total, 10), total_tokens=total) if total is not None else None,
+        pricing=spec.pricing,
+    )
+
+
+def test_token_savings_subtracts_all_summary_tokens():
+    result = calculate_token_savings([
+        savings_run('dialogue-1', 'dialogue', prompt=400, full_prompt=1000, total=410),
+        savings_run('summary-1', 'summary', prompt=300, total=350),
+        savings_run('dialogue-2', 'dialogue', prompt=500, full_prompt=1300, total=510),
+    ])
+    assert result.full_prompt_tokens == 2300
+    assert result.compressed_prompt_tokens == 900
+    assert result.gross_input_savings_tokens == 1400
+    assert result.summary_usage_tokens == 350
+    assert result.net_savings_tokens == 1050
+    assert result.net_savings_percent == 45.65
+    assert result.complete and len(result.by_model) == 1
+
+
+def test_token_savings_stays_unknown_when_api_usage_is_missing_and_groups_models():
+    result = calculate_token_savings([
+        savings_run('dialogue-known', 'dialogue', prompt=400, full_prompt=1000),
+        savings_run('summary-unknown', 'summary', prompt=300, total=None),
+        savings_run('dialogue-unknown', 'dialogue', prompt=200, full_prompt=600, total=None,
+                    model_id='ministral-3b-2512'),
+    ])
+    assert result.net_savings_tokens is None and not result.complete
+    assert result.unknown_dialogue_runs == 1 and result.unknown_summary_runs == 1
+    assert result.gross_input_savings_tokens == 600
+    assert result.mixed_models and len(result.by_model) == 2
 
 @pytest.mark.parametrize('status,body,code', [
     (400, 'maximum context length exceeded', 'context_limit_exceeded'),

@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import AgentSidebar from './components/AgentSidebar.vue'
 import ChatSidebar from './components/ChatSidebar.vue'
+import OutputSettings from './components/OutputSettings.vue'
 import ModelPicker from './components/ModelPicker.vue'
 import ChatThread from './components/ChatThread.vue'
 import MessageComposer from './components/MessageComposer.vue'
@@ -102,7 +103,7 @@ async function removeConversation(item) {
       </header>
       <div v-if="chat.error.value" class="error-banner" role="alert">{{ chat.error.value }} <button @click="chat.initialize">Повторить</button></div>
       <ChatThread :messages="chat.messages.value" :runs="chat.runs.value" :agent-name="chat.agent.value?.name" :sending="chat.sending.value" />
-      <MessageComposer v-model="chat.draft.value" :disabled="busy || !chat.agentId.value" :sending="chat.sending.value" @send="chat.send">
+      <MessageComposer v-model="chat.draft.value" :disabled="busy || !chat.agentId.value || !chat.outputLimitValid.value" :sending="chat.sending.value" @send="chat.send">
         <ModelPicker :models="chat.models.value" :model-id="chat.modelId.value" :busy="busy" @model="chat.changeModel" />
       </MessageComposer>
     </main>
@@ -111,6 +112,7 @@ async function removeConversation(item) {
       :role="overlay === 'settings' ? 'dialog' : undefined" :aria-modal="overlay === 'settings' ? true : undefined"
       :agents="chat.agents.value" :selected-agent="chat.agentId.value" :theme="theme" :busy="busy"
       @select-agent="chat.selectAgent" @theme="theme = $event" @close="closePanels">
+      <OutputSettings :limit="chat.outputLimit.value" :model="chat.selectedModel.value" :busy="busy" @change="chat.outputLimit.value = $event" />
       <ContextPanel v-if="chat.agent.value?.capabilities?.includes('context_memory')" :settings="chat.contextSettings.value" :summary="chat.conversation.value?.summary"
         :estimate="chat.estimate.value" :busy="busy" :has-conversation="Boolean(chat.conversation.value)" @change="chat.changeContext" @fork="chat.forkChat" />
       <TokenPanel :models="chat.models.value" :model-id="chat.modelId.value" :runs="chat.runs.value" :conversation="chat.conversation.value"

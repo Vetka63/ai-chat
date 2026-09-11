@@ -17,7 +17,10 @@ def main():
     parser.add_argument('--execute', action='store_true')
     parser.add_argument('--output', help='Файл JSON с метриками (без текстов диалога)')
     parser.add_argument('--through', choices=['short', 'long', 'overflow'], default='overflow')
+    parser.add_argument('--max-output-tokens', type=int, default=None, help='Явный лимит ответа для теста, например 1200; иначе настройки API')
     args = parser.parse_args()
+    if args.max_output_tokens is not None and args.max_output_tokens < 1:
+        parser.error('--max-output-tokens must be positive')
     print(f'Model: {args.model}; scenarios through {args.through}. Paid calls only with --execute.', flush=True)
     if not args.execute:
         return
@@ -40,7 +43,7 @@ def main():
                 for _ in range(5):
                     text = 'Reference notes follow.\n' + unit * repetitions + '\nWhat code did I ask you to remember? Reply with the code only.'
                     estimate = client.post('/api/v1/agents/dialogue/preview', json={
-                        'conversation_id': conv['id'], 'message': text, 'model_id': args.model,
+                        'conversation_id': conv['id'], 'message': text, 'model_id': args.model, 'max_output_tokens': args.max_output_tokens,
                     }).raise_for_status().json()
                     if estimate['prompt_tokens'] >= target:
                         break

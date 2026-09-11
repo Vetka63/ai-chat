@@ -18,7 +18,9 @@ class ChatCompletionsClient:
         if not self.api_key:
             raise AgentError("llm_not_configured", "LLM API key не настроен на сервере", 503)
         payload = dict(model=model, messages=[{"role": m.role, "content": m.content} for m in messages],
-                       temperature=temperature, max_tokens=max_tokens)
+                       temperature=temperature)
+        if max_tokens is not None:
+            payload["max_tokens"] = max_tokens
         if self.provider == "deepseek":
             payload["thinking"] = {"type": "disabled"}
         logger.info("llm_request provider=%s model=%s messages=%s max_tokens=%s", self.provider, model, len(messages), max_tokens)

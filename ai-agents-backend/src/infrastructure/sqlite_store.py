@@ -54,6 +54,8 @@ class SqliteConversationStore:
                 await database.execute("ALTER TABLE conversations ADD COLUMN selected_model_id TEXT")
             if "context_settings" not in {column["name"] for column in columns}:
                 await database.execute("ALTER TABLE conversations ADD COLUMN context_settings TEXT NOT NULL DEFAULT '{}'")
+            if "max_output_tokens" not in {column["name"] for column in columns}:
+                await database.execute("ALTER TABLE conversations ADD COLUMN max_output_tokens INTEGER")
             await database.commit()
 
     async def create(self, agent_id: str, title: str) -> ConversationSummary:
@@ -77,7 +79,7 @@ class SqliteConversationStore:
         async with self.connection() as database:
             rows = await (
                 await database.execute(
-                    """SELECT id, agent_id, title, created_at, updated_at, selected_model_id, context_settings
+                    """SELECT id, agent_id, title, created_at, updated_at, selected_model_id, context_settings, max_output_tokens
                        FROM conversations WHERE agent_id=? ORDER BY updated_at DESC, id DESC""",
                     (agent_id,),
                 )
@@ -88,7 +90,7 @@ class SqliteConversationStore:
         async with self.connection() as database:
             row = await (
                 await database.execute(
-                    """SELECT id, agent_id, title, created_at, updated_at, selected_model_id, context_settings
+                    """SELECT id, agent_id, title, created_at, updated_at, selected_model_id, context_settings, max_output_tokens
                        FROM conversations WHERE id=? AND agent_id=?""",
                     (conversation_id, agent_id),
                 )
@@ -113,6 +115,15 @@ class SqliteConversationStore:
         result['context_settings'] = ContextSettings.model_validate_json(result['context_settings'])
         return result
 
+    async def configure_output(self, agent_id: str, conversation_id: str, max_tokens: int | None):
+        """Сохраняет лимит следующего ответа; None оставляет выбор провайдеру."""
+        async with self.connection() as db:
+            cursor = await db.execute('UPDATE conversations SET max_output_tokens=? WHERE id=? AND agent_id=?',
+                                      (max_tokens, conversation_id, agent_id))
+            if cursor.rowcount == 0:
+                raise AgentError('conversation_not_found', 'Диалог не найден', 404)
+            await db.commit()
+
     async def configure_context(self, agent_id: str, conversation_id: str, settings: ContextSettings):
         """Сохраняет стратегию; старые сообщения и сводки не удаляются."""
         async with self.connection() as db:
@@ -126,10 +137,10 @@ class SqliteConversationStore:
         """Копирует снимок исходной переписки без прежних затрат и summary для честного сравнения."""
         label = 'Сжатая · ' if settings.mode == 'summary' else 'Полная · '
         item = ConversationSummary(id=new_id(), agent_id=source.agent_id, title=(label + source.title)[:120],
-            created_at=now(), updated_at=now(), selected_model_id=source.selected_model_id, context_settings=settings)
+            created_at=now(), updated_at=now(), selected_model_id=source.selected_model_id, context_settings=settings, max_output_tokens=source.max_output_tokens)
         async with self.connection() as db:
-            await db.execute('INSERT INTO conversations(id,agent_id,title,created_at,updated_at,selected_model_id,context_settings) VALUES(?,?,?,?,?,?,?)',
-                (item.id, item.agent_id, item.title, item.created_at, item.updated_at, item.selected_model_id, settings.model_dump_json()))
+            await db.execute('INSERT INTO conversations(id,agent_id,title,created_at,updated_at,selected_model_id,context_settings,max_output_tokens) VALUES(?,?,?,?,?,?,?,?)',
+                (item.id, item.agent_id, item.title, item.created_at, item.updated_at, item.selected_model_id, settings.model_dump_json(), item.max_output_tokens))
             await db.executemany('INSERT INTO messages(conversation_id,role,content,created_at) VALUES(?,?,?,?)',
                 [(item.id, m.role, m.content, item.created_at) for m in source.messages])
             await db.commit()

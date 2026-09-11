@@ -68,6 +68,7 @@ class DialogueAgent:
             conversation = await self.store.get(self.config.id, command.conversation_id)
             model_id = command.model_id or conversation.selected_model_id or self.config.model
             spec = self.catalog.get(model_id) if self.catalog else None
+            max_tokens = self.output_limit(command, conversation, spec)
             system_prompt = self.config.system_prompt.replace("{provider}", spec.provider if spec else "DeepSeek")
             messages = self.context_policy.build(
                 system_prompt,
@@ -77,6 +78,7 @@ class DialogueAgent:
             # Сохраняем вопрос до сжатия: summary тоже может завершиться ошибкой API.
             if spec:
                 await self.store.select_model(self.config.id, command.conversation_id, model_id)
+            await self.store.configure_output(self.config.id, command.conversation_id, max_tokens)
             await self.store.append_message(self.config.id, command.conversation_id, "user", text)
             prepared = await self.memory.prepare(conversation, system_prompt, text, model_id, generate=True) if self.memory else None
             baseline = messages
@@ -84,7 +86,7 @@ class DialogueAgent:
                 messages = prepared.messages
             run = None
             if self.accounting and spec:
-                estimate = await self.estimate_context(messages, baseline, conversation.messages, text, spec, prepared, conversation.context_settings.mode)
+                estimate = await self.estimate_context(messages, baseline, conversation.messages, text, spec, prepared, conversation.context_settings.mode, max_tokens)
                 run = RunRecord(id=new_id(), agent_id=self.config.id, conversation_id=command.conversation_id,
                     created_at=now(), model_id=spec.id, provider=spec.provider, requested_model=spec.model,
                     user_index=len(conversation.messages), estimate=estimate, pricing=self.catalog.pricing_at(model_id, now()))
@@ -92,7 +94,7 @@ class DialogueAgent:
             started = perf_counter()
             try:
                 completion = await self.llm.complete(messages, model=model_id,
-                    temperature=self.config.temperature, max_tokens=self.config.max_tokens)
+                    temperature=self.config.temperature, max_tokens=max_tokens)
                 if run:
                     run.usage, run.finish_reason = completion.usage, completion.finish_reason
                     run.returned_model = completion.model
@@ -121,6 +123,7 @@ class DialogueAgent:
             run=run,
             additional_runs=prepared.new_runs if prepared else [],
             summary=await self.memory.repository.get(self.config.id, command.conversation_id) if self.memory else None,
+            token_savings=await self.accounting.savings(self.config.id, command.conversation_id) if self.accounting else None,
         )
 
     async def configure_context(self, conversation_id: str, settings: ContextSettings):
@@ -136,15 +139,27 @@ class DialogueAgent:
             source = await self.store.get(self.config.id, conversation_id)
             return await self.store.fork(source, settings)
 
-    async def estimate_context(self, messages, baseline, history, text, spec, prepared, mode):
+    def output_limit(self, command, conversation, spec):
+        """Явное null отключает лимит; отсутствующее поле использует настройки чата."""
+        if "max_output_tokens" in command.model_fields_set:
+            value = command.max_output_tokens
+        else:
+            value = conversation.max_output_tokens if conversation else self.config.max_tokens
+        if value is not None and spec and value > spec.max_output_tokens:
+            raise AgentError("invalid_output_limit", "Лимит ответа выше максимума выбранной модели; уменьшите его или отключите")
+        return value
+
+    async def estimate_context(self, messages, baseline, history, text, spec, prepared, mode, max_tokens):
         """Сопоставляет полный и реально отправляемый контекст одним tokenizer."""
         def calculate():
-            result = self.accounting.estimate(messages, history, text, spec, self.config.max_tokens)
+            result = self.accounting.estimate(messages, history, text, spec, max_tokens)
             counter = self.accounting.estimators[spec.provider]
             result.context_mode = mode
             result.full_prompt_tokens = counter.count_messages(baseline)
             if prepared:
                 result.pending_summary = prepared.pending_summary
+                for key, value in (prepared.progress or {}).items():
+                    setattr(result, key, value)
                 if prepared.summary:
                     result.summary_tokens = counter.count_text(prepared.summary.text)
                     result.summarized_messages = prepared.summary.covered_messages
@@ -164,4 +179,4 @@ class DialogueAgent:
         messages = self.context_policy.build(self.config.system_prompt.replace("{provider}", spec.provider), history, text)
         prepared = await self.memory.prepare(conversation, self.config.system_prompt.replace("{provider}", spec.provider), text, spec.id, generate=False) if self.memory and conversation else None
         return await self.estimate_context(prepared.messages if prepared else messages, messages, history, text, spec,
-                                          prepared, conversation.context_settings.mode if conversation else "full")
+                                          prepared, conversation.context_settings.mode if conversation else "full", self.output_limit(command, conversation, spec))

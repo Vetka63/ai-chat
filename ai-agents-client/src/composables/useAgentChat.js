@@ -17,6 +17,8 @@ export function useAgentChat() {
   const previewError = ref('')
   const estimating = ref(false)
   const contextSettings = ref({ mode: 'full', keep_last: 10, summarize_every: 10 })
+  const outputLimit = ref(null)
+  const outputLimitValid = computed(() => outputLimit.value == null || (Number.isInteger(outputLimit.value) && outputLimit.value > 0 && outputLimit.value <= (selectedModel.value?.max_output_tokens || 1200)))
   const runs = computed(() => conversation.value?.runs || [])
   const selectedModel = computed(() => models.value.find((m) => m.id === modelId.value))
 
@@ -26,7 +28,7 @@ export function useAgentChat() {
 
   // Старый результат оценки не может заменить оценку нового черновика/модели.
   let previewController, previewTimer, revision = 0
-  watch([draft, modelId, agentId, conversation, sending, contextSettings], () => {
+  watch([draft, modelId, agentId, conversation, sending, contextSettings, outputLimit], () => {
     const requestRevision = ++revision
     clearTimeout(previewTimer)
     previewController?.abort()
@@ -38,7 +40,7 @@ export function useAgentChat() {
     previewTimer = setTimeout(async () => {
       previewController = new AbortController()
       try {
-        const result = await api.previewTokens(agentId.value, conversation.value?.id, draft.value, modelId.value, previewController.signal)
+        const result = await api.previewTokens(agentId.value, conversation.value?.id, draft.value, modelId.value, previewController.signal, outputLimit.value)
         if (requestRevision === revision) estimate.value = result
       } catch (cause) {
         if (requestRevision === revision && cause.name !== 'AbortError') previewError.value = 'Оценка временно недоступна; отправка разрешена'
@@ -65,6 +67,7 @@ export function useAgentChat() {
 
   async function loadConversation(id) {
     conversation.value = await api.getConversation(agentId.value, id)
+    outputLimit.value = conversation.value.max_output_tokens ?? null
     modelId.value = conversation.value.selected_model_id || defaultModelId.value
     contextSettings.value = conversation.value.context_settings || { mode: 'full', keep_last: 10, summarize_every: 10 }
     localStorage.setItem(selectedKey(agentId.value), id)
@@ -73,6 +76,7 @@ export function useAgentChat() {
   async function loadAgent(id) {
     agentId.value = id
     conversation.value = null
+    outputLimit.value = null
     modelId.value = defaultModelId.value
     conversations.value = await api.listConversations(id)
     const saved = localStorage.getItem(selectedKey(id))
@@ -133,6 +137,7 @@ export function useAgentChat() {
       conversation.value = { ...created, messages: [] }
       localStorage.setItem(selectedKey(agentId.value), created.id)
       draft.value = ''
+      outputLimit.value = null
     } catch (cause) {
       error.value = cause.message
     } finally {
@@ -149,6 +154,7 @@ export function useAgentChat() {
       conversations.value = conversations.value.filter((item) => item.id !== id)
       if (conversation.value?.id === id) {
         conversation.value = null
+        outputLimit.value = null
         localStorage.removeItem(selectedKey(agentId.value))
         if (conversations.value[0]) await loadConversation(conversations.value[0].id)
       }
@@ -161,7 +167,7 @@ export function useAgentChat() {
 
   async function send() {
     const text = draft.value.trim()
-    if (!text || sending.value || loading.value || !agentId.value) return
+    if (!outputLimitValid.value || !text || sending.value || loading.value || !agentId.value) return
     sending.value = true
     error.value = ''
     let createdForMessage = false
@@ -176,10 +182,11 @@ export function useAgentChat() {
       const target = conversation.value
       target.messages.push({ role: 'user', content: text })
       draft.value = ''
-      const result = await api.runConversationAgent(agentId.value, target.id, text, modelId.value)
+      const result = await api.runConversationAgent(agentId.value, target.id, text, modelId.value, outputLimit.value)
       target.messages.push({ role: 'assistant', content: result.reply, model: result.model, source: result.source })
       target.runs = [...(target.runs || []), ...(result.additional_runs || []), ...(result.run ? [result.run] : [])]
       target.summary = result.summary || null
+      target.token_savings = result.token_savings || null
       target.selected_model_id = modelId.value
       conversations.value = await api.listConversations(agentId.value)
       const summary = conversations.value.find((item) => item.id === target.id)
@@ -208,7 +215,7 @@ export function useAgentChat() {
     loading, sending, error, initialize, selectAgent, selectConversation,
     newChat, removeConversation, send,
     models, modelId, selectedModel, runs, estimate, estimating, previewError, changeModel,
-    contextSettings, changeContext, forkChat,
+    contextSettings, changeContext, forkChat, outputLimit, outputLimitValid,
   }
 
   async function changeContext(settings) {

@@ -45,11 +45,11 @@ export async function deleteConversation(agentId, conversationId) {
   return request(conversationsPath(agentId, conversationId), { method: 'DELETE' })
 }
 
-export async function runConversationAgent(agentId, conversationId, message, modelId) {
+export async function runConversationAgent(agentId, conversationId, message, modelId, maxOutputTokens = null) {
   return request(`/agents/${encodeURIComponent(agentId)}/runs`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ conversation_id: conversationId, message, model_id: modelId }),
+    body: JSON.stringify({ conversation_id: conversationId, message, model_id: modelId, max_output_tokens: maxOutputTokens }),
   })
 }
 
@@ -63,7 +63,7 @@ export const forkConversation = (agentId, conversationId, settings) => request(`
 export const selectModel = (agentId, conversationId, modelId) => request(`${conversationsPath(agentId, conversationId)}/model`, {
   method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model_id: modelId }),
 })
-export const previewTokens = (agentId, conversationId, message, modelId, signal) => request(`/agents/${encodeURIComponent(agentId)}/preview`, {
+export const previewTokens = (agentId, conversationId, message, modelId, signal, maxOutputTokens = null) => request(`/agents/${encodeURIComponent(agentId)}/preview`, {
   method: 'POST', headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ conversation_id: conversationId || null, message, model_id: modelId }), signal,
+  body: JSON.stringify({ conversation_id: conversationId || null, message, model_id: modelId, max_output_tokens: maxOutputTokens }), signal,
 })

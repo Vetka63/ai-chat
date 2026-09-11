@@ -21,6 +21,7 @@ from infrastructure.sqlite_usage import SqliteUsageRepository
 from infrastructure.model_catalog import ModelCatalog
 from infrastructure.sqlite_summary import SqliteSummaryRepository
 from capabilities.context_memory.models import ContextSettings
+from capabilities.token_accounting.service import calculate_token_savings
 
 logger = logging.getLogger(__name__)
 
@@ -118,6 +119,7 @@ def create_app(
         result = await request.app.state.store.get(agent_id, conversation_id)
         result.runs = await request.app.state.usage.list(agent_id, conversation_id)
         result.summary = await request.app.state.summaries.get(agent_id, conversation_id)
+        result.token_savings = calculate_token_savings(result.runs)
         return result
 
     @app.patch("/api/v1/agents/{agent_id}/conversations/{conversation_id}/context")

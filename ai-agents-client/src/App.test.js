@@ -75,7 +75,7 @@ describe('Day 9 client', () => {
     await flushPromises()
 
     const runCall = fetch.mock.calls.find(([url]) => url.includes('/runs'))
-    expect(JSON.parse(runCall[1].body)).toEqual({ conversation_id: 'chat-1', message: 'Привет', model_id: 'flash' })
+    expect(JSON.parse(runCall[1].body)).toEqual({ conversation_id: 'chat-1', message: 'Привет', model_id: 'flash', max_output_tokens: null })
     expect(wrapper.text()).toContain('Ответ')
   })
 
@@ -103,6 +103,17 @@ describe('Day 9 client', () => {
     expect(wrapper.text()).toContain('Запомни слово клевер')
     expect(wrapper.text()).toContain('Запомнил')
     expect(wrapper.text()).toContain('Сохранённые чаты')
+  })
+
+  it('sends the explicitly enabled 1200 limit', async () => {
+    const wrapper = mount(App)
+    await flushPromises()
+    await wrapper.get('.output-settings input[type="checkbox"]').setValue(true)
+    await wrapper.get('textarea').setValue('Короткий тест')
+    await wrapper.get('form.composer').trigger('submit')
+    await flushPromises()
+    const runCall = fetch.mock.calls.find(([url]) => url.includes('/runs'))
+    expect(JSON.parse(runCall[1].body).max_output_tokens).toBe(1200)
   })
 
   it('prevents a second request while the first one is pending', async () => {

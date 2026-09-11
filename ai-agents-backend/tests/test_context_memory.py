@@ -73,6 +73,8 @@ async def test_compression_retains_tail_and_originals(tmp_path):
     assert result.run.estimate.full_prompt_tokens > result.run.estimate.prompt_tokens
     assert result.run.estimate.summarized_messages == 10
     assert result.additional_runs[0].purpose == 'summary'
+    event = result.additional_runs[0].compression
+    assert (event.segment_start, event.segment_end, event.retained_messages) == (1, 10, 10)
     records = await usage.list('dialogue', conv.id)
     assert len(records) == 2 and sum(r.usage.total_tokens for r in records) == 240
     assert all(r.estimated_cost_usd > 0 for r in records)
@@ -123,7 +125,30 @@ async def test_failed_summary_preserves_old_state_and_question(tmp_path, failure
     assert (await store.get('dialogue', conv.id)).messages[-1].content == 'question not lost'
     record = (await usage.list('dialogue', conv.id))[-1]
     assert record.purpose == 'summary' and record.status == 'error'
+    assert (record.compression.segment_start, record.compression.segment_end) == (5, 6)
     assert (record.usage is None) == (failure == 'timeout')
+
+
+async def test_ui_progress_counts_both_roles_and_snapshots_settings(tmp_path):
+    settings = ContextSettings(mode='summary', keep_last=10, summarize_every=4)
+    agent, llm, store, repository, usage, conv = await build(tmp_path, settings, pairs=7)
+    preview = await agent.preview(PreviewCommand(conversation_id=conv.id, message='eighth request'))
+    assert preview.history_message_count == 14
+    assert preview.unsummarized_old_messages == 4 and preview.messages_until_summary == 0
+    assert preview.retained_message_count == 14 and preview.pending_summary
+    assert not llm.calls
+    result = await agent.run(AgentCommand(conversation_id=conv.id, message='eighth request'))
+    snapshot = result.additional_runs[0].compression
+    assert snapshot.model_dump() == dict(history_messages=14, segment_start=1, segment_end=4,
+        previous_covered=0, retained_messages=10, keep_last=10, summarize_every=4, revision=1)
+    preview = await agent.preview(PreviewCommand(conversation_id=conv.id))
+    assert preview.history_message_count == 16
+    assert preview.retained_message_count == 12
+    assert preview.unsummarized_old_messages == 2 and preview.messages_until_summary == 2
+    assert not preview.pending_summary
+    await agent.configure_context(conv.id, ContextSettings(mode='summary', keep_last=12, summarize_every=6))
+    saved = (await usage.list('dialogue', conv.id))[0].compression
+    assert saved == snapshot  # Старое событие не меняется вслед за настройками UI.
 
 
 async def test_mode_switch_and_increased_tail_do_not_duplicate_prefix(tmp_path):

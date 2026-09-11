@@ -5,7 +5,7 @@ from typing import Literal
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
-from capabilities.token_accounting.models import RunRecord, TokenUsage
+from capabilities.token_accounting.models import RunRecord, TokenSavings, TokenUsage
 from capabilities.context_memory.models import ContextSettings, SummaryState
 
 
@@ -50,6 +50,7 @@ class AgentCommand(StrictModel):
     conversation_id: str = Field(min_length=1, max_length=64)
     message: str = Field(min_length=1)
     model_id: str | None = None
+    max_output_tokens: int | None = Field(default=None, gt=0, strict=True)
 
 
 class PreviewCommand(StrictModel):
@@ -57,6 +58,7 @@ class PreviewCommand(StrictModel):
     conversation_id: str | None = None
     message: str = ""
     model_id: str | None = None
+    max_output_tokens: int | None = Field(default=None, gt=0, strict=True)
 
 
 class AgentResult(StrictModel):
@@ -69,6 +71,7 @@ class AgentResult(StrictModel):
     run: RunRecord | None = None
     additional_runs: list[RunRecord] = Field(default_factory=list)
     summary: SummaryState | None = None
+    token_savings: TokenSavings | None = None
 
 
 class AgentInfo(StrictModel):
@@ -89,6 +92,7 @@ class ConversationSummary(StrictModel):
     created_at: str
     updated_at: str
     selected_model_id: str | None = None
+    max_output_tokens: int | None = Field(default=None, gt=0, strict=True)
     context_settings: ContextSettings = Field(default_factory=ContextSettings)
 
 
@@ -98,6 +102,7 @@ class Conversation(ConversationSummary):
     messages: list[Message]
     runs: list[RunRecord] = Field(default_factory=list)
     summary: SummaryState | None = None
+    token_savings: TokenSavings | None = None
 
 
 class AgentError(Exception):

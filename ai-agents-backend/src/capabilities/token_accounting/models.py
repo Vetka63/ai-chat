@@ -42,7 +42,7 @@ class ContextEstimate(BaseModel):
     history_tokens: int
     system_tokens: int
     prompt_tokens: int
-    reserved_output_tokens: int
+    reserved_output_tokens: int | None = None
     context_window: int
     occupancy_percent: float
     exceeds_context: bool
@@ -53,6 +53,22 @@ class ContextEstimate(BaseModel):
     summarized_messages: int = 0
     summary_revision: int | None = None
     pending_summary: bool = False
+    history_message_count: int | None = None
+    unsummarized_old_messages: int | None = None
+    messages_until_summary: int | None = None
+    retained_message_count: int | None = None
+
+
+class CompressionDetails(BaseModel):
+    """Снимок попытки сжатия: номера сообщений с единицы, до текущего вопроса."""
+    history_messages: int
+    segment_start: int
+    segment_end: int
+    previous_covered: int
+    retained_messages: int
+    keep_last: int
+    summarize_every: int
+    revision: int
 
 
 class RunRecord(BaseModel):
@@ -78,3 +94,40 @@ class RunRecord(BaseModel):
     error_message: str | None = None
     provider_status: int | None = None
     purpose: Literal["dialogue", "summary"] = "dialogue"
+    compression: CompressionDetails | None = None
+
+
+class TokenSavingsBreakdown(BaseModel):
+    """Оценка эффекта сжатия для одной модели и одного метода подсчёта."""
+
+    model_id: str
+    requested_model: str
+    method: str
+    compared_dialogue_runs: int = 0
+    unknown_dialogue_runs: int = 0
+    full_prompt_tokens: int = 0
+    compressed_prompt_tokens: int = 0
+    gross_input_savings_tokens: int = 0
+    summary_runs: int = 0
+    summary_usage_tokens: int = 0
+    unknown_summary_runs: int = 0
+    net_savings_tokens: int | None = None
+    net_savings_percent: float | None = None
+
+
+class TokenSavings(BaseModel):
+    """Накопительная оценка экономии диалога с явным признаком полноты."""
+
+    compared_dialogue_runs: int = 0
+    unknown_dialogue_runs: int = 0
+    full_prompt_tokens: int = 0
+    compressed_prompt_tokens: int = 0
+    gross_input_savings_tokens: int = 0
+    summary_runs: int = 0
+    summary_usage_tokens: int = 0
+    unknown_summary_runs: int = 0
+    net_savings_tokens: int | None = None
+    net_savings_percent: float | None = None
+    complete: bool = True
+    mixed_models: bool = False
+    by_model: list[TokenSavingsBreakdown] = Field(default_factory=list)

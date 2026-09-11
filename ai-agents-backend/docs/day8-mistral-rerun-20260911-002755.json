@@ -1,0 +1,152 @@
+{
+  "conversation_id": "e44f1d20-1420-4783-876d-8b21c5864111",
+  "model": "ministral-3b-2512",
+  "results": [
+    {
+      "scenario": "short",
+      "http_status": 200,
+      "run": {
+        "id": "508b6ffc-46ef-4ab9-ad6c-1b97e15a7c5a",
+        "agent_id": "dialogue",
+        "conversation_id": "e44f1d20-1420-4783-876d-8b21c5864111",
+        "created_at": "2026-09-10T20:27:56.211574+00:00",
+        "model_id": "ministral-3b-2512",
+        "provider": "mistral",
+        "requested_model": "ministral-3b-2512",
+        "returned_model": "ministral-3b-2512",
+        "user_index": 0,
+        "assistant_index": 1,
+        "status": "success",
+        "estimate": {
+          "current_message_tokens": 16,
+          "history_tokens": 0,
+          "system_tokens": 116,
+          "prompt_tokens": 137,
+          "reserved_output_tokens": 1200,
+          "context_window": 131072,
+          "occupancy_percent": 1.02,
+          "exceeds_context": false,
+          "method": "Ministral 3 3B: официальный tokenizer; локальная оценка"
+        },
+        "usage": {
+          "prompt_tokens": 137,
+          "completion_tokens": 3,
+          "total_tokens": 140,
+          "cached_tokens": 0,
+          "reasoning_tokens": null
+        },
+        "estimated_cost_usd": "0.000014",
+        "pricing": {
+          "input_usd": "0.10",
+          "cached_input_usd": "0.01",
+          "output_usd": "0.10",
+          "label": "Mistral Standard · оценка, не списание с бесплатного плана",
+          "source": "https://docs.mistral.ai/inference/pricing",
+          "checked_at": "2026-09-10"
+        },
+        "finish_reason": "stop",
+        "duration_ms": 401,
+        "error_code": null,
+        "error_message": null,
+        "provider_status": null
+      }
+    },
+    {
+      "scenario": "long",
+      "http_status": 200,
+      "run": {
+        "id": "13d0749d-1e25-44d2-a6dc-c4056bddf526",
+        "agent_id": "dialogue",
+        "conversation_id": "e44f1d20-1420-4783-876d-8b21c5864111",
+        "created_at": "2026-09-10T20:27:56.761274+00:00",
+        "model_id": "ministral-3b-2512",
+        "provider": "mistral",
+        "requested_model": "ministral-3b-2512",
+        "returned_model": "ministral-3b-2512",
+        "user_index": 2,
+        "assistant_index": 3,
+        "status": "success",
+        "estimate": {
+          "current_message_tokens": 8014,
+          "history_tokens": 18,
+          "system_tokens": 116,
+          "prompt_tokens": 8156,
+          "reserved_output_tokens": 1200,
+          "context_window": 131072,
+          "occupancy_percent": 7.14,
+          "exceeds_context": false,
+          "method": "Ministral 3 3B: официальный tokenizer; локальная оценка"
+        },
+        "usage": {
+          "prompt_tokens": 8156,
+          "completion_tokens": 270,
+          "total_tokens": 8426,
+          "cached_tokens": 128,
+          "reasoning_tokens": null
+        },
+        "estimated_cost_usd": "0.00083108",
+        "pricing": {
+          "input_usd": "0.10",
+          "cached_input_usd": "0.01",
+          "output_usd": "0.10",
+          "label": "Mistral Standard · оценка, не списание с бесплатного плана",
+          "source": "https://docs.mistral.ai/inference/pricing",
+          "checked_at": "2026-09-10"
+        },
+        "finish_reason": "stop",
+        "duration_ms": 1769,
+        "error_code": null,
+        "error_message": null,
+        "provider_status": null
+      }
+    },
+    {
+      "scenario": "overflow",
+      "http_status": 502,
+      "run": {
+        "id": "cf037dfe-c8f3-47b8-96b3-c968c0c9317e",
+        "agent_id": "dialogue",
+        "conversation_id": "e44f1d20-1420-4783-876d-8b21c5864111",
+        "created_at": "2026-09-10T20:27:58.837726+00:00",
+        "model_id": "ministral-3b-2512",
+        "provider": "mistral",
+        "requested_model": "ministral-3b-2512",
+        "returned_model": null,
+        "user_index": 4,
+        "assistant_index": null,
+        "status": "error",
+        "estimate": {
+          "current_message_tokens": 137644,
+          "history_tokens": 8301,
+          "system_tokens": 116,
+          "prompt_tokens": 146072,
+          "reserved_output_tokens": 1200,
+          "context_window": 131072,
+          "occupancy_percent": 112.36,
+          "exceeds_context": true,
+          "method": "Ministral 3 3B: официальный tokenizer; локальная оценка"
+        },
+        "usage": null,
+        "estimated_cost_usd": null,
+        "pricing": {
+          "input_usd": "0.10",
+          "cached_input_usd": "0.01",
+          "output_usd": "0.10",
+          "label": "Mistral Standard · оценка, не списание с бесплатного плана",
+          "source": "https://docs.mistral.ai/inference/pricing",
+          "checked_at": "2026-09-10"
+        },
+        "finish_reason": null,
+        "duration_ms": 773,
+        "error_code": "context_limit_exceeded",
+        "error_message": "API провайдера отклонил запрос: превышено контекстное окно модели",
+        "provider_status": 400
+      },
+      "error": {
+        "code": "context_limit_exceeded",
+        "error": "API провайдера отклонил запрос: превышено контекстное окно модели",
+        "provider_status": 400
+      }
+    }
+  ]
+}

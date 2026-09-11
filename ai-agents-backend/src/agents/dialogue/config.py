@@ -16,4 +16,4 @@ class DialogueAgentConfig(StrictModel):
     model: str = Field(min_length=1)
     system_prompt: str = Field(min_length=1)
     temperature: float = Field(default=0.7, ge=0, le=2)
-    max_tokens: int = Field(default=1200, ge=1, le=8192)
+    max_tokens: int | None = Field(default=None, gt=0, strict=True)

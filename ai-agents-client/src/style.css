@@ -247,3 +247,19 @@ body {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+.output-slider { width: 100%; margin: 14px 0 5px; accent-color: var(--accent); }
+.output-number { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.output-number input { width: 95px; padding: 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--page); color: var(--text); font: inherit; }
+.summary-event { margin: -12px 0 30px 51px; padding: 14px 16px; border: 1px dashed var(--line); border-left: 3px solid var(--accent); border-radius: 12px; background: var(--page); font-size: 12px; line-height: 1.6; }
+.summary-event > strong { color: var(--accent); }
+.summary-event p { margin: 7px 0; }
+.summary-event > small { color: var(--muted); }
+.message-body .message-index { margin-top: 3px; font-size: 10px; }
+.usage-table .usage-purpose { min-width: 92px; text-align: left; }
+.usage-purpose small { color: var(--muted); font-size: 10px; }
+.savings-details .token-grid { margin-bottom: 10px; }
+.token-success { color: var(--success, #277a57); font-size: 12px; font-weight: 650; line-height: 1.5; }
+.savings-models { margin: 10px 0; padding-top: 8px; border-top: 1px solid var(--border); }
+.savings-models summary { cursor: pointer; font-size: 11px; font-weight: 650; }
+.savings-models p { margin: 8px 0 0; font-size: 11px; line-height: 1.45; }
+@media (max-width: 760px) { .summary-event { margin-left: 0; } }
