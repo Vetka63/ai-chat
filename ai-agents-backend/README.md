@@ -1,7 +1,8 @@
-# Python Agents — День 9
+# Python Agents — День 10
 
-Добавлена подключаемая сжатая память. [Руководство Дня 9](docs/day9-guide.md)
-описывает настройки, API, эксперимент и ограничения. Все исходные сообщения сохранены.
+Добавлены три выбираемые при создании чата стратегии: Sliding Window, Sticky Facts
+и Branching. После создания стратегия неизменяема. [Руководство Дня 10](docs/day10-guide.md) описывает UI, API, единый
+сценарий проверки и ограничения. Полная история и summary Дня 9 сохранены.
 
 Добавлены выбор модели, подключаемый учёт токенов и расходов. [Полное руководство Дня 8](docs/day8-guide.md).
 
@@ -20,6 +21,10 @@ FastAPI-сервис с инкапсулированным агентом и п�
 - `GET /api/v1/agents/{agent_id}/conversations/{conversation_id}`
 - `DELETE /api/v1/agents/{agent_id}/conversations/{conversation_id}`
 - `POST /api/v1/agents/{agent_id}/runs`
+- `PATCH /api/v1/agents/{agent_id}/conversations/{conversation_id}/context` — защитный `409`, настройки неизменяемы
+- `POST /api/v1/agents/{agent_id}/conversations/{conversation_id}/checkpoints`
+- `GET /api/v1/agents/{agent_id}/conversations/{conversation_id}/checkpoints`
+- `POST /api/v1/agents/{agent_id}/checkpoints/{checkpoint_id}/branches`
 
 Команда запуска:
 

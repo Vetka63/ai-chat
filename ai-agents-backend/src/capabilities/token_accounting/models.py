@@ -47,7 +47,7 @@ class ContextEstimate(BaseModel):
     occupancy_percent: float
     exceeds_context: bool
     method: str
-    context_mode: Literal["full", "summary"] = "full"
+    context_mode: Literal["full", "summary", "sliding_window", "sticky_facts", "branching"] = "full"
     full_prompt_tokens: int | None = None
     summary_tokens: int = 0
     summarized_messages: int = 0
@@ -57,6 +57,9 @@ class ContextEstimate(BaseModel):
     unsummarized_old_messages: int | None = None
     messages_until_summary: int | None = None
     retained_message_count: int | None = None
+    discarded_message_count: int | None = None
+    fact_count: int | None = None
+    facts_revision: int | None = None
 
 
 class CompressionDetails(BaseModel):
@@ -93,7 +96,7 @@ class RunRecord(BaseModel):
     error_code: str | None = None
     error_message: str | None = None
     provider_status: int | None = None
-    purpose: Literal["dialogue", "summary"] = "dialogue"
+    purpose: Literal["dialogue", "summary", "facts"] = "dialogue"
     compression: CompressionDetails | None = None
 
 

@@ -1,4 +1,6 @@
 """Адаптер DeepSeek и явный демонстрационный режим без платного API."""
+import json
+
 from agent_core.models import Completion
 from infrastructure.completions import ChatCompletionsClient
 
@@ -13,4 +15,15 @@ class DemoClient:
     """Возвращает локальный ответ с неизвестным usage, не выдумывая биллинг."""
     async def complete(self, messages, *, model, temperature, max_tokens):
         text = next(m.content for m in reversed(messages) if m.role == "user")
+        if 'key-value' in messages[0].content.lower():
+            try:
+                payload = json.loads(text)
+                facts = payload.get('existing_facts') or {}
+                user_message = str(payload.get('user_message') or '').strip()
+            except (json.JSONDecodeError, AttributeError):
+                facts, user_message = {}, text
+            return Completion(
+                content=json.dumps({'facts': {**facts, 'последнее_сообщение': user_message}}, ensure_ascii=False),
+                model=f"demo/{model}", source="demo", finish_reason="stop",
+            )
         return Completion(content=f"Демо-ответ агента на запрос: {text}", model=f"demo/{model}", source="demo", finish_reason="stop")

@@ -6,7 +6,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 from capabilities.token_accounting.models import RunRecord, TokenSavings, TokenUsage
-from capabilities.context_memory.models import ContextSettings, SummaryState
+from capabilities.context_memory.models import Checkpoint, ContextSettings, FactsState, SummaryState
 
 
 class StrictModel(BaseModel):
@@ -71,6 +71,8 @@ class AgentResult(StrictModel):
     run: RunRecord | None = None
     additional_runs: list[RunRecord] = Field(default_factory=list)
     summary: SummaryState | None = None
+    facts: FactsState | None = None
+    memory_warnings: list[str] = Field(default_factory=list)
     token_savings: TokenSavings | None = None
 
 
@@ -94,6 +96,10 @@ class ConversationSummary(StrictModel):
     selected_model_id: str | None = None
     max_output_tokens: int | None = Field(default=None, gt=0, strict=True)
     context_settings: ContextSettings = Field(default_factory=ContextSettings)
+    root_conversation_id: str | None = None
+    parent_conversation_id: str | None = None
+    checkpoint_id: str | None = None
+    branch_name: str | None = None
 
 
 class Conversation(ConversationSummary):
@@ -102,6 +108,8 @@ class Conversation(ConversationSummary):
     messages: list[Message]
     runs: list[RunRecord] = Field(default_factory=list)
     summary: SummaryState | None = None
+    facts: FactsState | None = None
+    checkpoints: list[Checkpoint] = Field(default_factory=list)
     token_savings: TokenSavings | None = None
 
 

@@ -146,7 +146,7 @@ async def test_ui_progress_counts_both_roles_and_snapshots_settings(tmp_path):
     assert preview.retained_message_count == 12
     assert preview.unsummarized_old_messages == 2 and preview.messages_until_summary == 2
     assert not preview.pending_summary
-    await agent.configure_context(conv.id, ContextSettings(mode='summary', keep_last=12, summarize_every=6))
+    await store.configure_context('dialogue', conv.id, ContextSettings(mode='summary', keep_last=12, summarize_every=6))
     saved = (await usage.list('dialogue', conv.id))[0].compression
     assert saved == snapshot  # Старое событие не меняется вслед за настройками UI.
 
@@ -155,10 +155,10 @@ async def test_mode_switch_and_increased_tail_do_not_duplicate_prefix(tmp_path):
     agent, llm, store, repository, usage, conv = await build(tmp_path, ContextSettings(mode='summary', keep_last=2, summarize_every=2), pairs=6)
     await agent.run(AgentCommand(conversation_id=conv.id, message='next'))
     assert (await repository.get('dialogue', conv.id)).covered_messages == 10
-    await agent.configure_context(conv.id, ContextSettings(mode='full'))
+    await store.configure_context('dialogue', conv.id, ContextSettings(mode='full'))
     await agent.run(AgentCommand(conversation_id=conv.id, message='full'))
     assert not llm.calls[-1][0] and len(llm.calls[-1][1]) == 16
-    await agent.configure_context(conv.id, ContextSettings(mode='summary', keep_last=12, summarize_every=2))
+    await store.configure_context('dialogue', conv.id, ContextSettings(mode='summary', keep_last=12, summarize_every=2))
     await agent.run(AgentCommand(conversation_id=conv.id, message='larger tail'))
     payload = json.loads(llm.calls[-2][1][-1].content)
     assert payload['previous_summary'] is None
@@ -194,19 +194,25 @@ def test_boundaries_and_settings_validation():
     assert compression_cut(history, 2) == 6
     assert compression_cut(history, 10) == 0
     with pytest.raises(ValidationError):
-        ContextSettings(keep_last=3)
+        ContextSettings(mode='summary', keep_last=3)
+    with pytest.raises(ValidationError):
+        ContextSettings(mode='summary', summarize_every=3)
+    assert ContextSettings(mode='sliding_window', keep_last=3, summarize_every=3).keep_last == 3
     with pytest.raises(ValidationError):
         ContextSettings(mode='unknown')
 
 
-def test_http_context_fork_and_defaults(tmp_path):
+def test_http_context_is_immutable_and_fork_has_own_settings(tmp_path):
     with TestClient(create_app(Settings(mode='demo', database_path=tmp_path/'http.sqlite3', _env_file=None))) as client:
         root = '/api/v1/agents/dialogue/conversations'
-        conv = client.post(root, json={}).json()
-        assert conv['context_settings']['mode'] == 'full'
+        conv = client.post(root, json={'context_settings': {
+            'mode': 'summary', 'keep_last': 2, 'summarize_every': 2,
+        }}).json()
+        assert conv['context_settings']['mode'] == 'summary'
         path = root+'/'+conv['id']
-        assert client.patch(path+'/context', json={'mode': 'summary', 'keep_last': 2, 'summarize_every': 2}).status_code == 200
-        assert client.patch(path+'/context', json={'keep_last': 1}).status_code == 422
+        rejected = client.patch(path+'/context', json={'mode': 'full', 'keep_last': 10, 'summarize_every': 10})
+        assert rejected.status_code == 409 and rejected.json()['code'] == 'context_settings_immutable'
+        assert client.patch(path+'/context', json={'mode': 'summary', 'keep_last': 1, 'summarize_every': 2}).status_code == 422
         assert client.get(path).json()['context_settings']['mode'] == 'summary'
         fork = client.post(path+'/fork', json={'mode': 'full'}).json()
         assert fork['id'] != conv['id'] and fork['context_settings']['mode'] == 'full'

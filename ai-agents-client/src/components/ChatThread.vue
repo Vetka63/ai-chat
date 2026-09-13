@@ -7,7 +7,7 @@ import RunMetrics from '../features/tokens/RunMetrics.vue'
 const props = defineProps({ messages: Array, runs: Array, agentName: String, sending: Boolean })
 const thread = ref(null)
 const expanded = ref(new Set())
-const metrics = computed(() => new Map((props.runs || []).filter((r) => r.purpose !== 'summary').map((r) => [r.assistant_index ?? r.user_index, r])))
+const metrics = computed(() => new Map((props.runs || []).filter((r) => !r.purpose || r.purpose === 'dialogue').map((r) => [r.assistant_index ?? r.user_index, r])))
 const summariesAt = (index) => (props.runs || []).filter((r) => r.purpose === 'summary' && r.user_index === index)
 watch(() => props.messages, () => { expanded.value = new Set() })
 

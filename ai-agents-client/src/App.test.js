@@ -12,9 +12,17 @@ const agent = { id: 'dialogue', name: 'Агент', description: 'Тест' }
 const summary = {
   id: 'chat-1', agent_id: 'dialogue', title: 'Новый чат',
   created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
+  context_settings: { mode: 'full', keep_last: 10, summarize_every: 10 },
 }
 
-describe('Day 9 client', () => {
+async function createConfiguredChat(wrapper, mode = 'full') {
+  await wrapper.get('.new-chat').trigger('click')
+  await wrapper.get(`.new-chat-dialog input[value="${mode}"]`).setValue(true)
+  await wrapper.get('.new-chat-dialog form').trigger('submit')
+  await flushPromises()
+}
+
+describe('Day 10 client', () => {
   beforeEach(() => {
     localStorage.clear()
     vi.stubGlobal('confirm', vi.fn(() => true))
@@ -23,7 +31,10 @@ describe('Day 9 client', () => {
       if (url.endsWith('/preview')) return response({})
       if (url.endsWith('/agents')) return response({ agents: [agent] })
       if (url.endsWith('/conversations') && !options.method) return response([])
-      if (url.endsWith('/conversations') && options.method === 'POST') return response(summary, true, 201)
+      if (url.endsWith('/conversations') && options.method === 'POST') {
+        const body = JSON.parse(options.body)
+        return response({ ...summary, title: body.title, context_settings: body.context_settings }, true, 201)
+      }
       if (url.includes('/runs')) return response({ reply: 'Ответ', model: 'deepseek-test', source: 'llm' })
       throw new Error(`Unexpected request: ${url}`)
     }))
@@ -70,13 +81,25 @@ describe('Day 9 client', () => {
   it('creates a conversation and sends its id with the current message', async () => {
     const wrapper = mount(App)
     await flushPromises()
+    await createConfiguredChat(wrapper, 'sticky_facts')
     await wrapper.get('textarea').setValue('Привет')
     await wrapper.get('form.composer').trigger('submit')
     await flushPromises()
 
     const runCall = fetch.mock.calls.find(([url]) => url.includes('/runs'))
     expect(JSON.parse(runCall[1].body)).toEqual({ conversation_id: 'chat-1', message: 'Привет', model_id: 'flash', max_output_tokens: null })
+    const createCall = fetch.mock.calls.find(([url, options]) => url.endsWith('/conversations') && options.method === 'POST')
+    expect(JSON.parse(createCall[1].body).context_settings.mode).toBe('sticky_facts')
     expect(wrapper.text()).toContain('Ответ')
+  })
+
+  it('opens creation settings instead of creating a chat immediately', async () => {
+    const wrapper = mount(App)
+    await flushPromises()
+    expect(wrapper.get('textarea').attributes('disabled')).toBeDefined()
+    await wrapper.get('.new-chat').trigger('click')
+    expect(wrapper.get('.new-chat-dialog').attributes('role')).toBe('dialog')
+    expect(fetch.mock.calls.filter(([url, options = {}]) => url.endsWith('/conversations') && options.method === 'POST')).toHaveLength(0)
   })
 
   it('loads persisted messages when the page starts', async () => {
@@ -108,6 +131,7 @@ describe('Day 9 client', () => {
   it('sends the explicitly enabled 1200 limit', async () => {
     const wrapper = mount(App)
     await flushPromises()
+    await createConfiguredChat(wrapper)
     await wrapper.get('.output-settings input[type="checkbox"]').setValue(true)
     await wrapper.get('textarea').setValue('Короткий тест')
     await wrapper.get('form.composer').trigger('submit')
@@ -134,6 +158,7 @@ describe('Day 9 client', () => {
 
     const wrapper = mount(App)
     await flushPromises()
+    await createConfiguredChat(wrapper)
     await wrapper.get('textarea').setValue('Запрос')
     await wrapper.get('form.composer').trigger('submit')
     await flushPromises()
@@ -161,6 +186,7 @@ describe('Day 9 client', () => {
 
     const wrapper = mount(App)
     await flushPromises()
+    await createConfiguredChat(wrapper)
     await wrapper.get('textarea').setValue('Какой город самый горячий?')
     await wrapper.get('form.composer').trigger('submit')
     await flushPromises()

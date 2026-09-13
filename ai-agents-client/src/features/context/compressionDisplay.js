@@ -14,7 +14,7 @@ export function compressionDescription(run, runs = []) {
       `Настройки этой попытки: оставлять минимум ${details.keep_last}, порог сжатия ${details.summarize_every}.`
   }
   // Старые summary-записи не хранили диапазон. Итог можно подтвердить только снимком основного вызова.
-  const response = runs.find(item => item.purpose !== 'summary' && item.user_index === run.user_index)
+  const response = runs.find(item => (!item.purpose || item.purpose === 'dialogue') && item.user_index === run.user_index)
   const covered = response?.estimate?.summarized_messages
   if (success && covered > 0) {
     return `Сводка охватывает сообщения истории №1–${covered}; целиком передано ${run.user_index - covered} сообщений истории. Диапазон новой порции и настройки не сохранены в этой старой записи.`
@@ -22,5 +22,5 @@ export function compressionDescription(run, runs = []) {
   return 'Диапазон сообщений и настройки не сохранены в этой старой записи.'
 }
 
-export const callType = run => run.purpose === 'summary' ? 'Сжатие' : 'Ответ'
+export const callType = run => ({ summary: 'Сжатие', facts: 'Facts', dialogue: 'Ответ' }[run.purpose] || 'Ответ')
 export const callStatus = run => ({ success: 'Успешно', error: 'Ошибка', pending: 'В работе', interrupted: 'Прервано' }[run.status] || run.status || '—')

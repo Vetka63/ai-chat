@@ -8,6 +8,7 @@ const props = defineProps({ models: Array, modelId: String, runs: Array, estimat
 const model = computed(() => props.models?.find((m) => m.id === props.modelId))
 const summary = computed(() => totals(props.runs || []))
 const compression = computed(() => totals((props.runs || []).filter((r) => r.purpose === 'summary')))
+const factsRuns = computed(() => totals((props.runs || []).filter((r) => r.purpose === 'facts')))
 const savings = computed(() => props.conversation?.token_savings)
 const savingsStatus = computed(() => {
   const value = savings.value
@@ -30,10 +31,15 @@ const savingsStatus = computed(() => {
           <dt>Вся исходная история ≈</dt><dd>{{ count(estimate.history_tokens) }}</dd>
           <dt>Системный текст ≈</dt><dd>{{ count(estimate.system_tokens) }}</dd>
           <dt>Весь prompt ≈</dt><dd>{{ count(estimate.prompt_tokens) }}</dd>
+          <template v-if="estimate.context_mode !== 'full'">
+            <dt>Полная история ≈</dt><dd>{{ count(estimate.full_prompt_tokens) }}</dd>
+            <dt>Сокращение prompt ≈</dt><dd>{{ count((estimate.full_prompt_tokens ?? estimate.prompt_tokens) - estimate.prompt_tokens) }}</dd>
+          </template>
           <template v-if="estimate.context_mode === 'summary'">
-            <dt>Без сжатия ≈</dt><dd>{{ count(estimate.full_prompt_tokens) }}</dd>
             <dt>Размер сводки ≈</dt><dd>{{ count(estimate.summary_tokens) }}</dd>
-            <dt>Разница prompt ≈</dt><dd>{{ count((estimate.full_prompt_tokens ?? estimate.prompt_tokens) - estimate.prompt_tokens) }}</dd>
+          </template>
+          <template v-if="estimate.context_mode === 'sticky_facts'">
+            <dt>Текущих facts</dt><dd>{{ count(estimate.fact_count) }}</dd>
           </template>
           <dt>Лимит ответа</dt><dd>{{ estimate.reserved_output_tokens == null ? 'По умолчанию API' : count(estimate.reserved_output_tokens) }}</dd>
         </dl>
@@ -74,12 +80,13 @@ const savingsStatus = computed(() => {
     </details>
     <details class="token-details" :open="runs?.length > 0">
       <summary>Расход диалога · {{ runs?.length || 0 }} вызовов LLM</summary>
-      <small class="muted">{{ (runs || []).filter(r => r.purpose !== 'summary').length }} вызовов для ответа + {{ (runs || []).filter(r => r.purpose === 'summary').length }} вызовов сжатия. Один ваш запрос может вызвать оба; неудачные попытки тоже учитываются.</small>
+      <small class="muted">{{ (runs || []).filter(r => !r.purpose || r.purpose === 'dialogue').length }} ответов + {{ (runs || []).filter(r => r.purpose === 'summary').length }} summary + {{ (runs || []).filter(r => r.purpose === 'facts').length }} facts. Один запрос может вызвать два LLM-вызова; ошибки тоже учитываются.</small>
       <dl class="token-grid">
         <dt>API total, сумма</dt><dd>{{ summary.known ? count(summary.tokens) : '—' }}</dd>
         <dt>Стоимость ≈</dt><dd>{{ summary.known ? money(summary.cost) : '—' }}</dd>
         <dt>В т.ч. сжатие, токены</dt><dd>{{ compression.known ? count(compression.tokens) : (compression.unknown ? '—' : '0') }}</dd>
         <dt>В т.ч. сжатие, USD ≈</dt><dd>{{ compression.known ? money(compression.cost) : (compression.unknown ? '—' : '$0') }}</dd>
+        <dt>В т.ч. facts, токены</dt><dd>{{ factsRuns.known ? count(factsRuns.tokens) : (factsRuns.unknown ? '—' : '0') }}</dd>
       </dl>
       <small v-if="summary.unknown" class="token-warning">Без usage: {{ summary.unknown }}. Их расход неизвестен.</small>
       <div v-if="runs?.length" class="usage-table-wrap">

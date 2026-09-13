@@ -6,6 +6,7 @@ import OutputSettings from './components/OutputSettings.vue'
 import ModelPicker from './components/ModelPicker.vue'
 import ChatThread from './components/ChatThread.vue'
 import MessageComposer from './components/MessageComposer.vue'
+import NewChatDialog from './components/NewChatDialog.vue'
 import { useAgentChat } from './composables/useAgentChat'
 import TokenPanel from './features/tokens/TokenPanel.vue'
 import ContextPanel from './features/context/ContextPanel.vue'
@@ -20,6 +21,7 @@ const settingsButton = ref(null)
 const chatsButton = ref(null)
 const settingsPanel = ref(null)
 const chatsPanel = ref(null)
+const newChatOpen = ref(false)
 const busy = computed(() => chat.loading.value || chat.sending.value)
 const overlay = computed(() => mobile.value && sidebarOpen.value ? 'chats' : compact.value && settingsOpen.value ? 'settings' : null)
 watch(theme, value => { document.documentElement.dataset.theme = value }, { immediate: true })
@@ -76,8 +78,14 @@ function chooseConversation(id) {
   if (mobile.value) closePanels()
 }
 function newChat() {
-  chat.newChat()
-  if (mobile.value) closePanels()
+  newChatOpen.value = true
+}
+async function createNewChat({ title, contextSettings }) {
+  await chat.newChat(title, contextSettings)
+  if (!chat.error.value) {
+    newChatOpen.value = false
+    if (mobile.value) closePanels()
+  }
 }
 async function removeConversation(item) {
   if (window.confirm(`Удалить чат «${item.title}»?`)) await chat.removeConversation(item.id)
@@ -89,34 +97,39 @@ async function removeConversation(item) {
     <div v-if="theme === 'new-year'" class="garland" aria-hidden="true"><i v-for="n in 18" :key="n"></i></div>
     <button v-if="overlay" class="scrim" tabindex="-1" aria-label="Закрыть боковую панель" @click="closePanels"></button>
     <ChatSidebar ref="chatsPanel" id="chats-panel" :class="{ open: sidebarOpen }"
-      :inert="(mobile && !sidebarOpen) || overlay === 'settings'"
-      :aria-hidden="(mobile && !sidebarOpen) || overlay === 'settings' ? true : undefined"
+      :inert="newChatOpen || (mobile && !sidebarOpen) || overlay === 'settings'"
+      :aria-hidden="newChatOpen || (mobile && !sidebarOpen) || overlay === 'settings' ? true : undefined"
       :role="overlay === 'chats' ? 'dialog' : undefined" :aria-modal="overlay === 'chats' ? true : undefined"
       :conversations="chat.conversations.value" :selected-conversation="chat.conversation.value?.id"
       :agent-name="chat.agent.value?.name" :busy="busy"
       @new="newChat" @select="chooseConversation" @delete="removeConversation" @close="closePanels" />
-    <main class="main-panel" :inert="Boolean(overlay)" :aria-hidden="overlay ? true : undefined">
+    <main class="main-panel" :inert="Boolean(overlay) || newChatOpen" :aria-hidden="overlay || newChatOpen ? true : undefined">
       <header class="chat-header">
         <button ref="chatsButton" class="menu-button icon-button" aria-label="Открыть список чатов" aria-controls="chats-panel" :aria-expanded="sidebarOpen" @click="toggleChats">☰</button>
         <div><strong>{{ chat.conversation.value?.title || chat.agent.value?.name || 'AI Agents' }}</strong><span><i></i>{{ chat.loading.value ? 'Загрузка истории…' : 'Контекст сохранён' }}</span></div>
         <button ref="settingsButton" class="settings-toggle icon-button" aria-label="Настройки агента" aria-controls="settings-panel" :aria-expanded="settingsOpen" @click="toggleSettings"><span aria-hidden="true">☷</span><span class="settings-label">Настройки</span></button>
       </header>
       <div v-if="chat.error.value" class="error-banner" role="alert">{{ chat.error.value }} <button @click="chat.initialize">Повторить</button></div>
+      <div v-if="chat.warning.value" class="warning-banner" role="status">{{ chat.warning.value }}</div>
       <ChatThread :messages="chat.messages.value" :runs="chat.runs.value" :agent-name="chat.agent.value?.name" :sending="chat.sending.value" />
-      <MessageComposer v-model="chat.draft.value" :disabled="busy || !chat.agentId.value || !chat.outputLimitValid.value" :sending="chat.sending.value" @send="chat.send">
+      <MessageComposer v-model="chat.draft.value" :disabled="busy || !chat.agentId.value || !chat.conversation.value || !chat.outputLimitValid.value" :sending="chat.sending.value" @send="chat.send">
         <ModelPicker :models="chat.models.value" :model-id="chat.modelId.value" :busy="busy" @model="chat.changeModel" />
       </MessageComposer>
     </main>
-    <AgentSidebar ref="settingsPanel" id="settings-panel" v-show="settingsOpen" :inert="overlay === 'chats'"
-      :aria-hidden="overlay === 'chats' ? true : undefined"
+    <AgentSidebar ref="settingsPanel" id="settings-panel" v-show="settingsOpen" :inert="overlay === 'chats' || newChatOpen"
+      :aria-hidden="overlay === 'chats' || newChatOpen ? true : undefined"
       :role="overlay === 'settings' ? 'dialog' : undefined" :aria-modal="overlay === 'settings' ? true : undefined"
       :agents="chat.agents.value" :selected-agent="chat.agentId.value" :theme="theme" :busy="busy"
       @select-agent="chat.selectAgent" @theme="theme = $event" @close="closePanels">
       <OutputSettings :limit="chat.outputLimit.value" :model="chat.selectedModel.value" :busy="busy" @change="chat.outputLimit.value = $event" />
       <ContextPanel v-if="chat.agent.value?.capabilities?.includes('context_memory')" :settings="chat.contextSettings.value" :summary="chat.conversation.value?.summary"
-        :estimate="chat.estimate.value" :busy="busy" :has-conversation="Boolean(chat.conversation.value)" @change="chat.changeContext" @fork="chat.forkChat" />
+        :facts="chat.conversation.value?.facts" :conversation="chat.conversation.value" :conversations="chat.conversations.value"
+        :estimate="chat.estimate.value" :busy="busy" :has-conversation="Boolean(chat.conversation.value)"
+        @fork="chat.forkChat" @checkpoint="chat.createCheckpoint"
+        @branches="({ checkpointId, names }) => chat.createBranches(checkpointId, names)" @select-branch="chat.selectConversation" />
       <TokenPanel :models="chat.models.value" :model-id="chat.modelId.value" :runs="chat.runs.value" :conversation="chat.conversation.value"
         :estimate="chat.estimate.value" :estimating="chat.estimating.value" :preview-error="chat.previewError.value" :busy="busy" :title="chat.conversation.value?.title" />
     </AgentSidebar>
+    <NewChatDialog :open="newChatOpen" :busy="busy" @cancel="newChatOpen = false" @create="createNewChat" />
   </div>
 </template>

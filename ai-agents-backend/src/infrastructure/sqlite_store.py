@@ -56,21 +56,37 @@ class SqliteConversationStore:
                 await database.execute("ALTER TABLE conversations ADD COLUMN context_settings TEXT NOT NULL DEFAULT '{}'")
             if "max_output_tokens" not in {column["name"] for column in columns}:
                 await database.execute("ALTER TABLE conversations ADD COLUMN max_output_tokens INTEGER")
+            if "root_conversation_id" not in {column["name"] for column in columns}:
+                await database.execute("ALTER TABLE conversations ADD COLUMN root_conversation_id TEXT")
+            if "parent_conversation_id" not in {column["name"] for column in columns}:
+                await database.execute("ALTER TABLE conversations ADD COLUMN parent_conversation_id TEXT")
+            if "checkpoint_id" not in {column["name"] for column in columns}:
+                await database.execute("ALTER TABLE conversations ADD COLUMN checkpoint_id TEXT")
+            if "branch_name" not in {column["name"] for column in columns}:
+                await database.execute("ALTER TABLE conversations ADD COLUMN branch_name TEXT")
+            await database.execute("UPDATE conversations SET root_conversation_id=id WHERE root_conversation_id IS NULL")
             await database.commit()
 
-    async def create(self, agent_id: str, title: str) -> ConversationSummary:
+    async def create(self, agent_id: str, title: str, settings: ContextSettings | None = None) -> ConversationSummary:
+        """Атомарно создаёт чат вместе с неизменяемой стратегией контекста."""
+
         timestamp = now()
+        context_settings = settings or ContextSettings()
         item = ConversationSummary(
             id=new_id(),
             agent_id=agent_id,
             title=title.strip() or "Новый чат",
             created_at=timestamp,
             updated_at=timestamp,
+            context_settings=context_settings,
         )
+        item.root_conversation_id = item.id
         async with self.connection() as database:
             await database.execute(
-                "INSERT INTO conversations(id, agent_id, title, created_at, updated_at) VALUES(?,?,?,?,?)",
-                (item.id, item.agent_id, item.title, item.created_at, item.updated_at),
+                """INSERT INTO conversations(id, agent_id, title, created_at, updated_at, context_settings, root_conversation_id)
+                   VALUES(?,?,?,?,?,?,?)""",
+                (item.id, item.agent_id, item.title, item.created_at, item.updated_at,
+                 context_settings.model_dump_json(), item.root_conversation_id),
             )
             await database.commit()
         return item
@@ -79,7 +95,8 @@ class SqliteConversationStore:
         async with self.connection() as database:
             rows = await (
                 await database.execute(
-                    """SELECT id, agent_id, title, created_at, updated_at, selected_model_id, context_settings, max_output_tokens
+                    """SELECT id, agent_id, title, created_at, updated_at, selected_model_id, context_settings, max_output_tokens,
+                              root_conversation_id, parent_conversation_id, checkpoint_id, branch_name
                        FROM conversations WHERE agent_id=? ORDER BY updated_at DESC, id DESC""",
                     (agent_id,),
                 )
@@ -90,7 +107,8 @@ class SqliteConversationStore:
         async with self.connection() as database:
             row = await (
                 await database.execute(
-                    """SELECT id, agent_id, title, created_at, updated_at, selected_model_id, context_settings, max_output_tokens
+                    """SELECT id, agent_id, title, created_at, updated_at, selected_model_id, context_settings, max_output_tokens,
+                              root_conversation_id, parent_conversation_id, checkpoint_id, branch_name
                        FROM conversations WHERE id=? AND agent_id=?""",
                     (conversation_id, agent_id),
                 )
@@ -137,10 +155,14 @@ class SqliteConversationStore:
         """Копирует снимок исходной переписки без прежних затрат и summary для честного сравнения."""
         label = 'Сжатая · ' if settings.mode == 'summary' else 'Полная · '
         item = ConversationSummary(id=new_id(), agent_id=source.agent_id, title=(label + source.title)[:120],
-            created_at=now(), updated_at=now(), selected_model_id=source.selected_model_id, context_settings=settings, max_output_tokens=source.max_output_tokens)
+            created_at=now(), updated_at=now(), selected_model_id=source.selected_model_id,
+            context_settings=settings, max_output_tokens=source.max_output_tokens)
+        item.root_conversation_id = item.id
         async with self.connection() as db:
-            await db.execute('INSERT INTO conversations(id,agent_id,title,created_at,updated_at,selected_model_id,context_settings,max_output_tokens) VALUES(?,?,?,?,?,?,?,?)',
-                (item.id, item.agent_id, item.title, item.created_at, item.updated_at, item.selected_model_id, settings.model_dump_json(), item.max_output_tokens))
+            await db.execute('''INSERT INTO conversations(id,agent_id,title,created_at,updated_at,selected_model_id,
+                context_settings,max_output_tokens,root_conversation_id) VALUES(?,?,?,?,?,?,?,?,?)''',
+                (item.id, item.agent_id, item.title, item.created_at, item.updated_at,
+                 item.selected_model_id, settings.model_dump_json(), item.max_output_tokens, item.root_conversation_id))
             await db.executemany('INSERT INTO messages(conversation_id,role,content,created_at) VALUES(?,?,?,?)',
                 [(item.id, m.role, m.content, item.created_at) for m in source.messages])
             await db.commit()

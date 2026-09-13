@@ -16,7 +16,23 @@ export function totals(runs) {
 export function markdownReport(title, runs, conversation) {
   const summary = totals(runs)
   const compression = totals(runs.filter((r) => r.purpose === 'summary'))
+  const factUpdates = totals(runs.filter((r) => r.purpose === 'facts'))
   const savings = conversation?.token_savings
+  const contextMode = conversation?.context_settings?.mode || 'full'
+  const facts = conversation?.facts?.facts || {}
+  const lineageLines = conversation ? [
+    '## Положение в дереве диалогов', '',
+    `Корневой диалог: ${conversation.root_conversation_id || conversation.id}.`,
+    `Родитель: ${conversation.parent_conversation_id || 'нет'}. Checkpoint: ${conversation.checkpoint_id || 'нет'}. Название ветки: ${conversation.branch_name || 'исходный диалог'}.`, '',
+    `Checkpoint в этом диалоге: ${(conversation.checkpoints || []).length}.`, '',
+  ] : []
+  const factsLines = contextMode === 'sticky_facts' || Object.keys(facts).length ? [
+    '## Sticky Facts', '',
+    ...(Object.keys(facts).length
+      ? Object.entries(facts).map(([key, value]) => `- **${key}:** ${value}`)
+      : ['Facts ещё не созданы.']),
+    '', `Ревизия: ${conversation?.facts?.revision || 0}. Отдельных вызовов обновления: ${runs.filter((r) => r.purpose === 'facts').length}.`, '',
+  ] : []
   const savingsLines = savings ? [
     '## Эффект сжатия', '',
     `Сопоставлено основных вызовов: ${savings.compared_dialogue_runs}; без usage: ${savings.unknown_dialogue_runs}.`, '',
@@ -28,10 +44,13 @@ export function markdownReport(title, runs, conversation) {
     'Формула: локальная оценка уменьшения входных prompt минус фактические API total_tokens всех вызовов summary. Ответы контрольного диалога без сжатия не выполнялись, поэтому результат является оценкой.', '',
   ] : []
   return [
-    '# День 9 · Сжатие контекста и токены', '', title || 'Диалог', '',
-    'Оригиналы хранятся полностью. Каждый запуск использует свой зафиксированный режим контекста. Сжатие — отдельный вызов LLM.', '',
+    '# День 10 · Стратегии управления контекстом', '', title || 'Диалог', '',
+    `Выбранная стратегия: ${contextMode}. Оригиналы хранятся в SQLite; состав запроса зависит от стратегии.`, '',
     `Известный расход API: ${summary.tokens} токенов. Оценка стоимости: ${money(summary.cost)}. Вызовов без usage: ${summary.unknown}.`, '',
     `Из них создание summary: ${compression.tokens} известных токенов, ${money(compression.cost)}; вызовов сжатия без usage: ${compression.unknown}. Это уже включено в итог выше.`, '',
+    `Из них обновление facts: ${factUpdates.tokens} известных токенов, ${money(factUpdates.cost)}; вызовов facts без usage: ${factUpdates.unknown}. Это уже включено в итог выше.`, '',
+    ...lineageLines,
+    ...factsLines,
     ...savingsLines,
     '| Вызов | Тип / ваш запрос | Модель (запрошена → возвращена) | История ≈ | Сообщение ≈ | Prompt ≈ | API input | API output | API total | USD ≈ | Статус |',
     '|---|---|---|---:|---:|---:|---:|---:|---:|---:|---|',
@@ -39,7 +58,9 @@ export function markdownReport(title, runs, conversation) {
     '', '## Детали запусков', '',
     ...runs.flatMap((r, i) => [
       `### ${i + 1}. ${r.created_at}`, '',
-      r.purpose === 'summary' ? compressionDescription(r, runs) : `Назначение: ${r.purpose || 'dialogue'}. Режим: ${r.estimate.context_mode || 'full'}. Prompt без сжатия ≈ ${r.estimate.full_prompt_tokens ?? '—'}; отправляемый prompt ≈ ${r.estimate.prompt_tokens}; сводка ≈ ${r.estimate.summary_tokens || 0} токенов, охватывает ${r.estimate.summarized_messages || 0} сообщений.`, '',
+      r.purpose === 'summary' ? compressionDescription(r, runs)
+        : r.purpose === 'facts' ? `Обновление key-value памяти. Результат: ${r.status === 'success' ? 'facts сохранены' : 'прежние facts оставлены без изменений'}.`
+          : `Назначение: ${r.purpose || 'dialogue'}. Режим: ${r.estimate.context_mode || 'full'}. Prompt полной истории ≈ ${r.estimate.full_prompt_tokens ?? '—'}; реально отправляемый prompt ≈ ${r.estimate.prompt_tokens}; передано сообщений хвоста: ${r.estimate.retained_message_count ?? '—'}; исключено: ${r.estimate.discarded_message_count ?? 0}; facts: ${r.estimate.fact_count ?? 0}; summary ≈ ${r.estimate.summary_tokens || 0} токенов.`, '',
       `Метод оценки: ${r.estimate.method}. Системный текст: ${r.estimate.system_tokens}. Окно: ${r.estimate.context_window}. Резерв ответа: ${r.estimate.reserved_output_tokens ?? 'не задан, по умолчанию API'}. Заполнение (${r.estimate.reserved_output_tokens == null ? 'только вход, резерв неизвестен' : 'с резервом'}): ${r.estimate.occupancy_percent}%.`, '',
       `Время: ${r.duration_ms ?? '—'} мс. Finish reason: ${r.finish_reason || '—'}. Кэш: ${r.usage?.cached_tokens ?? 'неизвестен'}. Reasoning: ${r.usage?.reasoning_tokens ?? 'неизвестен'} (часть output, не прибавляется повторно).`, '',
       `Ошибка: ${r.error_message || 'нет'}. HTTP провайдера: ${r.provider_status ?? '—'}.`, '',
@@ -49,12 +70,13 @@ export function markdownReport(title, runs, conversation) {
     '- API input включает системный промпт, историю, текущий запрос и форматирование. Раздельные оценки текста не обязаны складываться в точный prompt.',
     '- Суммарный расход повторно учитывает историю при каждом вызове. Это не размер текущего контекста.',
     '- Неизвестный usage не означает бесплатный вызов. Оценка по публичному тарифу не является списанием со счёта (возможен бесплатный план).',
-    '- Чистая экономия токенов здесь оценочная: уменьшение prompt считается локально, а расход summary берётся из API. Для строгого эксперимента сравните две копии чата.',
+    '- Sliding Window отбрасывает старый контекст только из запроса; Sticky Facts добавляет отдельный платный LLM-вызов; Branching изолирует продолжения после общего checkpoint.',
+    '- Чистая экономия summary оценочная: уменьшение prompt считается локально, а расход summary берётся из API. Для строгого эксперимента сравните диалоги с одной моделью.',
     '- context_limit_exceeded — ошибка окна модели. rate_limit — ограничение частоты/TPM, request_too_large — транспорт; это не доказательство переполнения контекста.',
     '', '## Вывод по эксперименту', '',
-    'Сравните ответы на одинаковый контрольный вопрос в двух копиях одной исходной истории с одной моделью. Проверьте сохранение фактов/чисел/ограничений, качество ответа, расходы с учётом summary. Запишите наблюдения здесь.', '',
+    'Пройдите один сценарий сбора ТЗ в Sliding Window и Sticky Facts, затем создайте две ветки от checkpoint. Сравните сохранение ранних требований, независимость решений и дополнительные LLM-вызовы. Запишите наблюдения здесь.', '',
     ...(conversation ? ['## Настройки и актуальная сводка', '',
-      `Режим: ${conversation.context_settings?.mode || 'full'}; N: ${conversation.context_settings?.keep_last ?? 10}; период: ${conversation.context_settings?.summarize_every ?? 10}.`, '',
+      `Режим: ${contextMode}; N: ${conversation.context_settings?.keep_last ?? 10}; период summary: ${conversation.context_settings?.summarize_every ?? 10}.`, '',
       conversation.summary?.text || 'Сводка ещё не создана.', '', '## Сообщения для сравнения качества', '',
       ...(conversation.messages || []).flatMap((m) => [`### ${m.role}`, '', m.content, '']),
     ] : []),
@@ -65,7 +87,7 @@ export function downloadReport(title, runs, conversation) {
   const url = URL.createObjectURL(new Blob([markdownReport(title, runs, conversation)], { type: 'text/markdown;charset=utf-8' }))
   const link = document.createElement('a')
   link.href = url
-  link.download = 'day-9-context.md'
+  link.download = 'day-10-context-strategies.md'
   link.click()
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }

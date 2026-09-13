@@ -10,6 +10,7 @@ export function useAgentChat() {
   const loading = ref(true)
   const sending = ref(false)
   const error = ref('')
+  const warning = ref('')
   const models = ref([])
   const modelId = ref('')
   const defaultModelId = ref('')
@@ -24,7 +25,7 @@ export function useAgentChat() {
 
   const agent = computed(() => agents.value.find((item) => item.id === agentId.value))
   const messages = computed(() => conversation.value?.messages || [])
-  const selectedKey = (id) => `day9:selected:${id}`
+  const selectedKey = (id) => `agents:selected:${id}`
 
   // Старый результат оценки не может заменить оценку нового черновика/модели.
   let previewController, previewTimer, revision = 0
@@ -67,6 +68,7 @@ export function useAgentChat() {
 
   async function loadConversation(id) {
     conversation.value = await api.getConversation(agentId.value, id)
+    warning.value = ''
     outputLimit.value = conversation.value.max_output_tokens ?? null
     modelId.value = conversation.value.selected_model_id || defaultModelId.value
     contextSettings.value = conversation.value.context_settings || { mode: 'full', keep_last: 10, summarize_every: 10 }
@@ -79,7 +81,7 @@ export function useAgentChat() {
     outputLimit.value = null
     modelId.value = defaultModelId.value
     conversations.value = await api.listConversations(id)
-    const saved = localStorage.getItem(selectedKey(id))
+    const saved = localStorage.getItem(selectedKey(id)) || localStorage.getItem(`day9:selected:${id}`)
     const selected = conversations.value.find((item) => item.id === saved) || conversations.value[0]
     if (selected) await loadConversation(selected.id)
   }
@@ -127,14 +129,16 @@ export function useAgentChat() {
     }
   }
 
-  async function newChat() {
+  async function newChat(title = 'Новый чат', settings = { mode: 'full', keep_last: 10, summarize_every: 10 }) {
     if (!agentId.value || loading.value || sending.value) return
     loading.value = true
     error.value = ''
+    warning.value = ''
     try {
-      const created = await api.createConversation(agentId.value, 'Новый чат', contextSettings.value)
+      const created = await api.createConversation(agentId.value, title, settings)
       conversations.value.unshift(created)
       conversation.value = { ...created, messages: [] }
+      contextSettings.value = { ...created.context_settings }
       localStorage.setItem(selectedKey(agentId.value), created.id)
       draft.value = ''
       outputLimit.value = null
@@ -170,15 +174,9 @@ export function useAgentChat() {
     if (!outputLimitValid.value || !text || sending.value || loading.value || !agentId.value) return
     sending.value = true
     error.value = ''
-    let createdForMessage = false
+    warning.value = ''
     try {
-      if (!conversation.value) {
-        const created = await api.createConversation(agentId.value, text.slice(0, 60), contextSettings.value)
-        conversations.value.unshift(created)
-        conversation.value = { ...created, messages: [] }
-        localStorage.setItem(selectedKey(agentId.value), created.id)
-        createdForMessage = true
-      }
+      if (!conversation.value) return
       const target = conversation.value
       target.messages.push({ role: 'user', content: text })
       draft.value = ''
@@ -186,7 +184,9 @@ export function useAgentChat() {
       target.messages.push({ role: 'assistant', content: result.reply, model: result.model, source: result.source })
       target.runs = [...(target.runs || []), ...(result.additional_runs || []), ...(result.run ? [result.run] : [])]
       target.summary = result.summary || null
+      target.facts = result.facts || null
       target.token_savings = result.token_savings || null
+      warning.value = (result.memory_warnings || []).join(' ')
       target.selected_model_id = modelId.value
       conversations.value = await api.listConversations(agentId.value)
       const summary = conversations.value.find((item) => item.id === target.id)
@@ -202,9 +202,6 @@ export function useAgentChat() {
           // При сетевой ошибке оставляем оптимистично добавленный вопрос на экране.
         }
       }
-      if (createdForMessage && !conversation.value?.messages.length) {
-        // Пустой созданный чат остаётся доступным для повторной отправки.
-      }
     } finally {
       sending.value = false
     }
@@ -215,23 +212,8 @@ export function useAgentChat() {
     loading, sending, error, initialize, selectAgent, selectConversation,
     newChat, removeConversation, send,
     models, modelId, selectedModel, runs, estimate, estimating, previewError, changeModel,
-    contextSettings, changeContext, forkChat, outputLimit, outputLimitValid,
-  }
-
-  async function changeContext(settings) {
-    if (loading.value || sending.value) return
-    loading.value = true
-    try {
-      if (conversation.value) {
-        await api.configureContext(agentId.value, conversation.value.id, settings)
-        conversation.value.context_settings = { ...settings }
-        const item = conversations.value.find((c) => c.id === conversation.value.id)
-        if (item) item.context_settings = { ...settings }
-      }
-      contextSettings.value = { ...settings }
-      error.value = ''
-    } catch (cause) { error.value = cause.message }
-    finally { loading.value = false }
+    contextSettings, forkChat, createCheckpoint, createBranches,
+    outputLimit, outputLimitValid, warning,
   }
 
   async function forkChat() {
@@ -243,6 +225,29 @@ export function useAgentChat() {
       conversations.value = await api.listConversations(agentId.value)
       await loadConversation(created.id)
       draft.value = ''
+      error.value = ''
+    } catch (cause) { error.value = cause.message }
+    finally { loading.value = false }
+  }
+
+  async function createCheckpoint(title) {
+    if (loading.value || sending.value || !conversation.value) return
+    loading.value = true
+    try {
+      const checkpoint = await api.createCheckpoint(agentId.value, conversation.value.id, title)
+      conversation.value.checkpoints = [...(conversation.value.checkpoints || []), checkpoint]
+      error.value = ''
+    } catch (cause) { error.value = cause.message }
+    finally { loading.value = false }
+  }
+
+  async function createBranches(checkpointId, names) {
+    if (loading.value || sending.value || !conversation.value) return
+    loading.value = true
+    try {
+      const created = await api.createBranches(agentId.value, checkpointId, names)
+      conversations.value = await api.listConversations(agentId.value)
+      if (created[0]) await loadConversation(created[0].id)
       error.value = ''
     } catch (cause) { error.value = cause.message }
     finally { loading.value = false }

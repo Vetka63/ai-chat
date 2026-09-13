@@ -35,6 +35,7 @@ class DialogueAgent:
         catalog=None,
         accounting: TokenAccounting | None = None,
         memory=None,
+        branch_service=None,
     ):
         self.config = config
         self.llm = llm
@@ -47,6 +48,7 @@ class DialogueAgent:
         self.catalog = catalog
         self.accounting = accounting
         self.memory = memory
+        self.branch_service = branch_service
         self._conversation_locks: dict[str, asyncio.Lock] = {}
 
     @property
@@ -56,6 +58,8 @@ class DialogueAgent:
             features.append("token_accounting")
         if self.memory:
             features.append("context_memory")
+        if self.branch_service:
+            features.append("branching")
         return AgentInfo(id=self.config.id, name=self.config.name, description=self.config.description, capabilities=features)
 
     async def run(self, command: AgentCommand) -> AgentResult:
@@ -123,15 +127,29 @@ class DialogueAgent:
             run=run,
             additional_runs=prepared.new_runs if prepared else [],
             summary=await self.memory.repository.get(self.config.id, command.conversation_id) if self.memory else None,
+            facts=await self.memory.facts_repository.get(self.config.id, command.conversation_id) if self.memory and self.memory.facts_repository else None,
+            memory_warnings=prepared.warnings if prepared else [],
             token_savings=await self.accounting.savings(self.config.id, command.conversation_id) if self.accounting else None,
         )
 
-    async def configure_context(self, conversation_id: str, settings: ContextSettings):
-        """Меняет стратегию между запусками; текущий запрос не меняется посередине."""
-        if settings.mode == "summary" and not self.memory:
-            raise AgentError("context_not_supported", "К агенту не подключено сжатие контекста", 501)
+    async def create_checkpoint(self, conversation_id: str, title: str):
+        """Сохраняет checkpoint только в согласованном конце текущего диалога."""
+        if not self.branch_service:
+            raise AgentError("branching_not_supported", "Агент не поддерживает ветвление", 501)
         async with self._conversation_locks.setdefault(conversation_id, asyncio.Lock()):
-            await self.store.configure_context(self.config.id, conversation_id, settings)
+            return await self.branch_service.create_checkpoint(self.config.id, conversation_id, title)
+
+    async def list_checkpoints(self, conversation_id: str):
+        """Возвращает checkpoint выбранного диалога без изменения состояния."""
+        if not self.branch_service:
+            raise AgentError("branching_not_supported", "Агент не поддерживает ветвление", 501)
+        return await self.branch_service.list_checkpoints(self.config.id, conversation_id)
+
+    async def create_branches(self, checkpoint_id: str, names: list[str]):
+        """Атомарно создаёт две независимые ветки от checkpoint."""
+        if not self.branch_service:
+            raise AgentError("branching_not_supported", "Агент не поддерживает ветвление", 501)
+        return await self.branch_service.create_branches(self.config.id, checkpoint_id, names)
 
     async def fork_conversation(self, conversation_id: str, settings: ContextSettings):
         """Копия одного согласованного снимка, без вызовов LLM и без изменения оригинала."""

@@ -29,4 +29,19 @@ describe('token report', () => {
     expect(text).toContain('Чистая экономия ≈ 1100 токенов')
     expect(text).toContain('фактические API total_tokens')
   })
+  it('exports Day 10 facts and branch lineage', () => {
+    const conversation = {
+      id: 'branch-a', root_conversation_id: 'root', parent_conversation_id: 'root', checkpoint_id: 'cp-1', branch_name: 'Монолит',
+      context_settings: { mode: 'sticky_facts', keep_last: 3, summarize_every: 10 },
+      facts: { revision: 2, facts: { goal: 'Собрать ТЗ' } }, checkpoints: [], messages: [],
+    }
+    const run = { purpose: 'facts', requested_model: 'test', returned_model: 'test', status: 'success',
+      estimate: { history_tokens: 1, current_message_tokens: 1, prompt_tokens: 2, method: 'approx', context_window: 100 },
+      pricing: {}, usage: { total_tokens: 10 } }
+    const text = markdownReport('Ветка', [run], conversation)
+    expect(text).toContain('# День 10')
+    expect(text).toContain('**goal:** Собрать ТЗ')
+    expect(text).toContain('Checkpoint: cp-1')
+    expect(text).toContain('Обновление key-value памяти')
+  })
 })
