@@ -36,7 +36,7 @@ export function useAgentChat() {
     estimate.value = null
     previewError.value = ''
     estimating.value = false
-    if (!agentId.value || !modelId.value || sending.value) return
+    if (!agentId.value || !modelId.value || sending.value || (agent.value?.capabilities?.includes('memory_layers') && !conversation.value)) return
     estimating.value = true
     previewTimer = setTimeout(async () => {
       previewController = new AbortController()
@@ -129,13 +129,13 @@ export function useAgentChat() {
     }
   }
 
-  async function newChat(title = 'Новый чат', settings = { mode: 'full', keep_last: 10, summarize_every: 10 }) {
+  async function newChat(title = 'Новый чат', settings = { mode: 'full', keep_last: 10, summarize_every: 10 }, problem) {
     if (!agentId.value || loading.value || sending.value) return
     loading.value = true
     error.value = ''
     warning.value = ''
     try {
-      const created = await api.createConversation(agentId.value, title, settings)
+      const created = await api.createConversation(agentId.value, title, settings, problem)
       conversations.value.unshift(created)
       conversation.value = { ...created, messages: [] }
       contextSettings.value = { ...created.context_settings }

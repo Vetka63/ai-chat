@@ -47,7 +47,9 @@ class ContextEstimate(BaseModel):
     occupancy_percent: float
     exceeds_context: bool
     method: str
-    context_mode: Literal["full", "summary", "sliding_window", "sticky_facts", "branching"] = "full"
+    context_mode: Literal["full", "summary", "sliding_window", "sticky_facts", "branching", "memory_layers"] = "full"
+    working_memory_tokens: int = 0
+    long_term_memory_tokens: int = 0
     full_prompt_tokens: int | None = None
     summary_tokens: int = 0
     summarized_messages: int = 0
@@ -96,7 +98,8 @@ class RunRecord(BaseModel):
     error_code: str | None = None
     error_message: str | None = None
     provider_status: int | None = None
-    purpose: Literal["dialogue", "summary", "facts"] = "dialogue"
+    purpose: Literal["dialogue", "summary", "facts", "memory_proposals"] = "dialogue"
+    memory_context: dict | None = None
     compression: CompressionDetails | None = None
 
 

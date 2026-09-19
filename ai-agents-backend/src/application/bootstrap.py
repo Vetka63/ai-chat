@@ -16,6 +16,7 @@ from infrastructure.tokenizers import ByteEstimate, MistralEstimate
 from capabilities.token_accounting.service import TokenAccounting
 from capabilities.context_memory.service import ContextMemory, LlmSummarizer
 from capabilities.context_memory.facts import LlmFactsExtractor
+from agents.algorithm_coach.factory import build_algorithm_coach
 
 
 def build_registry(
@@ -27,6 +28,7 @@ def build_registry(
     summary_repository=None,
     facts_repository=None,
     branch_service=None,
+    memory_repository=None,
 ) -> AgentRegistry:
     """Создаёт реестр; HTTP-маршруты не знают о DeepSeek и промптах."""
 
@@ -47,8 +49,11 @@ def build_registry(
         facts_repository,
         LlmFactsExtractor(llm, accounting, catalog) if facts_repository else None,
     ) if summary_repository else None
-    return AgentRegistry([build_dialogue_agent(
+    agents = [build_dialogue_agent(
         config, llm, store, catalog=catalog, accounting=accounting,
         memory=memory, branch_service=branch_service,
-    )])
+    )]
+    if memory_repository is not None:
+        agents.append(build_algorithm_coach(settings.model, llm, store, memory_repository, catalog, accounting))
+    return AgentRegistry(agents)
 

@@ -8,7 +8,7 @@ export class ApiError extends Error {
   }
 }
 
-async function request(path, options = {}) {
+export async function request(path, options = {}) {
   const response = await fetch(base + path, options)
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}))
@@ -29,11 +29,11 @@ export async function listConversations(agentId) {
   return request(conversationsPath(agentId))
 }
 
-export async function createConversation(agentId, title = 'Новый чат', contextSettings) {
+export async function createConversation(agentId, title = 'Новый чат', contextSettings, problem) {
   return request(conversationsPath(agentId), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ title, context_settings: contextSettings }),
+    body: JSON.stringify({ title, context_settings: contextSettings, ...(problem ? { problem } : {}) }),
   })
 }
 

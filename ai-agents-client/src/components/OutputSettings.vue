@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue'
-const props = defineProps({ limit: Number, model: Object, busy: Boolean })
+const props = defineProps({ limit: Number, model: Object, busy: Boolean, memoryLayers: Boolean })
 const emit = defineEmits(['change'])
 const maximum = computed(() => props.model?.max_output_tokens || 1200)
 function update(event, commit = false) {
@@ -24,7 +24,8 @@ function update(event, commit = false) {
         <p v-if="limit > maximum" class="token-warning">Лимит выше потолка выбранной модели. Уменьшите его или отключите ограничение перед отправкой.</p>
       </template>
       <small v-else class="muted">По умолчанию провайдера: max_tokens не отправляется. Собственные ограничения API продолжают действовать.</small>
-      <small class="muted">Применяется к следующему ответу и сохраняется при отправке. На служебную сводку памяти ползунок не влияет; её длина ограничивается инструкцией сжатия, а не фиксированным числом токенов приложения.</small>
+      <small v-if="memoryLayers" class="muted">Применяется к следующему ответу и сохраняется при отправке. Анализ предложений памяти использует последний сохранённый лимит чата.</small>
+      <small v-else class="muted">Применяется к следующему ответу и сохраняется при отправке. На служебную сводку памяти ползунок не влияет; её длина ограничивается инструкцией сжатия, а не фиксированным числом токенов приложения.</small>
     </div>
   </section>
 </template>

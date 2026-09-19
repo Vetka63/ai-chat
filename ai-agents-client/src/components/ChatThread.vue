@@ -4,7 +4,7 @@ import SummaryEvent from '../features/context/SummaryEvent.vue'
 import { requestNumber } from '../features/context/compressionDisplay'
 import RunMetrics from '../features/tokens/RunMetrics.vue'
 
-const props = defineProps({ messages: Array, runs: Array, agentName: String, sending: Boolean })
+const props = defineProps({ messages: Array, runs: Array, agentName: String, sending: Boolean, memoryLayers: Boolean })
 const thread = ref(null)
 const expanded = ref(new Set())
 const metrics = computed(() => new Map((props.runs || []).filter((r) => !r.purpose || r.purpose === 'dialogue').map((r) => [r.assistant_index ?? r.user_index, r])))
@@ -32,8 +32,9 @@ watch(
     <div v-if="!messages.length" class="welcome">
       <span class="welcome-orbit"><i>✦</i></span>
       <p class="eyebrow">АГЕНТ С ПОСТОЯННЫМ КОНТЕКСТОМ</p>
-      <h1>О чём поговорим?</h1>
-      <p>{{ agentName || 'Агент' }} сохранит сообщения в SQLite и вспомнит их даже после перезапуска приложения.</p>
+      <h1>{{ memoryLayers ? 'Какую задачу разберём?' : 'О чём поговорим?' }}</h1>
+      <p v-if="memoryLayers">Наставник видит последние N сообщений и сохранённую память. Условие, план и знания можно явно сохранить в панели справа.</p>
+      <p v-else>{{ agentName || 'Агент' }} сохранит сообщения в SQLite и вспомнит их даже после перезапуска приложения.</p>
       <div class="suggestions">
         <span>Объясни простую тему</span><span>Предложи три идеи</span><span>Помоги составить план</span>
       </div>

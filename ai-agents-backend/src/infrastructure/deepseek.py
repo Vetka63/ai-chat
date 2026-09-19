@@ -15,6 +15,12 @@ class DemoClient:
     """Возвращает локальный ответ с неизвестным usage, не выдумывая биллинг."""
     async def complete(self, messages, *, model, temperature, max_tokens):
         text = next(m.content for m in reversed(messages) if m.role == "user")
+        if 'распределение данных по слоям памяти' in messages[0].content:
+            payload = json.loads(text)
+            return Completion(content=json.dumps({'proposals': [{
+                'layer': 'working', 'key': 'findings', 'value': payload['user_message'],
+                'reason': 'Демо: пример предложения, требуется подтверждение пользователя',
+            }]}, ensure_ascii=False), model=f'demo/{model}', source='demo', finish_reason='stop')
         if 'key-value' in messages[0].content.lower():
             try:
                 payload = json.loads(text)

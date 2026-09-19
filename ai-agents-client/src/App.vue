@@ -10,8 +10,12 @@ import NewChatDialog from './components/NewChatDialog.vue'
 import { useAgentChat } from './composables/useAgentChat'
 import TokenPanel from './features/tokens/TokenPanel.vue'
 import ContextPanel from './features/context/ContextPanel.vue'
+import MemoryPanel from './features/memory/MemoryPanel.vue'
+import { useMemoryLayers } from './features/memory/useMemoryLayers'
 
 const chat = useAgentChat()
+const memory = useMemoryLayers(chat)
+const lastMemoryContext = computed(() => [...chat.runs.value].reverse().find(r => r.purpose === 'dialogue' && r.memory_context)?.memory_context)
 const sidebarOpen = ref(false)
 const compact = ref(window.innerWidth <= 1180)
 const mobile = ref(window.innerWidth <= 760)
@@ -22,7 +26,7 @@ const chatsButton = ref(null)
 const settingsPanel = ref(null)
 const chatsPanel = ref(null)
 const newChatOpen = ref(false)
-const busy = computed(() => chat.loading.value || chat.sending.value)
+const busy = computed(() => chat.loading.value || chat.sending.value || memory.busy.value)
 const overlay = computed(() => mobile.value && sidebarOpen.value ? 'chats' : compact.value && settingsOpen.value ? 'settings' : null)
 watch(theme, value => { document.documentElement.dataset.theme = value }, { immediate: true })
 
@@ -59,7 +63,7 @@ function keyboard(event) {
   if (event.key === 'Escape') { event.preventDefault(); closePanels(); return }
   if (event.key !== 'Tab') return
   const panel = overlay.value === 'chats' ? chatsPanel.value?.$el : settingsPanel.value?.$el
-  const items = [...(panel?.querySelectorAll('button:not(:disabled), a[href], input:not(:disabled), summary, [tabindex="0"]') || [])].filter(el => el.getClientRects().length > 0)
+  const items = [...(panel?.querySelectorAll('button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), summary, [tabindex="0"]') || [])].filter(el => el.getClientRects().length > 0)
   const first = items[0], last = items[items.length - 1]
   if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus() }
   else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
@@ -80,15 +84,16 @@ function chooseConversation(id) {
 function newChat() {
   newChatOpen.value = true
 }
-async function createNewChat({ title, contextSettings }) {
-  await chat.newChat(title, contextSettings)
+async function createNewChat({ title, contextSettings, problem }) {
+  await chat.newChat(title, contextSettings, problem)
   if (!chat.error.value) {
     newChatOpen.value = false
     if (mobile.value) closePanels()
   }
 }
 async function removeConversation(item) {
-  if (window.confirm(`Удалить чат «${item.title}»?`)) await chat.removeConversation(item.id)
+  const suffix = memory.enabled.value ? ' Карточка и рабочая память удалятся, долговременные записи останутся.' : ''
+  if (window.confirm(`Удалить чат «${item.title}»?${suffix}`)) await chat.removeConversation(item.id)
 }
 </script>
 
@@ -111,7 +116,7 @@ async function removeConversation(item) {
       </header>
       <div v-if="chat.error.value" class="error-banner" role="alert">{{ chat.error.value }} <button @click="chat.initialize">Повторить</button></div>
       <div v-if="chat.warning.value" class="warning-banner" role="status">{{ chat.warning.value }}</div>
-      <ChatThread :messages="chat.messages.value" :runs="chat.runs.value" :agent-name="chat.agent.value?.name" :sending="chat.sending.value" />
+      <ChatThread :messages="chat.messages.value" :runs="chat.runs.value" :agent-name="chat.agent.value?.name" :sending="chat.sending.value" :memory-layers="memory.enabled.value" />
       <MessageComposer v-model="chat.draft.value" :disabled="busy || !chat.agentId.value || !chat.conversation.value || !chat.outputLimitValid.value" :sending="chat.sending.value" @send="chat.send">
         <ModelPicker :models="chat.models.value" :model-id="chat.modelId.value" :busy="busy" @model="chat.changeModel" />
       </MessageComposer>
@@ -121,15 +126,19 @@ async function removeConversation(item) {
       :role="overlay === 'settings' ? 'dialog' : undefined" :aria-modal="overlay === 'settings' ? true : undefined"
       :agents="chat.agents.value" :selected-agent="chat.agentId.value" :theme="theme" :busy="busy"
       @select-agent="chat.selectAgent" @theme="theme = $event" @close="closePanels">
-      <OutputSettings :limit="chat.outputLimit.value" :model="chat.selectedModel.value" :busy="busy" @change="chat.outputLimit.value = $event" />
+      <OutputSettings :limit="chat.outputLimit.value" :model="chat.selectedModel.value" :busy="busy" :memory-layers="memory.enabled.value" @change="chat.outputLimit.value = $event" />
+      <MemoryPanel v-if="memory.enabled.value" :workspace="memory.workspace.value" :busy="busy"
+        :loading="memory.loading.value" :error="memory.error.value" :last-context="lastMemoryContext"
+        @refresh="memory.refresh" @problem="memory.saveProblem" @save="memory.saveEntry"
+        @delete="memory.deleteEntry" @propose="memory.propose" @resolve="memory.resolve" />
       <ContextPanel v-if="chat.agent.value?.capabilities?.includes('context_memory')" :settings="chat.contextSettings.value" :summary="chat.conversation.value?.summary"
         :facts="chat.conversation.value?.facts" :conversation="chat.conversation.value" :conversations="chat.conversations.value"
         :estimate="chat.estimate.value" :busy="busy" :has-conversation="Boolean(chat.conversation.value)"
         @fork="chat.forkChat" @checkpoint="chat.createCheckpoint"
         @branches="({ checkpointId, names }) => chat.createBranches(checkpointId, names)" @select-branch="chat.selectConversation" />
-      <TokenPanel :models="chat.models.value" :model-id="chat.modelId.value" :runs="chat.runs.value" :conversation="chat.conversation.value"
+      <TokenPanel :models="chat.models.value" :model-id="chat.modelId.value" :runs="chat.runs.value" :conversation="chat.conversation.value" :memory-workspace="memory.workspace.value"
         :estimate="chat.estimate.value" :estimating="chat.estimating.value" :preview-error="chat.previewError.value" :busy="busy" :title="chat.conversation.value?.title" />
     </AgentSidebar>
-    <NewChatDialog :open="newChatOpen" :busy="busy" @cancel="newChatOpen = false" @create="createNewChat" />
+    <NewChatDialog :open="newChatOpen" :busy="busy" :memory-layers="memory.enabled.value" @cancel="newChatOpen = false" @create="createNewChat" />
   </div>
 </template>

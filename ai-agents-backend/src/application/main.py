@@ -24,6 +24,8 @@ from infrastructure.sqlite_facts import SqliteFactsRepository
 from infrastructure.sqlite_branching import SqliteBranchRepository
 from capabilities.context_memory.models import ContextSettings
 from capabilities.token_accounting.service import calculate_token_savings
+from infrastructure.sqlite_memory_layers import SqliteMemoryRepository
+from application.routes.memory import router as memory_router
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +52,8 @@ def create_app(
         await app.state.facts.initialize()
         app.state.branches = SqliteBranchRepository(active_store)
         await app.state.branches.initialize()
+        app.state.memory_layers = SqliteMemoryRepository(active_store)
+        await app.state.memory_layers.initialize()
         app.state.catalog = ModelCatalog.load(Path(__file__).with_name("models.json"), {
             "deepseek": resolved.mode == "demo" or bool(resolved.api_key.get_secret_value()),
             "mistral": resolved.mode == "demo" or bool(resolved.mistral_api_key.get_secret_value()),
@@ -65,14 +69,16 @@ def create_app(
             app.state.registry = build_registry(
                 resolved, http, active_store, app.state.catalog, app.state.usage,
                 app.state.summaries, app.state.facts, app.state.branches,
+                app.state.memory_layers,
             )
             yield
 
-    app = FastAPI(title="AI Agents · День 10", version="0.5.0", lifespan=lifespan)
+    app = FastAPI(title="AI Agents · День 11", version="0.6.0", lifespan=lifespan)
+    app.include_router(memory_router)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=resolved.origins,
-        allow_methods=["GET", "POST", "DELETE", "PATCH"],
+        allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
         allow_headers=["Content-Type"],
     )
 
@@ -90,7 +96,7 @@ def create_app(
 
     @app.get("/health")
     async def health():
-        return {"status": "ok", "mode": resolved.mode, "day": 10}
+        return {"status": "ok", "mode": resolved.mode, "day": 11}
 
     @app.get("/api/v1/models")
     async def models(request: Request):
@@ -106,7 +112,12 @@ def create_app(
         status_code=201,
     )
     async def create_conversation(agent_id: str, body: CreateConversation, request: Request):
-        request.app.state.registry.get(agent_id)
+        agent = request.app.state.registry.get(agent_id)
+        creator = getattr(agent, 'create_conversation', None)
+        if creator is not None:
+            return await creator(body.title, body.context_settings if 'context_settings' in body.model_fields_set else None, body.problem)
+        if body.problem is not None:
+            raise AgentError('task_not_supported', 'Карточка задачи доступна у алгоритмического наставника')
         return await request.app.state.store.create(agent_id, body.title, body.context_settings)
 
     @app.get(
