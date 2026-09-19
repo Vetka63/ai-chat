@@ -1,16 +1,16 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
-const props = defineProps({ workspace: Object, busy: Boolean, sending: Boolean, error: String, taskRevision: Number })
+const props = defineProps({ workspace: Object, busy: Boolean, artifactBusy: Boolean, sending: Boolean, error: String, taskRevision: Number, invariantRevision: Number })
 const emit = defineEmits(['transition', 'save', 'step', 'refresh'])
 const phases = { planning: 'Планирование', execution: 'Реализация', validation: 'Проверка', done: 'Завершено' }
 const actions = { save_plan: 'Сохраните план решения', start_execution: 'Перейдите к реализации', work_on_step: 'Продолжите выбранный шаг', save_solution: 'Сохраните решение', start_validation: 'Перейдите к проверке решения', review_solution: 'Проверьте решение и сохраните отчёт', finish: 'Просмотрите отчёт и завершите задачу', completed: 'Задача завершена' }
 const events = { start_execution: 'К реализации', start_validation: 'К проверке', finish: 'Завершить', request_changes: 'На доработку', request_replan: 'Перепланировать', pause: 'Пауза', resume: 'Продолжить' }
 const state = computed(() => props.workspace?.state)
-const latest = computed(() => Object.fromEntries((props.workspace?.artifacts || []).map(a => [a.kind, a])))
+const latest = computed(() => Object.fromEntries((props.workspace?.artifacts || []).filter(a => !props.invariantRevision || (a.invariant_revision ?? 1) === props.invariantRevision).map(a => [a.kind, a])))
 const kind = computed(() => ({ planning: 'plan', execution: 'solution', validation: 'validation' })[state.value?.phase])
 const draft = ref(''), method = ref('llm_review')
 watch(() => [props.workspace?.task_id, state.value?.phase], () => { draft.value = ''; method.value = 'llm_review' })
-const disabled = computed(() => props.busy || props.sending || state.value?.status === 'paused' || Boolean(props.workspace?.active_command_id))
+const disabled = computed(() => props.busy || props.artifactBusy || props.sending || state.value?.status === 'paused' || Boolean(props.workspace?.active_command_id))
 const planLines = computed(() => draft.value.split('\n').map(s => s.trim()).filter(Boolean))
 const valid = computed(() => draft.value.trim() && (kind.value !== 'plan' || planLines.value.length <= 30))
 function save() {
@@ -35,7 +35,7 @@ function save() {
         </select>
       </label>
       <div class="task-actions"><button v-for="event in workspace.allowed_events" :key="event"
-        :disabled="busy || ((sending || workspace.active_command_id) && !['pause', 'resume'].includes(event))"
+        :disabled="busy || ((sending || artifactBusy || workspace.active_command_id) && !['pause', 'resume'].includes(event))"
         @click="emit('transition', event)">{{ events[event] }}</button></div>
       <small v-if="sending || workspace.active_command_id">Запрос выполняется. Пауза сохранится сразу; поздний ответ не применится, но API может списать токены.</small>
       <small>Этапы меняются кнопками, не текстом чата. День 13 проверяет порядок, но ещё не требует утверждения плана и принятия проверки — это День 15.</small>
@@ -52,6 +52,7 @@ function save() {
           <strong>{{ { plan: 'План', solution: 'Решение', validation: 'Проверка' }[item.kind] }} v{{ item.revision }}</strong>
           <small>Условие v{{ item.task_revision }} · план v{{ item.plan_revision ?? '—' }} · решение v{{ item.solution_revision ?? '—' }}</small>
           <p v-if="item.task_revision !== taskRevision" class="token-warning">Рабочая память менялась после сохранения. Проверьте актуальность.</p>
+          <p v-if="invariantRevision && (item.invariant_revision ?? 1) !== invariantRevision" class="token-warning">Правила изменились. Артефакт исключён из контекста; сохраните новую проверенную версию.</p>
           <ol v-if="item.kind === 'plan'"><li v-for="step in item.content.steps" :key="step.id">{{ step.title }}</li></ol>
           <pre v-else>{{ item.content.text }}</pre>
           <small v-if="item.content.method">{{ item.content.method === 'llm_review' ? 'Анализ LLM, не запуск кода' : 'Результат запуска со слов пользователя' }}</small>

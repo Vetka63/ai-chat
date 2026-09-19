@@ -183,6 +183,7 @@ export function useAgentChat() {
       const result = await api.runConversationAgent(agentId.value, target.id, text, modelId.value, outputLimit.value, workflow)
       target.messages.push({ role: 'assistant', content: result.reply, model: result.model, source: result.source })
       target.runs = [...(target.runs || []), ...(result.additional_runs || []), ...(result.run ? [result.run] : [])]
+        .sort((a, b) => (a.created_at || '').localeCompare(b.created_at || ''))
       target.summary = result.summary || null
       target.facts = result.facts || null
       target.token_savings = result.token_savings || null

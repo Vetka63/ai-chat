@@ -22,5 +22,5 @@ export function compressionDescription(run, runs = []) {
   return 'Диапазон сообщений и настройки не сохранены в этой старой записи.'
 }
 
-export const callType = run => ({ summary: 'Сжатие', facts: 'Facts', dialogue: 'Ответ', memory_proposals: 'Предложения памяти' }[run.purpose] || 'Ответ')
+export const callType = run => ({ summary: 'Сжатие', facts: 'Facts', dialogue: 'Ответ', memory_proposals: 'Предложения памяти', invariant_input: 'Judge · запрос', invariant_output: 'Judge · ответ', invariant_artifact: 'Judge · артефакт' }[run.purpose] || 'Ответ')
 export const callStatus = run => ({ success: 'Успешно', error: 'Ошибка', pending: 'В работе', interrupted: 'Прервано' }[run.status] || run.status || '—')

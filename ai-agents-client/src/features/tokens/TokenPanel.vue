@@ -10,6 +10,8 @@ const summary = computed(() => totals(props.runs || []))
 const compression = computed(() => totals((props.runs || []).filter((r) => r.purpose === 'summary')))
 const factsRuns = computed(() => totals((props.runs || []).filter((r) => r.purpose === 'facts')))
 const proposalRuns = computed(() => totals((props.runs || []).filter(r => r.purpose === 'memory_proposals')))
+const judgeCalls = computed(() => (props.runs || []).filter(r => r.purpose?.startsWith('invariant_')))
+const judgeRuns = computed(() => totals(judgeCalls.value))
 const savings = computed(() => props.conversation?.token_savings)
 const savingsStatus = computed(() => {
   const value = savings.value
@@ -86,7 +88,7 @@ const savingsStatus = computed(() => {
     </details>
     <details class="token-details" :open="runs?.length > 0">
       <summary>Расход диалога · {{ runs?.length || 0 }} вызовов LLM</summary>
-      <small v-if="memoryWorkspace" class="muted">{{ (runs || []).filter(r => r.purpose === 'dialogue').length }} основных вызовов + {{ (runs || []).filter(r => r.purpose === 'memory_proposals').length }} анализов памяти по кнопке. Ошибочные попытки тоже учитываются.</small>
+      <small v-if="memoryWorkspace" class="muted">{{ (runs || []).filter(r => r.purpose === 'dialogue').length }} основных вызовов + {{ (runs || []).filter(r => r.purpose === 'memory_proposals').length }} анализов памяти + {{ judgeCalls.length }} проверок judge. Ошибочные попытки тоже учитываются.</small>
       <small v-else class="muted">{{ (runs || []).filter(r => !r.purpose || r.purpose === 'dialogue').length }} ответов + {{ (runs || []).filter(r => r.purpose === 'summary').length }} summary + {{ (runs || []).filter(r => r.purpose === 'facts').length }} facts. Один запрос может вызвать два LLM-вызова; ошибки тоже учитываются.</small>
       <dl class="token-grid">
         <dt>API total, сумма</dt><dd>{{ summary.known ? count(summary.tokens) : '—' }}</dd>
@@ -96,6 +98,8 @@ const savingsStatus = computed(() => {
         <dt>В т.ч. facts, токены</dt><dd>{{ factsRuns.known ? count(factsRuns.tokens) : (factsRuns.unknown ? '—' : '0') }}</dd>
         <template v-if="memoryWorkspace">
           <dt>Предложения памяти, API</dt><dd>{{ proposalRuns.known ? count(proposalRuns.tokens) : (proposalRuns.unknown ? '—' : '0') }}</dd>
+          <dt>Judge, API токены</dt><dd>{{ judgeRuns.known ? count(judgeRuns.tokens) : (judgeRuns.unknown ? '—' : '0') }}</dd>
+          <dt>Judge, USD ≈</dt><dd>{{ judgeRuns.known ? money(judgeRuns.cost) : (judgeRuns.unknown ? '—' : '$0') }}</dd>
         </template>
       </dl>
       <small v-if="summary.unknown" class="token-warning">Без usage: {{ summary.unknown }}. Их расход неизвестен.</small>
@@ -110,7 +114,7 @@ const savingsStatus = computed(() => {
       </div>
       <button class="report-button" :disabled="!runs?.length || busy" @click="downloadReport(title, runs, conversation, memoryWorkspace)">↓ Скачать MD-отчёт</button>
       <small class="muted">Отчёт содержит переписку и память, в том числе общую с другими задачами. Проверьте его перед публикацией.</small>
-      <small v-if="memoryWorkspace" class="muted">Предложения памяти — отдельные вызовы, уже включённые в общий расход.</small>
+      <small v-if="memoryWorkspace" class="muted">Предложения памяти и judge — отдельные вызовы, уже включённые в общий расход. Успех вызова judge означает валидную проверку, а не разрешение кандидата: вердикт смотрите в правилах.</small>
       <small v-else class="muted">Σ — вызов сжатия, уже включён в общий расход. Блок «Эффект сжатия» вычитает его API usage из оценочного сокращения prompt.</small>
     </details>
     <a v-if="model" class="pricing-link" :href="model.pricing.source" target="_blank" rel="noopener noreferrer">Тарифы {{ model.provider }} ↗</a>

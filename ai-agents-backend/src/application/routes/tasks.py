@@ -25,7 +25,8 @@ async def transition(agent_id: str, conversation_id: str, body: TransitionComman
 
 @router.post('/artifacts', response_model=WorkflowWorkspace)
 async def artifact(agent_id: str, conversation_id: str, body: SaveArtifact, request: Request):
-    return await workflow(request, agent_id).change(agent_id, conversation_id, 'artifact', body)
+    workflow(request, agent_id)
+    return await request.app.state.registry.get(agent_id).save_artifact(conversation_id, body)
 
 
 @router.post('/step', response_model=WorkflowWorkspace)

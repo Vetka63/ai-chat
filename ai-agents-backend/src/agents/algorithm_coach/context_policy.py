@@ -8,6 +8,7 @@ class CoachContextPolicy:
     """Добавляет карточку задачи и активные записи, затем выбранный хвост диалога."""
     def blocks(self, workspace):
         working = json.dumps({'problem': workspace.task.problem,
+            'invariants': {'revision': workspace.invariants.revision, 'rules': [r.model_dump() for r in workspace.invariants.rules if r.active]},
             'workflow': self.workflow_context(workspace),
             'entries': {e.key: e.value for e in workspace.working if e.active}}, ensure_ascii=False)
         long_term = json.dumps({e.key: e.value for e in workspace.long_term if e.active}, ensure_ascii=False)
@@ -17,7 +18,7 @@ class CoachContextPolicy:
         """Текущий автомат и последние версии артефактов, без всего журнала переходов."""
         if workspace.workflow is None:
             return None
-        latest = {a.kind: a.model_dump() for a in workspace.workflow.artifacts}
+        latest = {a.kind: a.model_dump() for a in workspace.workflow.artifacts if a.invariant_revision == workspace.invariants.revision}
         return {'state': workspace.workflow.state.model_dump(), 'artifacts': latest}
 
     def build(self, system, workspace, text):
@@ -38,6 +39,7 @@ class CoachContextPolicy:
             'keep_last': workspace.keep_last, 'message_ids': [m.id for m in workspace.short_term],
             'problem': workspace.task.problem,
             'workflow': self.workflow_context(workspace),
+            'invariants': {'revision': workspace.invariants.revision, 'rules': [r.model_dump() for r in workspace.invariants.rules if r.active]},
             'working': [e.model_dump() for e in workspace.working if e.active],
             'long_term': [e.model_dump() for e in workspace.long_term if e.active],
         }

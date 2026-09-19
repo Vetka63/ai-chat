@@ -31,6 +31,8 @@ from infrastructure.sqlite_profiles import SqliteProfileRepository
 from infrastructure.sqlite_task_workflow import SqliteTaskUnitOfWork
 from agents.algorithm_coach.workflow_policy import CoachWorkflowPolicy
 from application.routes.tasks import router as task_router
+from application.routes.invariants import router as invariant_router
+from infrastructure.sqlite_invariants import SqliteInvariantRepository
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +64,8 @@ def create_app(
         app.state.workflow = SqliteTaskUnitOfWork(active_store, app.state.memory_layers, CoachWorkflowPolicy())
         await app.state.workflow.initialize()
         app.state.memory_layers.workflow = app.state.workflow
+        app.state.invariants = SqliteInvariantRepository(app.state.memory_layers, app.state.workflow)
+        app.state.memory_layers.invariants = app.state.invariants
         app.state.profiles = SqliteProfileRepository(active_store)
         app.state.catalog = ModelCatalog.load(Path(__file__).with_name("models.json"), {
             "deepseek": resolved.mode == "demo" or bool(resolved.api_key.get_secret_value()),
@@ -82,10 +86,11 @@ def create_app(
             )
             yield
 
-    app = FastAPI(title="AI Agents · День 13", version="0.8.0", lifespan=lifespan)
+    app = FastAPI(title="AI Agents · День 14", version="0.9.0", lifespan=lifespan)
     app.include_router(memory_router)
     app.include_router(profile_router)
     app.include_router(task_router)
+    app.include_router(invariant_router)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=resolved.origins,
@@ -95,7 +100,8 @@ def create_app(
 
     @app.exception_handler(AgentError)
     async def agent_error(_: Request, exc: AgentError):
-        return JSONResponse(status_code=exc.status, content={"code": exc.code, "error": exc.message, "provider_status": exc.provider_status})
+        return JSONResponse(status_code=exc.status, content={"code": exc.code, "error": exc.message, "provider_status": exc.provider_status,
+            **({'details': exc.details} if hasattr(exc, 'details') else {})})
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(_: Request, exc: RequestValidationError):
@@ -107,7 +113,7 @@ def create_app(
 
     @app.get("/health")
     async def health():
-        return {"status": "ok", "mode": resolved.mode, "day": 13}
+        return {"status": "ok", "mode": resolved.mode, "day": 14}
 
     @app.get("/api/v1/models")
     async def models(request: Request):

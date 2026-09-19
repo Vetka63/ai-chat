@@ -54,6 +54,7 @@ def build_registry(
         memory=memory, branch_service=branch_service,
     )]
     if memory_repository is not None:
-        agents.append(build_algorithm_coach(settings.model, llm, store, memory_repository, catalog, accounting))
+        agents.append(build_algorithm_coach(settings.model, llm, store, memory_repository, catalog, accounting,
+            settings.judge_model, settings.judge_max_output_tokens))
     return AgentRegistry(agents)
 

@@ -5,7 +5,9 @@ import TaskPanel from './TaskPanel.vue'
 import { useTaskWorkflow } from './useTaskWorkflow'
 import { memoryReport } from '../tokens/report'
 import { taskCommand } from './api'
+import { getConversation } from '../../api/agents'
 vi.mock('./api', () => ({ taskCommand: vi.fn() }))
+vi.mock('../../api/agents', () => ({ getConversation: vi.fn() }))
 afterEach(() => vi.resetAllMocks())
 const flow = (extra = {}) => ({ task_id: 't', state: { phase: 'planning', status: 'active', revision: 1, expected_action: 'save_plan' }, artifacts: [], events: [], allowed_events: ['start_execution', 'pause'], ...extra })
 const button = (wrapper, label) => wrapper.findAll('button').find(b => b.text() === label)
@@ -90,5 +92,26 @@ describe('Day 13 workflow', () => {
     expect(report).toContain('Фаза: planning')
     expect(report).toContain('pause')
     expect(report).toContain('approvals Дня 15 пока не включены')
+  })
+  it('can pause during artifact judge and refreshes usage after refusal', async () => {
+    const scope = effectScope()
+    const chat = { agent: ref({ capabilities: ['task_workflow'] }), agentId: ref('a'), conversation: ref({ id: 'c', runs: [] }) }
+    const memory = { workspace: ref({ workflow: flow() }), refresh: vi.fn() }
+    const task = scope.run(() => useTaskWorkflow(chat, memory))
+    let rejectArtifact
+    taskCommand.mockImplementation((a, c, resource) => resource === 'artifacts' ? new Promise((_, reject) => { rejectArtifact = reject }) : Promise.resolve(flow()))
+    getConversation.mockResolvedValue({ id: 'c', runs: [{ purpose: 'invariant_artifact' }] })
+    const saving = task.save({ kind: 'plan', content: { steps: [{ title: 'План' }] } })
+    expect(task.busy.value).toBe(true)
+    await task.transition('pause')
+    expect(taskCommand).toHaveBeenCalledTimes(2)
+    expect(task.busy.value).toBe(true)
+    expect(task.controlBusy.value).toBe(false)
+    rejectArtifact(new Error('Этап изменился'))
+    await saving
+    expect(task.error.value).toBe('Этап изменился')
+    expect(chat.conversation.value.runs).toHaveLength(1)
+    expect(task.busy.value).toBe(false)
+    scope.stop()
   })
 })

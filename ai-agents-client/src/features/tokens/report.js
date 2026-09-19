@@ -87,9 +87,15 @@ export function memoryReport(title, runs, conversation, workspace) {
   const personalized = workspace?.profile?.preferences || runs.some(r => r.memory_context?.profile?.preferences)
   const summary = totals(runs)
   const proposals = runs.filter(r => r.purpose === 'memory_proposals')
+  const judges = runs.filter(r => r.purpose?.startsWith('invariant_'))
+  const judgeUsage = totals(judges)
   const json = value => JSON.stringify(value ?? null, null, 2).split('\n').map(line => '    ' + line).join('\n')
   return [
-    workspace?.workflow ? '# День 13 · Состояние задачи' : personalized ? '# День 12 · Персонализация и память' : '# День 11 · Три слоя памяти', '', title || 'Алгоритмическая задача', '',
+    workspace?.invariants ? '# День 14 · Инварианты задачи' : workspace?.workflow ? '# День 13 · Состояние задачи' : personalized ? '# День 12 · Персонализация и память' : '# День 11 · Три слоя памяти', '', title || 'Алгоритмическая задача', '',
+    ...(workspace?.invariants ? ['## Обязательные правила', '',
+      `Версия правил: ${workspace.invariants.revision}. Активных: ${workspace.invariants.rules.filter(r => r.active).length}. Проверки и снимки правил приведены ниже.`, '',
+      `Judge: ${judges.length} вызовов; известных токенов ${judgeUsage.tokens}; стоимость ≈ ${money(judgeUsage.cost)}; без usage ${judgeUsage.unknown}. Уже включено в общий расход.`, '',
+      'Конфликт или неопределённость блокируют публикацию ответа/сохранение артефакта. Отказ — решение policy, не ответ основной LLM. Изменение правил возвращает к planning и исключает старые артефакты из контекста. Семантическая проверка вероятностная; код не исполняется.', ''] : []),
     ...(workspace?.workflow ? ['## Жизненный цикл', '', `Фаза: ${workspace.workflow.state.phase}. Статус: ${workspace.workflow.state.status}. Шаг: ${workspace.workflow.state.current_step_id || 'не выбран'}. Ожидается: ${workspace.workflow.state.expected_action}. Версия: ${workspace.workflow.state.revision}.`, '',
       'Переходы выполняет backend по явным командам. Артефакты и журнал приведены в снимке ниже. Пауза сохраняет этап и шаг. Анализ LLM не означает запуск кода. Содержательные approvals Дня 15 пока не включены.', ''] : []),
     ...(personalized ? ['Профиль фиксируется у задачи; его настройки могут изменяться. Снимок каждого вызова показывает применённую версию. Мягкие предпочтения не являются обязательными инвариантами.', ''] : []),
@@ -125,7 +131,7 @@ export function downloadReport(title, runs, conversation, workspace) {
   const url = URL.createObjectURL(new Blob([content], { type: 'text/markdown;charset=utf-8' }))
   const link = document.createElement('a')
   link.href = url
-  link.download = memory ? (workspace?.workflow ? 'day-13-task-workflow.md' : workspace?.profile?.preferences ? 'day-12-personalization.md' : 'day-11-memory-layers.md') : 'day-10-context-strategies.md'
+  link.download = memory ? (workspace?.invariants ? 'day-14-invariants.md' : workspace?.workflow ? 'day-13-task-workflow.md' : workspace?.profile?.preferences ? 'day-12-personalization.md' : 'day-11-memory-layers.md') : 'day-10-context-strategies.md'
   link.click()
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }

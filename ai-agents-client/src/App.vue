@@ -16,11 +16,14 @@ import { useProfiles } from './features/profiles/useProfiles'
 import ProfilePanel from './features/profiles/ProfilePanel.vue'
 import TaskPanel from './features/tasks/TaskPanel.vue'
 import { useTaskWorkflow } from './features/tasks/useTaskWorkflow'
+import InvariantPanel from './features/invariants/InvariantPanel.vue'
+import { useInvariants } from './features/invariants/useInvariants'
 
 const chat = useAgentChat()
 const memory = useMemoryLayers(chat)
 const profiles = useProfiles(chat, memory)
 const tasks = useTaskWorkflow(chat, memory)
+const invariants = useInvariants(chat, memory)
 const lastMemoryContext = computed(() => [...chat.runs.value].reverse().find(r => r.purpose === 'dialogue' && r.memory_context)?.memory_context)
 const sidebarOpen = ref(false)
 const compact = ref(window.innerWidth <= 1180)
@@ -32,7 +35,7 @@ const chatsButton = ref(null)
 const settingsPanel = ref(null)
 const chatsPanel = ref(null)
 const newChatOpen = ref(false)
-const busy = computed(() => chat.loading.value || chat.sending.value || memory.busy.value || profiles.busy.value || tasks.busy.value)
+const busy = computed(() => chat.loading.value || chat.sending.value || memory.busy.value || profiles.busy.value || tasks.busy.value || tasks.controlBusy.value || invariants.busy.value)
 const overlay = computed(() => mobile.value && sidebarOpen.value ? 'chats' : compact.value && settingsOpen.value ? 'settings' : null)
 watch(theme, value => { document.documentElement.dataset.theme = value }, { immediate: true })
 
@@ -133,7 +136,10 @@ async function removeConversation(item) {
       :role="overlay === 'settings' ? 'dialog' : undefined" :aria-modal="overlay === 'settings' ? true : undefined"
       :agents="chat.agents.value" :selected-agent="chat.agentId.value" :theme="theme" :busy="busy"
       @select-agent="chat.selectAgent" @theme="theme = $event" @close="closePanels">
-      <TaskPanel v-if="tasks.enabled.value" :workspace="tasks.workspace.value" :busy="tasks.busy.value || chat.loading.value || memory.busy.value || profiles.busy.value"
+      <InvariantPanel v-if="invariants.enabled.value" :workspace="memory.workspace.value?.invariants" :state="tasks.workspace.value?.state"
+        :task-id="memory.workspace.value?.task.id" :busy="busy" :error="invariants.error.value" @save="invariants.save" />
+      <TaskPanel v-if="tasks.enabled.value" :workspace="tasks.workspace.value" :busy="tasks.controlBusy.value || invariants.busy.value || chat.loading.value || memory.busy.value || profiles.busy.value"
+        :artifact-busy="tasks.busy.value" :invariant-revision="memory.workspace.value?.invariants.revision"
         :sending="chat.sending.value" :error="tasks.error.value" :task-revision="memory.workspace.value?.task.revision"
         @transition="tasks.transition" @save="tasks.save" @step="tasks.step" @refresh="memory.refresh" />
       <ProfilePanel v-if="profiles.enabled.value" :profiles="profiles.profiles.value" :profile="memory.workspace.value?.profile"

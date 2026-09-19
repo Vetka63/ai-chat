@@ -257,7 +257,7 @@ def test_restart_and_non_destructive_migration(tmp_path):
         assert client.get('/api/v1/agents/dialogue/conversations/'+old).status_code == 200
         assert client.get(path(chat)).json()['runs'][0]['memory_context']['problem']['statement'] == 'Two Sum'
     with sqlite3.connect(database) as db:
-        assert db.execute('SELECT count(*) FROM schema_migrations').fetchone()[0] == 3
+        assert db.execute('SELECT count(*) FROM schema_migrations').fetchone()[0] == 4
         # Дополнительный профиль не видит общую память первого профиля.
         db.execute("INSERT INTO profiles(id,name) VALUES('other','Другой профиль')")
         db.execute("UPDATE tasks SET profile_id='other' WHERE conversation_id=?", (chat,))
@@ -288,4 +288,4 @@ async def test_upgrade_existing_day10_database_preserves_messages(tmp_path):
     restored = await store.get('dialogue', chat.id)
     assert restored.messages[0].content == 'Старое сообщение'
     with sqlite3.connect(database) as db:
-        assert db.execute('SELECT count(*) FROM schema_migrations').fetchone()[0] == 3
+        assert db.execute('SELECT count(*) FROM schema_migrations').fetchone()[0] == 4

@@ -17,6 +17,7 @@ class SqliteMemoryRepository:
     def __init__(self, store):
         self.store = store
         self.workflow = None
+        self.invariants = None
 
     async def initialize(self):
         await migrate_memory_layers(self.store)
@@ -90,6 +91,7 @@ class SqliteMemoryRepository:
                 source_excerpt,status,base_entry_id,base_entry_revision,created_at FROM memory_proposals
                 WHERE task_id=? ORDER BY created_at,id""", (task['id'],))).fetchall()
             return MemoryWorkspace(
+                invariants=await self.invariants.read(db, task) if self.invariants else {},
                 workflow=await self.workflow.read(db, task) if self.workflow else None,
                 task=TaskMemory(id=task['id'], conversation_id=conversation_id, agent_id=agent_id,
                     profile_id=task['profile_id'], problem=json.loads(task['problem']), revision=task['revision']),

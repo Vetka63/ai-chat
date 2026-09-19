@@ -24,12 +24,13 @@ class RecordedLlmCall:
         started = perf_counter()
         try:
             completion = await self.llm.complete(messages, model=spec.id, temperature=temperature, max_tokens=max_tokens)
+            # Время именно этого API-вызова, без вложенного output judge и SQL commit.
+            run.duration_ms = round((perf_counter() - started) * 1000)
             run.usage, run.returned_model, run.finish_reason = completion.usage, completion.model, completion.finish_reason
             run.pricing = self.catalog.pricing_at(spec.id, run.created_at, completion.model)
             yield completion, run
             run.status = 'success'
             if commit is not None:
-                run.duration_ms = round((perf_counter() - started) * 1000)
                 run.estimated_cost_usd = calculate_cost(run.usage, run.pricing)
                 await commit(run)
         except AgentError as exc:
@@ -46,5 +47,6 @@ class RecordedLlmCall:
         finally:
             # Успешный commit уже атомарно сохранил run вместе с ответом и состоянием.
             if commit is None or run.status != 'success':
-                run.duration_ms = round((perf_counter() - started) * 1000)
+                if run.duration_ms is None:
+                    run.duration_ms = round((perf_counter() - started) * 1000)
                 await self.accounting.record(run)

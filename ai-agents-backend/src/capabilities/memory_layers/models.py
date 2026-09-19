@@ -5,6 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from capabilities.personalization.models import UserProfile
 from capabilities.task_workflow.models import WorkflowWorkspace
+from capabilities.invariants.models import InvariantWorkspace
 
 
 class MemoryModel(BaseModel):
@@ -78,6 +79,7 @@ class MemoryProfile(UserProfile):
 class MemoryWorkspace(MemoryModel):
     """Отдельное представление трёх слоёв и не применённых предложений."""
     workflow: WorkflowWorkspace | None = None
+    invariants: InvariantWorkspace = Field(default_factory=InvariantWorkspace)
     task: TaskMemory
     profile: MemoryProfile
     keep_last: int

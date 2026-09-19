@@ -29,6 +29,7 @@ class TaskArtifact(WorkflowModel):
     content: dict
     source_message_id: int | None = None
     task_revision: int
+    invariant_revision: int = 1
     plan_revision: int | None = None
     solution_revision: int | None = None
     created_at: str

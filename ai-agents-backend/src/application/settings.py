@@ -31,6 +31,8 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("PY_AGENT_MODEL", "LLM_MODEL"),
     )
     request_timeout_seconds: float = Field(default=90, gt=0, le=300)
+    judge_model: str = 'deepseek-v4-pro'
+    judge_max_output_tokens: int = Field(default=2000, gt=0, le=16000)
     cors_origins: str = "http://localhost:5174,http://localhost:8083"
     database_path: Path = Path("data/agents.sqlite3")
     mistral_api_key: SecretStr = Field(default=SecretStr(""), validation_alias="MISTRAL_API_KEY")

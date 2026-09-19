@@ -9,17 +9,18 @@ from capabilities.personalization.context import profile_data, profile_text
 
 class AlgorithmCoachAgent:
     """Оркестрирует диалог и явный анализ памяти, не хранит состояние задачи в экземпляре."""
-    def __init__(self, config, store, memory, calls, catalog, accounting, input_policy, output_policy, context_policy, workflow):
+    def __init__(self, config, store, memory, calls, catalog, accounting, input_policy, output_policy, context_policy, workflow, invariants):
         self.config, self.store, self.memory = config, store, memory
         self.calls, self.catalog, self.accounting = calls, catalog, accounting
         self.input_policy, self.output_policy, self.context_policy = input_policy, output_policy, context_policy
         self._locks = {}
         self.workflow = workflow
+        self.invariants = invariants
 
     @property
     def info(self):
         return AgentInfo(id=self.config.id, name=self.config.name, description=self.config.description,
-            capabilities=['persistent_history', 'token_accounting', 'memory_layers', 'personalization', 'task_workflow'])
+            capabilities=['persistent_history', 'token_accounting', 'memory_layers', 'personalization', 'task_workflow', 'invariants'])
 
     async def create_conversation(self, title, settings, problem=None, profile_id=None):
         if settings and settings.mode != 'sliding_window':
@@ -63,21 +64,46 @@ class AlgorithmCoachAgent:
             reservation = await self.workflow.repository.reserve(workspace, command, spec.id, limit)
             if isinstance(reservation, AgentResult):
                 return reservation
+            additional_runs = []
             async def commit(record):
-                result = AgentResult(agent_id=self.config.id, reply=reply, model=completion.model, source=completion.source, run=record)
+                result = AgentResult(agent_id=self.config.id, reply=reply, model=completion.model, source=completion.source, run=record, additional_runs=additional_runs)
                 await self.workflow.repository.complete(workspace, command, result)
             try:
+                checked = await self.invariants.check(workspace, text, 'input', command.command_id)
+                if checked:
+                    additional_runs.append(checked)
                 async with self.calls.invoke(agent_id=self.config.id, conversation_id=conversation.id,
                     messages=messages, spec=spec, estimate=estimate, user_index=workspace.history_message_count,
                     temperature=self.config.temperature, max_tokens=limit, run_id=reservation, commit=commit,
                     memory_context=self.context_policy.snapshot(workspace)) as (completion, run):
                     reply = self.output_policy.present(completion)
+                    checked = await self.invariants.check(workspace, reply, 'output', command.command_id, request=text)
+                    if checked:
+                        additional_runs.append(checked)
                     run.assistant_index = workspace.history_message_count + 1
             except BaseException as exc:
                 await self.workflow.repository.fail(workspace.task.id, command.command_id,
                     'interrupted' if isinstance(exc, asyncio.CancelledError) else 'error')
                 raise
-            return AgentResult(agent_id=self.config.id, reply=reply, model=completion.model, source=completion.source, run=run)
+            return AgentResult(agent_id=self.config.id, reply=reply, model=completion.model, source=completion.source, run=run, additional_runs=additional_runs)
+
+    async def save_artifact(self, conversation_id, command):
+        """Ручная форма проходит те же проверки правил, что и кандидат от модели."""
+        workspace = await self.memory.repository.workspace(self.config.id, conversation_id)
+        reservation = await self.workflow.repository.reserve_artifact(workspace, command, self.workflow.policy)
+        if reservation is not None:
+            return reservation
+        try:
+            text = command.content.get('text') or json.dumps(command.content, ensure_ascii=False)
+            await self.invariants.check(workspace, text, 'artifact', command.command_id,
+                require_solution=command.kind == 'solution', request='Сохранение артефакта '+command.kind)
+            return await self.workflow.repository.change(self.config.id, conversation_id, 'artifact', command,
+                self.workflow.policy, reserved=True, memory_versions=self.memory.repository.versions(workspace),
+                checked_revision=workspace.workflow.state.revision)
+        except BaseException as exc:
+            await self.workflow.repository.fail(workspace.task.id, command.command_id,
+                'interrupted' if isinstance(exc, asyncio.CancelledError) else 'error')
+            raise
 
     async def preview(self, command):
         if not command.conversation_id:

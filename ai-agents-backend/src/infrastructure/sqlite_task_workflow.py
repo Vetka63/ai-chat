@@ -61,47 +61,86 @@ class SqliteTaskUnitOfWork:
                    'after': state.model_dump(), 'created_at': now()}
         await db.execute('INSERT INTO task_events(task_id,payload) VALUES(?,?)', (workspace.task_id, json.dumps(payload, ensure_ascii=False)))
 
-    async def change(self, agent_id, conversation_id, operation, command, policy):
+    async def change(self, agent_id, conversation_id, operation, command, policy, reserved=False, memory_versions=None, checked_revision=None):
         async with self.store.connection() as db:
             await db.execute('BEGIN IMMEDIATE')
             task = await self.memory._task(db, agent_id, conversation_id)
             fingerprint = self.fingerprint(operation, command)
-            previous = await self.replay(db, task['id'], command.command_id, fingerprint)
+            previous = None if reserved else await self.replay(db, task['id'], command.command_id, fingerprint)
             if previous is not None:
                 return WorkflowWorkspace.model_validate(previous)
             workspace = await self.read(db, task)
+            if memory_versions:
+                await self.memory._task(db, agent_id, conversation_id, memory_versions)
+            if reserved and workspace.active_command_id != command.command_id:
+                raise AgentError('state_conflict', 'Проверка артефакта больше не активна', 409)
             self.check_revision(workspace, command.expected_revision)
+            if reserved:
+                self.check_revision(workspace, checked_revision)
             # Пауза не ждёт ответа LLM. Resume тоже допустим: версия всё равно отвергнет поздний ответ.
-            if workspace.active_command_id and not (operation == 'transition' and command.event in ('pause', 'resume')):
+            if workspace.active_command_id and not reserved and not (operation == 'transition' and command.event in ('pause', 'resume')):
                 raise AgentError('task_busy', 'Дождитесь текущего вызова; поставить на паузу можно сейчас', 409)
             before = workspace.state.model_dump()
+            current_artifacts = [a for a in workspace.artifacts if a.invariant_revision == task['invariant_revision']]
             name = operation
             if operation == 'transition':
                 name = command.event
-                policy.transition(workspace.state, command.event, workspace.artifacts)
+                policy.transition(workspace.state, command.event, current_artifacts)
             elif operation == 'step':
-                policy.select_step(workspace.state, command.step_id, workspace.artifacts)
+                policy.select_step(workspace.state, command.step_id, current_artifacts)
             elif operation == 'artifact':
-                content = policy.artifact(command.kind, command.content, workspace.state, workspace.artifacts)
+                content = policy.artifact(command.kind, command.content, workspace.state, current_artifacts)
                 if command.source_message_id is not None:
                     await self.memory._source(db, conversation_id, command.source_message_id)
                 latest = {a.kind: a for a in workspace.artifacts}
+                current = {a.kind: a for a in current_artifacts}
                 artifact = TaskArtifact(id=new_id(), kind=command.kind,
                     revision=latest[command.kind].revision+1 if command.kind in latest else 1,
                     content=content, source_message_id=command.source_message_id, task_revision=task['revision'],
-                    plan_revision=latest['plan'].revision if 'plan' in latest else None,
-                    solution_revision=latest['solution'].revision if 'solution' in latest else None, created_at=now())
+                    invariant_revision=task['invariant_revision'],
+                    plan_revision=current['plan'].revision if 'plan' in current else None,
+                    solution_revision=current['solution'].revision if 'solution' in current else None, created_at=now())
                 await db.execute('INSERT INTO task_artifacts VALUES(?,?,?,?,?)',
                     (artifact.id, task['id'], artifact.kind, artifact.revision, artifact.model_dump_json()))
                 workspace.artifacts.append(artifact)
                 name = 'save_'+command.kind
-            policy.expected(workspace.state, workspace.artifacts)
+            policy.expected(workspace.state, [a for a in workspace.artifacts if a.invariant_revision == task['invariant_revision']])
             await self.event(db, workspace, name, before, command.command_id)
             result = await self.read(db, task)
-            await db.execute('INSERT INTO task_commands VALUES(?,?,?,?,?,?)',
-                (task['id'], command.command_id, fingerprint, 'success', result.model_dump_json(), None))
+            if reserved:
+                result.active_command_id = None
+                await db.execute("UPDATE task_commands SET status='success',result=? WHERE task_id=? AND command_id=?",
+                    (result.model_dump_json(), task['id'], command.command_id))
+            else:
+                await db.execute('INSERT INTO task_commands VALUES(?,?,?,?,?,?)',
+                    (task['id'], command.command_id, fingerprint, 'success', result.model_dump_json(), None))
             await db.commit()
             return result
+
+    async def reserve_artifact(self, workspace, command, policy):
+        """Не держит SQL-транзакцию во время judge и исключает повторные проверки одной команды."""
+        async with self.store.connection() as db:
+            await db.execute('BEGIN IMMEDIATE')
+            task = await self.memory._task(db, workspace.task.agent_id, workspace.task.conversation_id)
+            fingerprint = self.fingerprint('artifact', command)
+            previous = await self.replay(db, task['id'], command.command_id, fingerprint)
+            if previous is not None:
+                return WorkflowWorkspace.model_validate(previous)
+            await self.memory._task(db, workspace.task.agent_id, workspace.task.conversation_id, self.memory.versions(workspace))
+            flow = await self.read(db, task)
+            self.check_revision(flow, command.expected_revision)
+            self.check_revision(flow, workspace.workflow.state.revision)
+            policy.require_active(flow.state)
+            if flow.active_command_id:
+                raise AgentError('task_busy', 'Дождитесь текущего вызова', 409)
+            policy.artifact(command.kind, command.content, flow.state,
+                [a for a in flow.artifacts if a.invariant_revision == task['invariant_revision']])
+            if command.source_message_id is not None:
+                await self.memory._source(db, task['conversation_id'], command.source_message_id)
+            await db.execute('INSERT INTO task_commands VALUES(?,?,?,?,?,?)',
+                (task['id'], command.command_id, fingerprint, 'pending', None, None))
+            await db.commit()
+            return None
 
     async def reserve(self, workspace, command, spec_id, limit):
         """Вопрос и reservation записываются вместе; повтор не вызывает модель второй раз."""
