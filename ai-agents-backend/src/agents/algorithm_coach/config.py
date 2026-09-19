@@ -7,7 +7,7 @@ class AlgorithmCoachConfig(BaseModel):
     model_config = ConfigDict(extra='forbid', frozen=True)
     id: str = 'algorithm_coach'
     name: str = 'Алгоритмический наставник'
-    description: str = 'Дни 11–14 · память, этапы и обязательные правила'
+    description: str = 'Дни 11–15 · память, правила и подтверждения этапов'
     model: str
     temperature: float = Field(default=0.4, ge=0, le=2)
     system_prompt: str

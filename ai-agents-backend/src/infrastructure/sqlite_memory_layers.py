@@ -131,9 +131,20 @@ class SqliteMemoryRepository:
 
     async def _bump(self, db, task, layer):
         if layer == 'working':
+            await self._invalidate_workflow(db, task)
             await db.execute("UPDATE tasks SET revision=revision+1 WHERE id=?", (task['id'],))
         else:
             await db.execute("UPDATE profiles SET memory_revision=memory_revision+1 WHERE id=?", (task['profile_id'],))
+
+    async def _invalidate_workflow(self, db, task):
+        """Изменение технического контекста аннулирует approvals в той же транзакции."""
+        if self.workflow:
+            flow = await self.workflow.read(db, task)
+            if flow.state.phase == 'done':
+                raise AgentError('task_done', 'Завершённая задача доступна только для чтения; создайте новую', 409)
+            before = flow.state.model_dump()
+            self.workflow.policy.invalidate(flow.state, flow.artifacts)
+            await self.workflow.event(db, flow, 'requirements_changed', before, new_id())
 
     async def _write(self, db, task, layer, key, value, active, source_id, excerpt, author):
         table, condition, args = self._scope(task, layer)
@@ -169,6 +180,7 @@ class SqliteMemoryRepository:
         async with self.store.connection() as db:
             await db.execute("BEGIN IMMEDIATE")
             task = await self._task(db, agent_id, conversation_id, versions)
+            await self._invalidate_workflow(db, task)
             await db.execute("UPDATE tasks SET problem=?,revision=revision+1 WHERE id=?",
                              (json.dumps(problem, ensure_ascii=False), task['id']))
             await db.commit()

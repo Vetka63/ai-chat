@@ -22,9 +22,17 @@ class SqliteTaskUnitOfWork:
         artifacts = await (await db.execute('SELECT payload FROM task_artifacts WHERE task_id=? ORDER BY rowid', (task['id'],))).fetchall()
         events = await (await db.execute('SELECT payload FROM task_events WHERE task_id=? ORDER BY sequence', (task['id'],))).fetchall()
         active = await (await db.execute("SELECT command_id FROM task_commands WHERE task_id=? AND status='pending'", (task['id'],))).fetchone()
+        parsed = [TaskArtifact.model_validate_json(a['payload']) for a in artifacts]
+        current = [a for a in parsed if a.task_revision == task['revision'] and a.invariant_revision == task['invariant_revision']]
+        allowed, blocked = self.policy.availability(state, current)
+        if active:
+            for e in list(allowed):
+                if e not in ('pause', 'resume'):
+                    blocked[e] = 'Дождитесь текущего запроса или поставьте задачу на паузу.'
+                    allowed.remove(e)
         return WorkflowWorkspace(task_id=task['id'], state=state,
-            artifacts=[TaskArtifact.model_validate_json(a['payload']) for a in artifacts],
-            events=[json.loads(e['payload']) for e in events], allowed_events=self.policy.allowed(state),
+            artifacts=parsed,
+            events=[json.loads(e['payload']) for e in events], allowed_events=allowed, blocked_events=blocked,
             active_command_id=active['command_id'] if active else None)
 
     async def workspace(self, agent_id, conversation_id):
@@ -36,7 +44,7 @@ class SqliteTaskUnitOfWork:
     @staticmethod
     def fingerprint(operation, command):
         data = command.model_dump(mode='json')
-        return hashlib.sha256(json.dumps([operation, data], sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+        return hashlib.sha256(json.dumps([15, operation, data], sort_keys=True, ensure_ascii=False).encode()).hexdigest()
 
     async def replay(self, db, task_id, command_id, fingerprint):
         row = await (await db.execute('SELECT * FROM task_commands WHERE task_id=? AND command_id=?', (task_id, command_id))).fetchone()
@@ -81,11 +89,11 @@ class SqliteTaskUnitOfWork:
             if workspace.active_command_id and not reserved and not (operation == 'transition' and command.event in ('pause', 'resume')):
                 raise AgentError('task_busy', 'Дождитесь текущего вызова; поставить на паузу можно сейчас', 409)
             before = workspace.state.model_dump()
-            current_artifacts = [a for a in workspace.artifacts if a.invariant_revision == task['invariant_revision']]
+            current_artifacts = [a for a in workspace.artifacts if a.invariant_revision == task['invariant_revision'] and a.task_revision == task['revision']]
             name = operation
             if operation == 'transition':
                 name = command.event
-                policy.transition(workspace.state, command.event, current_artifacts)
+                policy.transition(workspace.state, command.event, current_artifacts, command)
             elif operation == 'step':
                 policy.select_step(workspace.state, command.step_id, current_artifacts)
             elif operation == 'artifact':
@@ -97,18 +105,20 @@ class SqliteTaskUnitOfWork:
                 artifact = TaskArtifact(id=new_id(), kind=command.kind,
                     revision=latest[command.kind].revision+1 if command.kind in latest else 1,
                     content=content, source_message_id=command.source_message_id, task_revision=task['revision'],
-                    invariant_revision=task['invariant_revision'],
+                    invariant_revision=task['invariant_revision'], checked_workflow_version=15,
                     plan_revision=current['plan'].revision if 'plan' in current else None,
                     solution_revision=current['solution'].revision if 'solution' in current else None, created_at=now())
                 await db.execute('INSERT INTO task_artifacts VALUES(?,?,?,?,?)',
                     (artifact.id, task['id'], artifact.kind, artifact.revision, artifact.model_dump_json()))
                 workspace.artifacts.append(artifact)
                 name = 'save_'+command.kind
-            policy.expected(workspace.state, [a for a in workspace.artifacts if a.invariant_revision == task['invariant_revision']])
+            policy.expected(workspace.state, [a for a in workspace.artifacts if a.invariant_revision == task['invariant_revision'] and a.task_revision == task['revision']])
             await self.event(db, workspace, name, before, command.command_id)
             result = await self.read(db, task)
             if reserved:
                 result.active_command_id = None
+                result.allowed_events, result.blocked_events = policy.availability(result.state,
+                    [a for a in result.artifacts if a.invariant_revision == task['invariant_revision'] and a.task_revision == task['revision']])
                 await db.execute("UPDATE task_commands SET status='success',result=? WHERE task_id=? AND command_id=?",
                     (result.model_dump_json(), task['id'], command.command_id))
             else:
@@ -134,7 +144,7 @@ class SqliteTaskUnitOfWork:
             if flow.active_command_id:
                 raise AgentError('task_busy', 'Дождитесь текущего вызова', 409)
             policy.artifact(command.kind, command.content, flow.state,
-                [a for a in flow.artifacts if a.invariant_revision == task['invariant_revision']])
+                [a for a in flow.artifacts if a.invariant_revision == task['invariant_revision'] and a.task_revision == task['revision']])
             if command.source_message_id is not None:
                 await self.memory._source(db, task['conversation_id'], command.source_message_id)
             await db.execute('INSERT INTO task_commands VALUES(?,?,?,?,?,?)',

@@ -2,6 +2,7 @@
 import json
 from agent_core.models import Message
 from capabilities.personalization.context import profile_text
+from .workflow_policy import CoachWorkflowPolicy
 
 
 class CoachContextPolicy:
@@ -18,7 +19,8 @@ class CoachContextPolicy:
         """Текущий автомат и последние версии артефактов, без всего журнала переходов."""
         if workspace.workflow is None:
             return None
-        latest = {a.kind: a.model_dump() for a in workspace.workflow.artifacts if a.invariant_revision == workspace.invariants.revision}
+        artifacts = [a for a in workspace.workflow.artifacts if a.invariant_revision == workspace.invariants.revision and a.task_revision == workspace.task.revision]
+        latest = {k: a.model_dump() for k, a in CoachWorkflowPolicy().current(workspace.workflow.state, artifacts).items()}
         return {'state': workspace.workflow.state.model_dump(), 'artifacts': latest}
 
     def build(self, system, workspace, text):

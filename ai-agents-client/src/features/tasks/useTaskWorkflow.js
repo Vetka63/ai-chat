@@ -7,7 +7,7 @@ export function useTaskWorkflow(chat, memory) {
   const busy = ref(false), controlBusy = ref(false), error = ref('')
   const enabled = computed(() => chat.agent.value?.capabilities?.includes('task_workflow'))
   const workspace = computed(() => memory.workspace.value?.workflow)
-  const blocked = computed(() => enabled.value && (!workspace.value || workspace.value.state.status === 'paused' || workspace.value.state.phase === 'done'))
+  const blocked = computed(() => enabled.value && (!workspace.value || workspace.value.state.status === 'paused' || workspace.value.state.phase === 'done' || (['execution', 'validation'].includes(workspace.value.state.phase) && !workspace.value.state.approved_plan_id)))
   let disposed = false
   onScopeDispose(() => { disposed = true })
   async function change(resource, body) {
@@ -40,7 +40,7 @@ export function useTaskWorkflow(chat, memory) {
     }
   }
   return { busy, controlBusy, error, enabled, workspace, blocked,
-    transition: event => change('events', { event }),
+    transition: event => change('events', typeof event === 'string' ? { event } : event),
     save: artifact => change('artifacts', artifact),
     step: step_id => change('step', { step_id }),
     send: () => { if (!blocked.value && !busy.value && !controlBusy.value) return chat.send({ command_id: crypto.randomUUID(), expected_revision: workspace.value?.state.revision }) },

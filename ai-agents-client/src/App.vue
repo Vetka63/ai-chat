@@ -126,7 +126,7 @@ async function removeConversation(item) {
       <div v-if="chat.error.value" class="error-banner" role="alert">{{ chat.error.value }} <button @click="chat.initialize">Повторить</button></div>
       <div v-if="chat.warning.value" class="warning-banner" role="status">{{ chat.warning.value }}</div>
       <ChatThread :messages="chat.messages.value" :runs="chat.runs.value" :agent-name="chat.agent.value?.name" :sending="chat.sending.value" :memory-layers="memory.enabled.value" />
-      <div v-if="tasks.enabled.value && tasks.blocked.value && tasks.workspace.value" class="warning-banner" role="status">{{ tasks.workspace.value.state.status === 'paused' ? 'Задача на паузе. Продолжите её в панели настроек.' : 'Задача завершена. Для нового решения создайте новую задачу.' }}</div>
+      <div v-if="tasks.enabled.value && tasks.blocked.value && tasks.workspace.value" class="warning-banner" role="status">{{ tasks.workspace.value.state.status === 'paused' ? 'Задача на паузе. Продолжите её в панели настроек.' : tasks.workspace.value.state.phase === 'done' ? 'Задача завершена. Для нового решения создайте новую задачу.' : 'Нет подтверждения плана Дня 15. Выберите «Перепланировать» в панели задачи.' }}</div>
       <MessageComposer v-model="chat.draft.value" :disabled="busy || tasks.blocked.value || !chat.agentId.value || !chat.conversation.value || !chat.outputLimitValid.value" :sending="chat.sending.value" @send="tasks.enabled.value ? tasks.send() : chat.send()">
         <ModelPicker :models="chat.models.value" :model-id="chat.modelId.value" :busy="busy" @model="chat.changeModel" />
       </MessageComposer>

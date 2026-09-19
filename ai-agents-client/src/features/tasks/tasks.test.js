@@ -9,14 +9,14 @@ import { getConversation } from '../../api/agents'
 vi.mock('./api', () => ({ taskCommand: vi.fn() }))
 vi.mock('../../api/agents', () => ({ getConversation: vi.fn() }))
 afterEach(() => vi.resetAllMocks())
-const flow = (extra = {}) => ({ task_id: 't', state: { phase: 'planning', status: 'active', revision: 1, expected_action: 'save_plan' }, artifacts: [], events: [], allowed_events: ['start_execution', 'pause'], ...extra })
+const flow = (extra = {}) => ({ task_id: 't', state: { phase: 'planning', status: 'active', revision: 1, expected_action: 'save_plan' }, artifacts: [], events: [], allowed_events: ['approve_plan', 'pause'], blocked_events: {}, ...extra })
 const button = (wrapper, label) => wrapper.findAll('button').find(b => b.text() === label)
 
 describe('Day 13 workflow', () => {
   it('allows pause while LLM is running but disables normal transitions and saving', async () => {
     const w = mount(TaskPanel, { props: { workspace: flow(), sending: true } })
     expect(button(w, 'Пауза').attributes('disabled')).toBeUndefined()
-    expect(button(w, 'К реализации').attributes('disabled')).toBeDefined()
+    expect(button(w, 'Утвердить план → реализация').attributes('disabled')).toBeDefined()
     await button(w, 'Пауза').trigger('click')
     expect(w.emitted('transition')[0]).toEqual(['pause'])
     expect(w.get('textarea').attributes('disabled')).toBeDefined()
@@ -41,7 +41,8 @@ describe('Day 13 workflow', () => {
   it('labels LLM review as analysis, not executed tests', async () => {
     const data = flow({ state: { phase: 'validation', status: 'active', revision: 1 }, allowed_events: ['finish', 'pause'] })
     const w = mount(TaskPanel, { props: { workspace: data } })
-    await w.get('textarea').setValue('Проверить пустой массив')
+    await w.findAll('textarea')[1].setValue('Проверить пустой массив')
+    await w.get('input[type=checkbox]').setValue(true)
     await button(w, 'Сохранить новую версию').trigger('click')
     expect(w.emitted('save')[0][0].content.method).toBe('llm_review')
     expect(w.text()).toContain('код не запускался')
@@ -88,10 +89,10 @@ describe('Day 13 workflow', () => {
   })
   it('exports state, exact step, artifacts and transition history', () => {
     const report = memoryReport('Задача', [], { messages: [] }, { workflow: flow({ events: [{ event: 'pause' }] }) })
-    expect(report).toContain('День 13')
+    expect(report).toContain('День 15')
     expect(report).toContain('Фаза: planning')
     expect(report).toContain('pause')
-    expect(report).toContain('approvals Дня 15 пока не включены')
+    expect(report).toContain('Подтверждения версий')
   })
   it('can pause during artifact judge and refreshes usage after refusal', async () => {
     const scope = effectScope()

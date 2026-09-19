@@ -76,7 +76,7 @@ class AlgorithmCoachAgent:
                     messages=messages, spec=spec, estimate=estimate, user_index=workspace.history_message_count,
                     temperature=self.config.temperature, max_tokens=limit, run_id=reservation, commit=commit,
                     memory_context=self.context_policy.snapshot(workspace)) as (completion, run):
-                    reply = self.output_policy.present(completion)
+                    reply = self.output_policy.candidate(completion, workspace.workflow.state.phase)
                     checked = await self.invariants.check(workspace, reply, 'output', command.command_id, request=text)
                     if checked:
                         additional_runs.append(checked)
@@ -94,7 +94,7 @@ class AlgorithmCoachAgent:
         if reservation is not None:
             return reservation
         try:
-            text = command.content.get('text') or json.dumps(command.content, ensure_ascii=False)
+            text = json.dumps(command.content, ensure_ascii=False) if command.kind != 'solution' else command.content.get('text', '')
             await self.invariants.check(workspace, text, 'artifact', command.command_id,
                 require_solution=command.kind == 'solution', request='Сохранение артефакта '+command.kind)
             return await self.workflow.repository.change(self.config.id, conversation_id, 'artifact', command,

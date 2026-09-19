@@ -86,7 +86,7 @@ def create_app(
             )
             yield
 
-    app = FastAPI(title="AI Agents · День 14", version="0.9.0", lifespan=lifespan)
+    app = FastAPI(title="AI Agents · День 15", version="0.10.0", lifespan=lifespan)
     app.include_router(memory_router)
     app.include_router(profile_router)
     app.include_router(task_router)
@@ -113,7 +113,7 @@ def create_app(
 
     @app.get("/health")
     async def health():
-        return {"status": "ok", "mode": resolved.mode, "day": 14}
+        return {"status": "ok", "mode": resolved.mode, "day": 15}
 
     @app.get("/api/v1/models")
     async def models(request: Request):

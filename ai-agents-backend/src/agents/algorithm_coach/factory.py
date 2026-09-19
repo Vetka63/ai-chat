@@ -13,6 +13,7 @@ from capabilities.task_workflow.service import TaskWorkflow
 from capabilities.invariants.service import InvariantGuard
 from .validators.invariants import CoachInvariantPolicy
 from .llm_judge.invariants import InvariantJudge
+from .validators.stages import CoachStagePolicy
 
 
 def build_algorithm_coach(model, llm, store, repository, catalog, accounting, judge_model='deepseek-v4-pro', judge_max_tokens=2000):
@@ -24,4 +25,4 @@ def build_algorithm_coach(model, llm, store, repository, catalog, accounting, ju
         CoachInputPolicy(), CoachOutputPolicy(), CoachContextPolicy(),
         TaskWorkflow(repository.workflow, CoachWorkflowPolicy()),
         InvariantGuard(repository.invariants, CoachInvariantPolicy(),
-            InvariantJudge(RecordedLlmCall(llm, accounting, catalog), accounting, catalog, judge_model, judge_max_tokens)))
+            InvariantJudge(RecordedLlmCall(llm, accounting, catalog), accounting, catalog, judge_model, judge_max_tokens), CoachStagePolicy()))

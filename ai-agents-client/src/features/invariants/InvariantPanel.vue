@@ -29,7 +29,8 @@ function ruleLabel(check, id) { return check.rules.find(r => r.id === id)?.label
     <template v-if="workspace">
       <p>Версия {{ workspace.revision }} · активных правил: {{ workspace.rules.filter(r => r.active).length }}</p>
       <ul v-if="workspace.rules.some(r => r.active)"><li v-for="rule in workspace.rules.filter(r => r.active)" :key="rule.id"><strong>{{ rule.label }}</strong>: {{ rule.value }}</li></ul>
-      <p v-else>Правила не включены. Дополнительных вызовов judge нет.</p>
+      <p v-else>Пользовательские правила не включены. Обязательная проверка этапа Дня 15 остаётся активной.</p>
+      <small>Системное правило «Допустимое действие этапа» нельзя отключить. Оно проверяется тем же judge вместе с правилами задачи, без отдельной цепочки вызовов.</small>
       <small>Проверяем запрос, ответ до публикации и сохраняемый артефакт. Judge настроен отдельно на сервере (по умолчанию DeepSeek Pro). Это дополнительные платные вызовы. Неуверенная проверка блокирует результат; анализ не гарантирует корректность и не запускает код.</small>
       <details><summary>Настроить правила</summary>
         <p>Сохранение вернёт задачу к планированию. Старые артефакты останутся в истории, но не попадут в новый контекст. Пауза сохранится.</p>

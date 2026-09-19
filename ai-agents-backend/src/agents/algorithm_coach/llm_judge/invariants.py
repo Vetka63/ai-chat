@@ -5,6 +5,7 @@ import logging
 from pathlib import Path
 from agent_core.models import AgentError, Message
 from capabilities.invariants.models import JudgePayload
+from ..context_policy import CoachContextPolicy
 
 logger = logging.getLogger(__name__)
 
@@ -16,12 +17,13 @@ class InvariantJudge:
         self.model, self.max_tokens = model, max_tokens
         self.prompt = (Path(__file__).parents[1]/'prompts'/'invariant_judge.txt').read_text(encoding='utf-8')
 
-    async def evaluate(self, workspace, text, stage, command_id):
-        rules = [r for r in workspace.invariants.rules if r.active]
+    async def evaluate(self, workspace, text, stage, command_id, rules=None):
+        rules = rules if rules is not None else [r for r in workspace.invariants.rules if r.active]
         spec = self.catalog.get(self.model)
         payload = {'stage': stage, 'rules': [r.model_dump() for r in rules],
             'profile': workspace.profile.model_dump(), 'problem': workspace.task.problem,
-            'state': workspace.workflow.state.model_dump(), 'content_to_check': text}
+            'state': workspace.workflow.state.model_dump(),
+            'artifacts': CoachContextPolicy().workflow_context(workspace)['artifacts'], 'content_to_check': text}
         serialized = json.dumps(payload, ensure_ascii=False)
         # Список ID повторён в доверенной инструкции: нельзя закончить на первом conflict.
         instruction = self.prompt + '\nВерни checks ровно для этих ID в указанном порядке: ' + json.dumps([r.id for r in rules])

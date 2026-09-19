@@ -20,6 +20,7 @@ class ObservedLlm:
         self.answer = 'Разбор решения без запуска кода.'
         self.error = None
         self.before_return = None
+        self.raw_candidate = False
 
     async def complete(self, messages, **kwargs):
         self.calls.append(messages)
@@ -27,7 +28,10 @@ class ObservedLlm:
             await self.before_return()
         if self.error:
             raise self.error
-        return Completion(content=self.answer, model=kwargs['model'], finish_reason='stop',
+        content = self.answer
+        if 'День 15: всегда возвращай только JSON' in messages[0].content and not self.raw_candidate:
+            content = json.dumps({'kind': 'explanation', 'text': content}, ensure_ascii=False)
+        return Completion(content=content, model=kwargs['model'], finish_reason='stop',
             usage=TokenUsage(prompt_tokens=100, completion_tokens=20, total_tokens=120))
 
 
@@ -41,10 +45,26 @@ def rig(tmp_path):
 
 
 def create(client, **extra):
+    # По умолчанию подставляется отдельный fake semantic judge, без внешней сети.
+    judge = client.app.state.registry.get('algorithm_coach').invariants.judge
+    if not hasattr(judge.calls.llm, 'calls'):
+        judge.calls.llm = PassingJudge()
     response = client.post(BASE+'/conversations', json={
         'title': 'Проверка памяти', 'context_settings': {'mode': 'sliding_window', 'keep_last': 2}, **extra})
     assert response.status_code == 201, response.text
     return response.json()['id']
+
+
+class PassingJudge:
+    """Тестовый протокол judge; сценарии конфликтов используют отдельный FakeJudge."""
+    def __init__(self): self.calls = []
+
+    async def complete(self, messages, **kwargs):
+        self.calls.append(messages)
+        data = json.loads(messages[-1].content)
+        return Completion(content=json.dumps({'checks': [
+            {'rule_id': r['id'], 'verdict': 'pass', 'reason': 'Тестовый допуск'} for r in data['rules']]}),
+            model=kwargs['model'], finish_reason='stop', usage=TokenUsage(prompt_tokens=30, completion_tokens=10, total_tokens=40))
 
 
 def path(chat):
@@ -194,7 +214,7 @@ def test_preview_is_read_only_and_disabled_memory_is_excluded(rig):
     assert memory(client, chat) == before and len(llm.calls) == count
     run(client, chat)
     assert json.loads(llm.calls[-1][3].content.split('\n', 1)[1]) == {}
-    assert client.get(path(chat)).json()['runs'][-1]['memory_context']['long_term'] == []
+    assert [r for r in client.get(path(chat)).json()['runs'] if r['purpose'] == 'dialogue'][-1]['memory_context']['long_term'] == []
     propose(client, llm, chat, [])
     assert json.loads(llm.calls[-1][-1].content)['existing_long_term'] == {}
 
@@ -223,8 +243,9 @@ def test_provider_error_preserves_question_and_unknown_usage(rig):
     assert run(client, chat, 'Важный вопрос').status_code == 504
     restored = client.get(path(chat)).json()
     assert restored['messages'] == [{'role': 'user', 'content': 'Важный вопрос'}]
-    assert restored['runs'][0]['status'] == 'error'
-    assert restored['runs'][0]['usage'] is None
+    main = next(r for r in restored['runs'] if r['purpose'] == 'dialogue')
+    assert main['status'] == 'error'
+    assert main['usage'] is None
 
 
 def test_changed_memory_during_generation_rejects_stale_reply(rig):
@@ -240,7 +261,7 @@ def test_changed_memory_during_generation_rejects_stale_reply(rig):
     assert run(client, chat).status_code == 409
     detail = client.get(path(chat)).json()
     assert len(detail['messages']) == 1
-    assert detail['runs'][0]['usage']['total_tokens'] == 120
+    assert next(r for r in detail['runs'] if r['purpose'] == 'dialogue')['usage']['total_tokens'] == 120
 
 
 def test_restart_and_non_destructive_migration(tmp_path):
@@ -255,7 +276,7 @@ def test_restart_and_non_destructive_migration(tmp_path):
     with TestClient(create_app(settings)) as client:
         assert memory(client, chat) == before
         assert client.get('/api/v1/agents/dialogue/conversations/'+old).status_code == 200
-        assert client.get(path(chat)).json()['runs'][0]['memory_context']['problem']['statement'] == 'Two Sum'
+        assert next(r for r in client.get(path(chat)).json()['runs'] if r['purpose'] == 'dialogue')['memory_context']['problem']['statement'] == 'Two Sum'
     with sqlite3.connect(database) as db:
         assert db.execute('SELECT count(*) FROM schema_migrations').fetchone()[0] == 4
         # Дополнительный профиль не видит общую память первого профиля.

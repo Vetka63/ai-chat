@@ -5,19 +5,24 @@ from .models import InvariantCheck, RuleVerdict
 
 class InvariantGuard:
     """Сочетает предметный валидатор, semantic judge и независимый аудит."""
-    def __init__(self, repository, policy, judge):
+    def __init__(self, repository, policy, judge, stage_policy=None):
         self.repository, self.policy, self.judge = repository, policy, judge
+        self.stage_policy = stage_policy
 
     async def check(self, workspace, text, stage, command_id, *, request='', require_solution=False):
         rules = [r for r in workspace.invariants.rules if r.active]
+        if self.stage_policy:
+            rules += self.stage_policy.rules(workspace)
         if not rules:
             return None
         checks = [] if stage == 'input' else self.policy.validate(rules, text, require_solution)
+        if stage != 'input' and self.stage_policy:
+            checks += self.stage_policy.validate(workspace, text)
         run, error_code = None, None
         if not checks:
             try:
                 checks, run = await self.judge.evaluate(workspace,
-                    {'request': request, 'candidate': text} if stage != 'input' else text, stage, command_id)
+                    {'request': request, 'candidate': text} if stage != 'input' else text, stage, command_id, rules=rules)
             except AgentError as exc:
                 error_code = exc.code
                 checks = [RuleVerdict(rule_id=r.id, verdict='uncertain', reason='Проверка judge недоступна или невалидна; разрешение не получено') for r in rules]
@@ -31,7 +36,7 @@ class InvariantGuard:
             by_id = {r.id: r for r in rules}
             violations = [f'«{by_id[c.rule_id].label}» [{c.rule_id}]: {c.reason}' for c in checks if c.verdict != 'pass']
             message = ('Запрос или кандидат конфликтует с обязательными правилами. ' if verdict == 'conflict' else 'Не удалось подтвердить соблюдение обязательных правил. ')
-            message += ' '.join(violations) + ' Продолжите в рамках указанных правил либо явно измените их в панели «Обязательные правила».'
+            message += ' '.join(violations) + ' Продолжите в рамках правил и текущего этапа. Этап меняется командой в панели задачи, пользовательские правила — в отдельном редакторе.'
             exc = AgentError('invariant_'+verdict, message, 422 if verdict == 'conflict' else 503)
             exc.details = {'type': 'policy_refusal', 'check': audit.model_dump(), 'source': 'policy', 'model': None}
             raise exc

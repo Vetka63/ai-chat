@@ -61,13 +61,13 @@ describe('Day 14 invariants', () => {
   })
   it('hides stale artifact from active step and allows pause during artifact judge', () => {
     const w = mount(TaskPanel, { props: { invariantRevision: 2, artifactBusy: true, workspace: {
-      task_id: 't', state: { phase: 'planning', status: 'active' }, allowed_events: ['pause', 'start_execution'], events: [],
+      task_id: 't', state: { phase: 'planning', status: 'active' }, allowed_events: ['pause', 'approve_plan'], events: [],
       artifacts: [{ id: 'p', kind: 'plan', invariant_revision: 1, content: { steps: [{ id: 's', title: 'Старый план' }] } }],
     } } })
     expect(w.find('select').exists()).toBe(false)
     expect(w.text()).toContain('Артефакт исключён из контекста')
     expect(button(w, 'Пауза').attributes('disabled')).toBeUndefined()
-    expect(button(w, 'К реализации').attributes('disabled')).toBeDefined()
+    expect(button(w, 'Утвердить план → реализация').attributes('disabled')).toBeDefined()
     w.unmount()
   })
   it('labels all judge calls and exports rules and audit', () => {

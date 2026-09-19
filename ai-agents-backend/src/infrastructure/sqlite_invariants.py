@@ -39,7 +39,7 @@ class SqliteInvariantRepository:
                     revision=previous[draft.id].revision+1 if draft.id else 1)
                 await db.execute('INSERT INTO task_invariants VALUES(?,?,?)', (rule.id, task['id'], rule.model_dump_json()))
             await db.execute('UPDATE tasks SET invariant_revision=invariant_revision+1 WHERE id=?', (task['id'],))
-            flow.state.phase, flow.state.current_step_id, flow.state.expected_action = 'planning', None, 'save_plan'
+            self.workflow.policy.invalidate(flow.state, flow.artifacts)
             await self.workflow.event(db, flow, 'invariants_changed', before, command.command_id)
             fresh = await self.memory._task(db, agent_id, conversation_id)
             result = await self.read(db, fresh)

@@ -23,7 +23,20 @@ def change(client, chat, resource='events', **body):
 
 
 def event(client, chat, name):
-    result = change(client, chat, event=name)
+    # Успешные сценарии прежних дней теперь проходят явные условия Дня 15.
+    extra = {}
+    if name == 'start_execution':
+        if not any(a['kind'] == 'plan' for a in flow(client, chat)['artifacts']): plan(client, chat)
+        name = 'approve_plan'
+    if name == 'start_validation':
+        if not any(a['kind'] == 'solution' for a in flow(client, chat)['artifacts']):
+            assert change(client, chat, 'artifacts', kind='solution', content={'text': 'def two_sum(nums, target):\n    return []'}).status_code == 200
+        name = 'submit_solution'
+    if name == 'finish': name = 'accept_validation'
+    kind = {'approve_plan': 'plan', 'submit_solution': 'solution', 'accept_validation': 'validation'}.get(name)
+    if kind: extra['artifact_id'] = next(a['id'] for a in reversed(flow(client, chat)['artifacts']) if a['kind'] == kind)
+    if name == 'request_changes': extra = {'remarks': 'Уточнить решение', 'step_id': flow(client, chat)['state']['current_step_id']}
+    result = change(client, chat, event=name, **extra)
     assert result.status_code == 200, result.text
     return result.json()
 
@@ -85,7 +98,7 @@ def test_artifact_versions_sources_and_validation_method(rig):
     assert change(client, chat, 'artifacts', kind='solution', content={'text': 'return []'}).status_code == 200
     event(client, chat, 'start_validation')
     assert change(client, chat, 'artifacts', kind='validation', content={'text': 'Проверка'}).status_code == 422
-    report = change(client, chat, 'artifacts', kind='validation', content={'text': 'Дубликаты не обработаны', 'method': 'llm_review'}).json()['artifacts'][-1]
+    report = change(client, chat, 'artifacts', kind='validation', content={'text': 'Дубликаты обработаны', 'method': 'llm_review', 'blocking_issues': []}).json()['artifacts'][-1]
     assert report['plan_revision'] == 2 and report['solution_revision'] == 1
     assert report['content']['method'] == 'llm_review'
     assert change(client, chat, 'artifacts', kind='solution', content={'text': 'bad phase'}).status_code == 409
@@ -113,8 +126,8 @@ def test_run_replay_returns_same_result_without_duplicate_usage_or_messages(rig)
     assert first.status_code == 200, first.text
     assert client.post(BASE+'/runs', json=body).json() == first.json()
     stored = client.get(path(chat)).json()
-    assert len(stored['messages']) == 2 and len(stored['runs']) == 1 and len(llm.calls) == 1
-    assert stored['runs'][0] == first.json()['run']
+    assert len(stored['messages']) == 2 and len(stored['runs']) == 3 and len(llm.calls) == 1
+    assert next(r for r in stored['runs'] if r['purpose'] == 'dialogue') == first.json()['run']
     assert client.post(BASE+'/runs', json={**body, 'message': 'Другой запрос'}).json()['code'] == 'command_conflict'
 
 
@@ -129,8 +142,9 @@ def test_late_response_after_pause_is_not_published_but_usage_remains(rig):
     assert result.status_code == 409 and result.json()['code'] == 'state_conflict'
     stored = client.get(path(chat)).json()
     assert [m['role'] for m in stored['messages']] == ['user']
-    assert stored['runs'][0]['usage']['total_tokens'] == 120
-    assert stored['runs'][0]['status'] == 'error'
+    main = next(r for r in stored['runs'] if r['purpose'] == 'dialogue')
+    assert main['usage']['total_tokens'] == 120
+    assert main['status'] == 'error'
     assert flow(client, chat)['state']['status'] == 'paused'
     assert flow(client, chat)['active_command_id'] is None
 
@@ -203,7 +217,8 @@ def test_result_transaction_rolls_back_reply_and_event_on_failure(rig, monkeypat
         run(client, chat)
     saved = client.get(path(chat)).json()
     assert [m['role'] for m in saved['messages']] == ['user']
-    assert saved['runs'][0]['status'] == 'error' and saved['runs'][0]['usage']['total_tokens'] == 120
+    main = next(r for r in saved['runs'] if r['purpose'] == 'dialogue')
+    assert main['status'] == 'error' and main['usage']['total_tokens'] == 120
     assert flow(client, chat)['events'] == [] and flow(client, chat)['active_command_id'] is None
 
 

@@ -51,12 +51,12 @@ def judged(rig):
     return client, llm, judge, chat
 
 
-def test_no_rules_does_not_add_calls(rig):
+def test_no_user_rules_still_checks_day15_stage(rig):
     client, llm = rig
     chat = create(client)
     result = run(client, chat)
     assert result.status_code == 200 and len(llm.calls) == 1
-    assert len(client.get(path(chat)).json()['runs']) == 1
+    assert len(client.get(path(chat)).json()['runs']) == 3
 
 
 def test_two_judges_use_separate_model_and_output_is_committed_after_checks(rig):
@@ -137,15 +137,17 @@ def test_semantic_output_conflict_blocks_candidate(rig):
 def test_manual_artifact_cannot_bypass_checks_and_replay_does_not_pay_twice(rig):
     client, llm, judge, chat = judged(rig)
     event(client, chat, 'start_execution')
+    before = flow(client, chat)['artifacts']
+    calls_before = len(judge.calls)
     invalid = change(client, chat, 'artifacts', kind='solution', content={'text': 'import numpy'})
-    assert invalid.status_code == 422 and not flow(client, chat)['artifacts']
+    assert invalid.status_code == 422 and flow(client, chat)['artifacts'] == before
     body = {'kind': 'solution', 'content': {'text': 'def two_sum(nums, target):\n    return []'},
         'command_id': 'save-once', 'expected_revision': flow(client, chat)['state']['revision']}
     first = client.post(path(chat)+'/task/artifacts', json=body)
     assert first.status_code == 200, first.text
     assert first.json()['active_command_id'] is None
     assert client.post(path(chat)+'/task/artifacts', json=body).json() == first.json()
-    assert len(judge.calls) == 1
+    assert len(judge.calls) == calls_before + 1
 
 
 def test_rule_edit_invalidates_artifacts_resets_phase_preserves_pause(rig):
@@ -201,6 +203,7 @@ def test_pause_during_artifact_judge_discards_late_artifact(rig, kind):
     agent = client.app.state.registry.get('algorithm_coach')
     from capabilities.task_workflow.models import TransitionCommand
     revision = flow(client, chat)['state']['revision']
+    before = flow(client, chat)['artifacts']
     async def pause():
         await agent.workflow.repository.change('algorithm_coach', chat, 'transition',
             TransitionCommand(command_id='pause-during-check', expected_revision=revision, event='pause'), agent.workflow.policy)
@@ -209,7 +212,7 @@ def test_pause_during_artifact_judge_discards_late_artifact(rig, kind):
     response = change(client, chat, 'artifacts', kind=kind, content=content)
     assert response.status_code == 409
     state = flow(client, chat)
-    assert not state['artifacts'] and state['state']['status'] == 'paused'
+    assert state['artifacts'] == before and state['state']['status'] == 'paused'
     assert state['active_command_id'] is None
     assert client.get(path(chat)).json()['runs'][0]['usage']['total_tokens'] == 40
 

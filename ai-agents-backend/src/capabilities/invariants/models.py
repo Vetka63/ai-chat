@@ -26,7 +26,7 @@ class TaskInvariant(RuleDraft):
     """Сохранённое правило конкретной задачи с версией и автором."""
     id: str
     revision: int
-    author: Literal['user'] = 'user'
+    author: Literal['user', 'system'] = 'user'
 
 
 class SaveInvariants(WorkflowCommand):
@@ -43,7 +43,7 @@ class RuleVerdict(InvariantModel):
 
 class JudgePayload(InvariantModel):
     """Judge обязан вернуть ровно одну оценку каждого активного ID."""
-    checks: list[RuleVerdict] = Field(min_length=1, max_length=20)
+    checks: list[RuleVerdict] = Field(min_length=1, max_length=21)
 
 
 class InvariantCheck(InvariantModel):

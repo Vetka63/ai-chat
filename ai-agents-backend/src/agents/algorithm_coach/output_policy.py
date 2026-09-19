@@ -2,7 +2,7 @@
 import json
 from pydantic import ValidationError
 from agent_core.models import AgentError
-from .models import ProposalPayload
+from .models import ProposalPayload, CoachCandidate
 
 
 class CoachOutputPolicy:
@@ -32,3 +32,16 @@ class CoachOutputPolicy:
         except AgentError as exc:
             raise AgentError('invalid_memory_proposals', 'Предложение модели не прошло правила памяти. Сохранённые записи не изменены', 502) from exc
         return candidates
+
+    def candidate(self, completion, phase):
+        """После проверки схемы обязательна семантическая проверка стадии."""
+        text = self.present(completion)
+        try:
+            value = CoachCandidate.model_validate_json(text)
+            if not value.text.strip(): raise ValueError('empty')
+        except ValueError as exc:
+            raise AgentError('invalid_coach_candidate', 'Модель вернула неверный JSON ответа; кандидат не опубликован', 502) from exc
+        allowed = {'planning': {'explanation', 'plan'}, 'execution': {'explanation', 'solution'}, 'validation': {'explanation', 'validation'}}
+        if value.kind not in allowed.get(phase, set()):
+            raise AgentError('stage_output_blocked', 'Тип ответа не разрешён на текущем этапе. Сначала выполните ожидаемое действие в панели задачи', 422)
+        return value.text.strip()

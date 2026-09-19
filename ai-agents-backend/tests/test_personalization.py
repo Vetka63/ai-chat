@@ -97,7 +97,7 @@ def test_updates_apply_next_request_without_rewriting_old_snapshots(rig):
     assert first['memory_context']['profile']['revision'] == 1
     assert second['memory_context']['profile']['revision'] == updated['revision'] == 2
     assert second['memory_context']['profile']['preferences']['explanation_language'] == 'en'
-    stored = client.get(path(chat)).json()['runs']
+    stored = [r for r in client.get(path(chat)).json()['runs'] if r['purpose'] == 'dialogue']
     assert stored[0]['memory_context']['profile'] == first['memory_context']['profile']
     assert memory(client, chat)['task']['profile_id'] == 'beginner'
 
@@ -160,8 +160,8 @@ def test_profile_edited_during_generation_blocks_stale_answer_and_keeps_usage(ri
     assert response.status_code == 409
     detail = client.get(path(chat)).json()
     assert len(detail['messages']) == 1
-    assert detail['runs'][0]['usage']['total_tokens'] == 120
-    assert detail['runs'][0]['memory_context']['profile']['revision'] == 1
+    assert next(r for r in detail['runs'] if r['purpose'] == 'dialogue')['usage']['total_tokens'] == 120
+    assert next(r for r in detail['runs'] if r['purpose'] == 'dialogue')['memory_context']['profile']['revision'] == 1
 
 
 def test_profile_persists_and_seed_does_not_overwrite_edits(tmp_path):
