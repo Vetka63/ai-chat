@@ -48,7 +48,7 @@ function remove(entry) {
             <option v-for="m in userMessages" :key="m.id" :value="m.id">#{{ m.id }} · {{ m.content.slice(0, 60) }}</option>
           </select>
         </label>
-        <button :disabled="busy || !userMessages.length" @click="emit('propose', Number(source) || userMessages.at(-1)?.id)">Предложить, что запомнить</button>
+        <button :disabled="busy || !userMessages.length || workspace.workflow?.state.status === 'paused' || workspace.workflow?.state.phase === 'done'" @click="emit('propose', Number(source) || userMessages.at(-1)?.id)">Предложить, что запомнить</button>
         <small class="muted">Отдельный API-вызов с расходом токенов. Ничего не сохраняет без вашего подтверждения.</small>
       </details>
       <details open>

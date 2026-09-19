@@ -14,10 +14,13 @@ import MemoryPanel from './features/memory/MemoryPanel.vue'
 import { useMemoryLayers } from './features/memory/useMemoryLayers'
 import { useProfiles } from './features/profiles/useProfiles'
 import ProfilePanel from './features/profiles/ProfilePanel.vue'
+import TaskPanel from './features/tasks/TaskPanel.vue'
+import { useTaskWorkflow } from './features/tasks/useTaskWorkflow'
 
 const chat = useAgentChat()
 const memory = useMemoryLayers(chat)
 const profiles = useProfiles(chat, memory)
+const tasks = useTaskWorkflow(chat, memory)
 const lastMemoryContext = computed(() => [...chat.runs.value].reverse().find(r => r.purpose === 'dialogue' && r.memory_context)?.memory_context)
 const sidebarOpen = ref(false)
 const compact = ref(window.innerWidth <= 1180)
@@ -29,7 +32,7 @@ const chatsButton = ref(null)
 const settingsPanel = ref(null)
 const chatsPanel = ref(null)
 const newChatOpen = ref(false)
-const busy = computed(() => chat.loading.value || chat.sending.value || memory.busy.value || profiles.busy.value)
+const busy = computed(() => chat.loading.value || chat.sending.value || memory.busy.value || profiles.busy.value || tasks.busy.value)
 const overlay = computed(() => mobile.value && sidebarOpen.value ? 'chats' : compact.value && settingsOpen.value ? 'settings' : null)
 watch(theme, value => { document.documentElement.dataset.theme = value }, { immediate: true })
 
@@ -120,7 +123,8 @@ async function removeConversation(item) {
       <div v-if="chat.error.value" class="error-banner" role="alert">{{ chat.error.value }} <button @click="chat.initialize">Повторить</button></div>
       <div v-if="chat.warning.value" class="warning-banner" role="status">{{ chat.warning.value }}</div>
       <ChatThread :messages="chat.messages.value" :runs="chat.runs.value" :agent-name="chat.agent.value?.name" :sending="chat.sending.value" :memory-layers="memory.enabled.value" />
-      <MessageComposer v-model="chat.draft.value" :disabled="busy || !chat.agentId.value || !chat.conversation.value || !chat.outputLimitValid.value" :sending="chat.sending.value" @send="chat.send">
+      <div v-if="tasks.enabled.value && tasks.blocked.value && tasks.workspace.value" class="warning-banner" role="status">{{ tasks.workspace.value.state.status === 'paused' ? 'Задача на паузе. Продолжите её в панели настроек.' : 'Задача завершена. Для нового решения создайте новую задачу.' }}</div>
+      <MessageComposer v-model="chat.draft.value" :disabled="busy || tasks.blocked.value || !chat.agentId.value || !chat.conversation.value || !chat.outputLimitValid.value" :sending="chat.sending.value" @send="tasks.enabled.value ? tasks.send() : chat.send()">
         <ModelPicker :models="chat.models.value" :model-id="chat.modelId.value" :busy="busy" @model="chat.changeModel" />
       </MessageComposer>
     </main>
@@ -129,6 +133,9 @@ async function removeConversation(item) {
       :role="overlay === 'settings' ? 'dialog' : undefined" :aria-modal="overlay === 'settings' ? true : undefined"
       :agents="chat.agents.value" :selected-agent="chat.agentId.value" :theme="theme" :busy="busy"
       @select-agent="chat.selectAgent" @theme="theme = $event" @close="closePanels">
+      <TaskPanel v-if="tasks.enabled.value" :workspace="tasks.workspace.value" :busy="tasks.busy.value || chat.loading.value || memory.busy.value || profiles.busy.value"
+        :sending="chat.sending.value" :error="tasks.error.value" :task-revision="memory.workspace.value?.task.revision"
+        @transition="tasks.transition" @save="tasks.save" @step="tasks.step" @refresh="memory.refresh" />
       <ProfilePanel v-if="profiles.enabled.value" :profiles="profiles.profiles.value" :profile="memory.workspace.value?.profile"
         :busy="busy" :loading="profiles.loading.value" :error="profiles.error.value" :notice="profiles.notice.value" :preferred-id="profiles.preferredId.value"
         @save="profiles.save" @refresh="profiles.refresh" />

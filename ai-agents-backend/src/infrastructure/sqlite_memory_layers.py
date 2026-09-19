@@ -16,6 +16,7 @@ class SqliteMemoryRepository:
 
     def __init__(self, store):
         self.store = store
+        self.workflow = None
 
     async def initialize(self):
         await migrate_memory_layers(self.store)
@@ -35,8 +36,10 @@ class SqliteMemoryRepository:
                 (id,agent_id,title,created_at,updated_at,context_settings,root_conversation_id)
                 VALUES(?,?,?,?,?,?,?)""", (item.id, agent_id, title, timestamp, timestamp,
                                            settings.model_dump_json(), item.id))
+            task_id = new_id()
             await db.execute("INSERT INTO tasks(id,conversation_id,agent_id,profile_id,problem) VALUES(?,?,?,?,?)",
-                (new_id(), item.id, agent_id, profile_id, json.dumps(problem, ensure_ascii=False)))
+                (task_id, item.id, agent_id, profile_id, json.dumps(problem, ensure_ascii=False)))
+            await db.execute('INSERT INTO task_states(task_id) VALUES(?)', (task_id,))
             await db.commit()
         return item
 
@@ -87,6 +90,7 @@ class SqliteMemoryRepository:
                 source_excerpt,status,base_entry_id,base_entry_revision,created_at FROM memory_proposals
                 WHERE task_id=? ORDER BY created_at,id""", (task['id'],))).fetchall()
             return MemoryWorkspace(
+                workflow=await self.workflow.read(db, task) if self.workflow else None,
                 task=TaskMemory(id=task['id'], conversation_id=conversation_id, agent_id=agent_id,
                     profile_id=task['profile_id'], problem=json.loads(task['problem']), revision=task['revision']),
                 profile=MemoryProfile(id=task['profile_id'], name=task['profile_name'], memory_revision=task['memory_revision'],
@@ -184,6 +188,10 @@ class SqliteMemoryRepository:
         async with self.store.connection() as db:
             await db.execute("BEGIN IMMEDIATE")
             task = await self._task(db, workspace.task.agent_id, workspace.task.conversation_id, self.versions(workspace))
+            if self.workflow and workspace.workflow:
+                current = await self.workflow.read(db, task)
+                self.workflow.check_revision(current, workspace.workflow.state.revision)
+                self.workflow.policy.require_active(current.state)
             excerpt = await self._source(db, task['conversation_id'], source_id)
             # Повтор анализа сообщения заменяет только прежние неподтверждённые предложения.
             await db.execute("UPDATE memory_proposals SET status='rejected' WHERE task_id=? AND source_message_id=? AND status='pending'",

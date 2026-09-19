@@ -169,7 +169,7 @@ export function useAgentChat() {
     }
   }
 
-  async function send() {
+  async function send(workflow = {}) {
     const text = draft.value.trim()
     if (!outputLimitValid.value || !text || sending.value || loading.value || !agentId.value) return
     sending.value = true
@@ -180,7 +180,7 @@ export function useAgentChat() {
       const target = conversation.value
       target.messages.push({ role: 'user', content: text })
       draft.value = ''
-      const result = await api.runConversationAgent(agentId.value, target.id, text, modelId.value, outputLimit.value)
+      const result = await api.runConversationAgent(agentId.value, target.id, text, modelId.value, outputLimit.value, workflow)
       target.messages.push({ role: 'assistant', content: result.reply, model: result.model, source: result.source })
       target.runs = [...(target.runs || []), ...(result.additional_runs || []), ...(result.run ? [result.run] : [])]
       target.summary = result.summary || null

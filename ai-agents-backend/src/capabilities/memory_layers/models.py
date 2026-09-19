@@ -4,6 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from capabilities.personalization.models import UserProfile
+from capabilities.task_workflow.models import WorkflowWorkspace
 
 
 class MemoryModel(BaseModel):
@@ -61,7 +62,7 @@ class MemoryProposal(MemoryCandidate):
 
 
 class TaskMemory(MemoryModel):
-    """Рабочая задача Дня 11: карточка условия, пока без автомата этапов."""
+    """Карточка рабочей памяти; жизненный цикл хранится отдельным модулем."""
     id: str
     conversation_id: str
     agent_id: str
@@ -76,6 +77,7 @@ class MemoryProfile(UserProfile):
 
 class MemoryWorkspace(MemoryModel):
     """Отдельное представление трёх слоёв и не применённых предложений."""
+    workflow: WorkflowWorkspace | None = None
     task: TaskMemory
     profile: MemoryProfile
     keep_last: int

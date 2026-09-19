@@ -45,11 +45,11 @@ export async function deleteConversation(agentId, conversationId) {
   return request(conversationsPath(agentId, conversationId), { method: 'DELETE' })
 }
 
-export async function runConversationAgent(agentId, conversationId, message, modelId, maxOutputTokens = null) {
+export async function runConversationAgent(agentId, conversationId, message, modelId, maxOutputTokens = null, workflow = {}) {
   return request(`/agents/${encodeURIComponent(agentId)}/runs`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ conversation_id: conversationId, message, model_id: modelId, max_output_tokens: maxOutputTokens }),
+    body: JSON.stringify({ conversation_id: conversationId, message, model_id: modelId, max_output_tokens: maxOutputTokens, ...workflow }),
   })
 }
 

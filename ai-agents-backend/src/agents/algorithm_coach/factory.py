@@ -8,6 +8,8 @@ from .context_policy import CoachContextPolicy
 from .input_policy import CoachInputPolicy
 from .memory_policy import AlgorithmMemoryPolicy
 from .output_policy import CoachOutputPolicy
+from .workflow_policy import CoachWorkflowPolicy
+from capabilities.task_workflow.service import TaskWorkflow
 
 
 def build_algorithm_coach(model, llm, store, repository, catalog, accounting):
@@ -16,4 +18,5 @@ def build_algorithm_coach(model, llm, store, repository, catalog, accounting):
         proposals_prompt=(directory/'proposals.txt').read_text(encoding='utf-8'))
     return AlgorithmCoachAgent(config, store, LayeredMemory(repository, AlgorithmMemoryPolicy()),
         RecordedLlmCall(llm, accounting, catalog), catalog, accounting,
-        CoachInputPolicy(), CoachOutputPolicy(), CoachContextPolicy())
+        CoachInputPolicy(), CoachOutputPolicy(), CoachContextPolicy(),
+        TaskWorkflow(repository.workflow, CoachWorkflowPolicy()))

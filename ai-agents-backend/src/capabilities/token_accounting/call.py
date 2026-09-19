@@ -5,6 +5,7 @@ from time import perf_counter
 
 from agent_core.models import AgentError, new_id, now
 from .models import RunRecord
+from .service import calculate_cost
 
 
 class RecordedLlmCall:
@@ -14,8 +15,8 @@ class RecordedLlmCall:
 
     @asynccontextmanager
     async def invoke(self, *, agent_id, conversation_id, messages, spec, estimate,
-                     user_index, temperature, max_tokens, purpose='dialogue', memory_context=None):
-        run = RunRecord(id=new_id(), agent_id=agent_id, conversation_id=conversation_id,
+                     user_index, temperature, max_tokens, purpose='dialogue', memory_context=None, run_id=None, commit=None):
+        run = RunRecord(id=run_id or new_id(), agent_id=agent_id, conversation_id=conversation_id,
             created_at=now(), model_id=spec.id, provider=spec.provider, requested_model=spec.model,
             user_index=user_index, purpose=purpose, estimate=estimate,
             pricing=self.catalog.pricing_at(spec.id, now()), memory_context=memory_context)
@@ -27,6 +28,10 @@ class RecordedLlmCall:
             run.pricing = self.catalog.pricing_at(spec.id, run.created_at, completion.model)
             yield completion, run
             run.status = 'success'
+            if commit is not None:
+                run.duration_ms = round((perf_counter() - started) * 1000)
+                run.estimated_cost_usd = calculate_cost(run.usage, run.pricing)
+                await commit(run)
         except AgentError as exc:
             run.status, run.error_code, run.error_message = 'error', exc.code, exc.message
             run.provider_status = exc.provider_status
@@ -39,5 +44,7 @@ class RecordedLlmCall:
             run.error_message = 'Не удалось обработать результат вызова'
             raise
         finally:
-            run.duration_ms = round((perf_counter() - started) * 1000)
-            await self.accounting.record(run)
+            # Успешный commit уже атомарно сохранил run вместе с ответом и состоянием.
+            if commit is None or run.status != 'success':
+                run.duration_ms = round((perf_counter() - started) * 1000)
+                await self.accounting.record(run)

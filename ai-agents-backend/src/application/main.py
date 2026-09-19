@@ -28,6 +28,9 @@ from infrastructure.sqlite_memory_layers import SqliteMemoryRepository
 from application.routes.memory import router as memory_router
 from application.routes.profiles import router as profile_router
 from infrastructure.sqlite_profiles import SqliteProfileRepository
+from infrastructure.sqlite_task_workflow import SqliteTaskUnitOfWork
+from agents.algorithm_coach.workflow_policy import CoachWorkflowPolicy
+from application.routes.tasks import router as task_router
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +59,9 @@ def create_app(
         await app.state.branches.initialize()
         app.state.memory_layers = SqliteMemoryRepository(active_store)
         await app.state.memory_layers.initialize()
+        app.state.workflow = SqliteTaskUnitOfWork(active_store, app.state.memory_layers, CoachWorkflowPolicy())
+        await app.state.workflow.initialize()
+        app.state.memory_layers.workflow = app.state.workflow
         app.state.profiles = SqliteProfileRepository(active_store)
         app.state.catalog = ModelCatalog.load(Path(__file__).with_name("models.json"), {
             "deepseek": resolved.mode == "demo" or bool(resolved.api_key.get_secret_value()),
@@ -76,9 +82,10 @@ def create_app(
             )
             yield
 
-    app = FastAPI(title="AI Agents · День 12", version="0.7.0", lifespan=lifespan)
+    app = FastAPI(title="AI Agents · День 13", version="0.8.0", lifespan=lifespan)
     app.include_router(memory_router)
     app.include_router(profile_router)
+    app.include_router(task_router)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=resolved.origins,
@@ -100,7 +107,7 @@ def create_app(
 
     @app.get("/health")
     async def health():
-        return {"status": "ok", "mode": resolved.mode, "day": 12}
+        return {"status": "ok", "mode": resolved.mode, "day": 13}
 
     @app.get("/api/v1/models")
     async def models(request: Request):

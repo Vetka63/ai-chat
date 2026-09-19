@@ -51,6 +51,8 @@ class AgentCommand(StrictModel):
     message: str = Field(min_length=1)
     model_id: str | None = None
     max_output_tokens: int | None = Field(default=None, gt=0, strict=True)
+    command_id: str | None = Field(default=None, min_length=1, max_length=64)
+    expected_revision: int | None = Field(default=None, ge=1, strict=True)
 
 
 class PreviewCommand(StrictModel):
