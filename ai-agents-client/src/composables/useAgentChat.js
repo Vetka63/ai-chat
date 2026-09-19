@@ -129,13 +129,13 @@ export function useAgentChat() {
     }
   }
 
-  async function newChat(title = 'Новый чат', settings = { mode: 'full', keep_last: 10, summarize_every: 10 }, problem) {
+  async function newChat(title = 'Новый чат', settings = { mode: 'full', keep_last: 10, summarize_every: 10 }, problem, profileId) {
     if (!agentId.value || loading.value || sending.value) return
     loading.value = true
     error.value = ''
     warning.value = ''
     try {
-      const created = await api.createConversation(agentId.value, title, settings, problem)
+      const created = await api.createConversation(agentId.value, title, settings, problem, profileId)
       conversations.value.unshift(created)
       conversation.value = { ...created, messages: [] }
       contextSettings.value = { ...created.context_settings }

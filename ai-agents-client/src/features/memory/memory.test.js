@@ -93,7 +93,7 @@ describe('Day 11 memory UI', () => {
     chat.conversation.value = { id: 'chat', messages: [], runs: [] }
     await flushPromises()
     await memory.propose(7)
-    expect(api.proposeMemory).toHaveBeenCalledWith('algorithm_coach', 'chat', { task_revision: 1, profile_revision: 1, source_message_id: 7 })
+    expect(api.proposeMemory).toHaveBeenCalledWith('algorithm_coach', 'chat', { task_revision: 1, profile_revision: 1, preferences_revision: 1, source_message_id: 7 })
     expect(chat.conversation.value.runs).toEqual([run])
     scope.stop()
   })

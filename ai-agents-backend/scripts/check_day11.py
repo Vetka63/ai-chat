@@ -31,7 +31,8 @@ def main():
 
         def versions(chat):
             data = memory(chat)
-            return {'task_revision': data['task']['revision'], 'profile_revision': data['profile']['memory_revision']}
+            return {'task_revision': data['task']['revision'], 'profile_revision': data['profile']['memory_revision'],
+                    'preferences_revision': data['profile']['revision']}
 
         def create(title, problem):
             data = call('POST', prefix+'/conversations', {'title': title,
@@ -44,7 +45,7 @@ def main():
             report['runs'].append({key: run.get(key) for key in
                 ('purpose', 'status', 'requested_model', 'returned_model', 'usage', 'duration_ms')})
 
-        assert call('GET', '/health')['day'] == 11
+        assert call('GET', '/health')['day'] >= 11
         first = create('День 11 — проверка Two Sum', 'Найти индексы двух разных чисел с суммой target.')
         call('POST', path(first)+'/memory/entries', {**versions(first), 'layer': 'working',
             'key': 'constraints', 'value': 'Не менять исходный массив.'})

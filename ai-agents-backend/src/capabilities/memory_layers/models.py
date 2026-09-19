@@ -3,6 +3,7 @@
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+from capabilities.personalization.models import UserProfile
 
 
 class MemoryModel(BaseModel):
@@ -69,11 +70,8 @@ class TaskMemory(MemoryModel):
     revision: int
 
 
-class MemoryProfile(MemoryModel):
-    """Владелец долгосрочной памяти; персонализация появится на Дне 12."""
-    id: str
-    name: str
-    memory_revision: int
+class MemoryProfile(UserProfile):
+    """Согласованный снимок профиля внутри рабочего пространства памяти."""
 
 
 class MemoryWorkspace(MemoryModel):
@@ -92,6 +90,7 @@ class MemoryVersions(MemoryModel):
     """Версии, которые видел клиент; защищают от потери параллельной правки."""
     task_revision: int = Field(ge=1)
     profile_revision: int = Field(ge=1)
+    preferences_revision: int = Field(default=1, ge=1)
 
 
 class SaveMemory(MemoryVersions):

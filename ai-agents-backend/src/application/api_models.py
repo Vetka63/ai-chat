@@ -12,6 +12,7 @@ class CreateConversation(StrictModel):
     title: str = Field(default="Новый чат", min_length=1, max_length=120)
     context_settings: ContextSettings = Field(default_factory=ContextSettings)
     problem: dict[str, str] | None = None
+    profile_id: str | None = Field(default=None, min_length=1, max_length=64)
 
 
 class SelectModel(StrictModel):

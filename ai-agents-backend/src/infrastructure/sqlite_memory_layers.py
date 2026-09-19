@@ -20,8 +20,8 @@ class SqliteMemoryRepository:
     async def initialize(self):
         await migrate_memory_layers(self.store)
 
-    async def create(self, agent_id, title, settings, problem):
-        """Чат и задача создаются атомарно; профиль Дня 11 выбирается сервером."""
+    async def create(self, agent_id, title, settings, problem, profile_id='local'):
+        """Чат и задача создаются атомарно с неизменяемым ID существующего профиля."""
         timestamp, conversation_id = now(), new_id()
         title = title.strip() or 'Новая задача'
         item = ConversationSummary(id=conversation_id, agent_id=agent_id, title=title,
@@ -29,30 +29,35 @@ class SqliteMemoryRepository:
             root_conversation_id=conversation_id)
         async with self.store.connection() as db:
             await db.execute("BEGIN IMMEDIATE")
+            if not await (await db.execute('SELECT id FROM profiles WHERE id=?', (profile_id,))).fetchone():
+                raise AgentError('profile_not_found', 'Выберите существующий профиль', 404)
             await db.execute("""INSERT INTO conversations
                 (id,agent_id,title,created_at,updated_at,context_settings,root_conversation_id)
                 VALUES(?,?,?,?,?,?,?)""", (item.id, agent_id, title, timestamp, timestamp,
                                            settings.model_dump_json(), item.id))
             await db.execute("INSERT INTO tasks(id,conversation_id,agent_id,profile_id,problem) VALUES(?,?,?,?,?)",
-                (new_id(), item.id, agent_id, 'local', json.dumps(problem, ensure_ascii=False)))
+                (new_id(), item.id, agent_id, profile_id, json.dumps(problem, ensure_ascii=False)))
             await db.commit()
         return item
 
     async def _task(self, db, agent_id, conversation_id, versions=None):
         row = await (await db.execute("""SELECT t.*,p.memory_revision,p.name AS profile_name,
+                p.preferences,p.revision AS preferences_revision,p.updated_at AS profile_updated_at,
                 c.context_settings FROM tasks t JOIN conversations c ON c.id=t.conversation_id
                 JOIN profiles p ON p.id=t.profile_id
                 WHERE t.agent_id=? AND c.agent_id=? AND t.conversation_id=?""",
                 (agent_id, agent_id, conversation_id))).fetchone()
         if row is None:
             raise AgentError("task_not_found", "Задача не найдена у выбранного агента", 404)
-        if versions and (row['revision'] != versions.task_revision or row['memory_revision'] != versions.profile_revision):
-            raise AgentError("state_conflict", "Память изменилась. Обновите панель и повторите действие", 409)
+        if versions and (row['revision'] != versions.task_revision or row['memory_revision'] != versions.profile_revision
+                         or row['preferences_revision'] != versions.preferences_revision):
+            raise AgentError("state_conflict", "Память или профиль изменились. Обновите панель и повторите действие", 409)
         return row
 
     @staticmethod
     def versions(workspace):
-        return MemoryVersions(task_revision=workspace.task.revision, profile_revision=workspace.profile.memory_revision)
+        return MemoryVersions(task_revision=workspace.task.revision, profile_revision=workspace.profile.memory_revision,
+                              preferences_revision=workspace.profile.revision)
 
     @staticmethod
     def _scope(task, layer):
@@ -84,7 +89,8 @@ class SqliteMemoryRepository:
             return MemoryWorkspace(
                 task=TaskMemory(id=task['id'], conversation_id=conversation_id, agent_id=agent_id,
                     profile_id=task['profile_id'], problem=json.loads(task['problem']), revision=task['revision']),
-                profile=MemoryProfile(id=task['profile_id'], name=task['profile_name'], memory_revision=task['memory_revision']),
+                profile=MemoryProfile(id=task['profile_id'], name=task['profile_name'], memory_revision=task['memory_revision'],
+                    preferences=json.loads(task['preferences']), revision=task['preferences_revision'], updated_at=task['profile_updated_at']),
                 keep_last=keep, history_message_count=total[0],
                 short_term=[StoredMessage.model_validate(dict(row)) for row in reversed(tail)],
                 working=await self._entries(db, task, 'working'), long_term=await self._entries(db, task, 'long_term'),

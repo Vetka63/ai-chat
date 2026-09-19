@@ -58,7 +58,8 @@ def memory(client, chat):
 
 
 def versions(workspace):
-    return {'task_revision': workspace['task']['revision'], 'profile_revision': workspace['profile']['memory_revision']}
+    return {'task_revision': workspace['task']['revision'], 'profile_revision': workspace['profile']['memory_revision'],
+            'preferences_revision': workspace['profile']['revision']}
 
 
 def save(client, chat, layer='working', key='goal', value='Цель задачи', **extra):
@@ -95,11 +96,11 @@ def test_three_layers_are_sent_and_original_history_is_retained(rig):
     assert run(client, chat, 'Средний вопрос').status_code == 200
     result = run(client, chat, 'Последний вопрос').json()
     sent = llm.calls[-1]
-    assert len(sent) == 6  # system + working + long-term + N=2 + current
-    assert 'Линейное время' in sent[1].content
-    assert 'Найти пару' in sent[1].content
-    assert 'Использовать Python' in sent[2].content
-    assert [m.content for m in sent[3:]] == ['Средний вопрос', llm.answer, 'Последний вопрос']
+    assert len(sent) == 7  # system + profile + working + long-term + N=2 + current
+    assert 'Линейное время' in sent[2].content
+    assert 'Найти пару' in sent[2].content
+    assert 'Использовать Python' in sent[3].content
+    assert [m.content for m in sent[4:]] == ['Средний вопрос', llm.answer, 'Последний вопрос']
     assert result['run']['estimate']['context_mode'] == 'memory_layers'
     assert result['run']['estimate']['working_memory_tokens'] > 0
     assert len(result['run']['memory_context']['message_ids']) == 2
@@ -135,7 +136,7 @@ def test_proposals_do_not_change_memory_until_each_confirmation(rig):
     assert workspace['working'] == workspace['long_term'] == []
     llm.answer = 'Проверка'
     run(client, chat)
-    assert json.loads(llm.calls[-1][1].content.split('\n', 1)[1])['entries'] == {}
+    assert json.loads(llm.calls[-1][2].content.split('\n', 1)[1])['entries'] == {}
     for proposal in workspace['proposals']:
         assert resolve(client, chat, proposal).status_code == 200
     saved = memory(client, chat)
@@ -192,7 +193,7 @@ def test_preview_is_read_only_and_disabled_memory_is_excluded(rig):
         assert preview.status_code == 200, preview.text
     assert memory(client, chat) == before and len(llm.calls) == count
     run(client, chat)
-    assert json.loads(llm.calls[-1][2].content.split('\n', 1)[1]) == {}
+    assert json.loads(llm.calls[-1][3].content.split('\n', 1)[1]) == {}
     assert client.get(path(chat)).json()['runs'][-1]['memory_context']['long_term'] == []
     propose(client, llm, chat, [])
     assert json.loads(llm.calls[-1][-1].content)['existing_long_term'] == {}
@@ -256,7 +257,7 @@ def test_restart_and_non_destructive_migration(tmp_path):
         assert client.get('/api/v1/agents/dialogue/conversations/'+old).status_code == 200
         assert client.get(path(chat)).json()['runs'][0]['memory_context']['problem']['statement'] == 'Two Sum'
     with sqlite3.connect(database) as db:
-        assert db.execute('SELECT count(*) FROM schema_migrations').fetchone()[0] == 1
+        assert db.execute('SELECT count(*) FROM schema_migrations').fetchone()[0] == 2
         # Дополнительный профиль не видит общую память первого профиля.
         db.execute("INSERT INTO profiles(id,name) VALUES('other','Другой профиль')")
         db.execute("UPDATE tasks SET profile_id='other' WHERE conversation_id=?", (chat,))
@@ -287,4 +288,4 @@ async def test_upgrade_existing_day10_database_preserves_messages(tmp_path):
     restored = await store.get('dialogue', chat.id)
     assert restored.messages[0].content == 'Старое сообщение'
     with sqlite3.connect(database) as db:
-        assert db.execute('SELECT count(*) FROM schema_migrations').fetchone()[0] == 1
+        assert db.execute('SELECT count(*) FROM schema_migrations').fetchone()[0] == 2

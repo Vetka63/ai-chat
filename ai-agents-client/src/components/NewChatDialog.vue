@@ -1,12 +1,13 @@
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
 
-const props = defineProps({ open: Boolean, busy: Boolean, memoryLayers: Boolean })
+const props = defineProps({ open: Boolean, busy: Boolean, memoryLayers: Boolean, personalization: Boolean, profiles: Array, defaultProfileId: String })
 const emit = defineEmits(['cancel', 'create'])
 const dialog = ref(null)
 const title = ref('Новый чат')
 const settings = ref({ mode: 'full', keep_last: 10, summarize_every: 10 })
 const problem = ref('')
+const profileId = ref('local')
 const modes = [
   ['full', '∞', 'Полная история', 'Все сообщения диалога'],
   ['summary', 'Σ', 'Summary', 'Сводка старого контекста и свежий хвост'],
@@ -20,17 +21,20 @@ watch(() => props.open, async value => {
   title.value = 'Новый чат'
   settings.value = { mode: props.memoryLayers ? 'sliding_window' : 'full', keep_last: props.memoryLayers ? 4 : 10, summarize_every: 10 }
   problem.value = ''
+  profileId.value = props.defaultProfileId || 'local'
   await nextTick()
   dialog.value?.querySelector('input')?.focus()
 }, { immediate: true })
 function submit() {
+  if (props.busy || (props.personalization && !props.profiles?.some(p => p.id === profileId.value))) return
   emit('create', { title: title.value.trim(), contextSettings: { ...settings.value },
-    ...(props.memoryLayers ? { problem: { statement: problem.value.trim() } } : {}) })
+    ...(props.memoryLayers ? { problem: { statement: problem.value.trim() } } : {}),
+    ...(props.personalization ? { profileId: profileId.value } : {}) })
 }
 function keyboard(event) {
   if (event.key === 'Escape') { event.preventDefault(); emit('cancel'); return }
   if (event.key !== 'Tab') return
-  const items = [...dialog.value.querySelectorAll('button:not(:disabled), input:not(:disabled), textarea:not(:disabled)')]
+  const items = [...dialog.value.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled)')]
   const first = items[0], last = items[items.length - 1]
   if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus() }
   else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
@@ -46,7 +50,12 @@ function keyboard(event) {
         <fieldset :disabled="busy">
           <legend>{{ memoryLayers ? 'Три слоя памяти' : 'Стратегия контекста' }}</legend>
           <template v-if="memoryLayers">
-            <p class="muted">Профиль: Мой учебный профиль. Рабочая память будет отдельной; сохранённые знания доступны и в следующих задачах.</p>
+            <label v-if="personalization" class="dialog-title">Профиль для задачи
+              <select v-model="profileId" class="profile-select" required>
+                <option v-for="p in profiles" :key="p.id" :value="p.id">{{ p.name }}</option>
+              </select>
+            </label>
+            <p class="muted">{{ personalization ? 'Профиль фиксируется при создании. Его предпочтения можно редактировать отдельно; знания другого профиля сюда не попадут.' : 'Профиль: Мой учебный профиль.' }} Рабочая память будет отдельной для этой задачи.</p>
             <label class="dialog-title">Условие задачи<textarea class="problem-input" v-model="problem" rows="4" maxlength="20000" placeholder="Вставьте условие или добавьте его позже в карточке задачи"></textarea></label>
           </template>
           <div v-else class="strategy-grid creation-strategies">
@@ -61,7 +70,7 @@ function keyboard(event) {
           </div>
         </fieldset>
         <p class="immutable-note">{{ memoryLayers ? 'Условие сохранится в рабочую память. Новые сведения из переписки нужно сохранять явно в панели памяти. Размер хвоста фиксируется при создании.' : 'Стратегия фиксируется после создания. Для другого способа управления контекстом создайте новый чат.' }}</p>
-        <footer><button type="button" class="secondary-button" :disabled="busy" @click="emit('cancel')">Отмена</button><button class="report-button" :disabled="busy || !title.trim()" type="submit">Создать чат</button></footer>
+        <footer><button type="button" class="secondary-button" :disabled="busy" @click="emit('cancel')">Отмена</button><button class="report-button" :disabled="busy || !title.trim() || (personalization && !profiles?.some(p => p.id === profileId))" type="submit">Создать чат</button></footer>
       </form>
     </section>
   </div>
@@ -69,4 +78,5 @@ function keyboard(event) {
 
 <style scoped>
 .problem-input { width: 100%; min-height: 110px; resize: vertical; font: inherit; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--text); }
+.profile-select { width: 100%; font: inherit; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--text); }
 </style>

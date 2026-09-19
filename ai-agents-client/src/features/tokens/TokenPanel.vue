@@ -33,6 +33,7 @@ const savingsStatus = computed(() => {
           <dt>Системный текст ≈</dt><dd>{{ count(estimate.system_tokens) }}</dd>
           <dt>Весь prompt ≈</dt><dd>{{ count(estimate.prompt_tokens) }}</dd>
           <template v-if="estimate.context_mode === 'memory_layers'">
+            <dt>Профиль ≈</dt><dd>{{ count(estimate.profile_tokens) }}</dd>
             <dt>Рабочая память ≈</dt><dd>{{ count(estimate.working_memory_tokens) }}</dd>
             <dt>Долговременная ≈</dt><dd>{{ count(estimate.long_term_memory_tokens) }}</dd>
           </template>

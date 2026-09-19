@@ -11,7 +11,8 @@ export function useMemoryLayers(chat) {
   let revision = 0
   let disposed = false
   const scope = () => chat.agentId.value + '/' + chat.conversation.value?.id
-  const versions = () => ({ task_revision: workspace.value.task.revision, profile_revision: workspace.value.profile.memory_revision })
+  const versions = () => ({ task_revision: workspace.value.task.revision, profile_revision: workspace.value.profile.memory_revision,
+    preferences_revision: workspace.value.profile.revision || 1 })
 
   async function refresh() {
     const current = ++revision

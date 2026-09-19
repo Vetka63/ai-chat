@@ -50,6 +50,7 @@ class ContextEstimate(BaseModel):
     context_mode: Literal["full", "summary", "sliding_window", "sticky_facts", "branching", "memory_layers"] = "full"
     working_memory_tokens: int = 0
     long_term_memory_tokens: int = 0
+    profile_tokens: int = 0
     full_prompt_tokens: int | None = None
     summary_tokens: int = 0
     summarized_messages: int = 0

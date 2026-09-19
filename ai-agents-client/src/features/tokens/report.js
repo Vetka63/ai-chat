@@ -84,11 +84,13 @@ export function markdownReport(title, runs, conversation) {
 }
 
 export function memoryReport(title, runs, conversation, workspace) {
+  const personalized = workspace?.profile?.preferences || runs.some(r => r.memory_context?.profile?.preferences)
   const summary = totals(runs)
   const proposals = runs.filter(r => r.purpose === 'memory_proposals')
   const json = value => JSON.stringify(value ?? null, null, 2).split('\n').map(line => '    ' + line).join('\n')
   return [
-    '# День 11 · Три слоя памяти', '', title || 'Алгоритмическая задача', '',
+    personalized ? '# День 12 · Персонализация и память' : '# День 11 · Три слоя памяти', '', title || 'Алгоритмическая задача', '',
+    ...(personalized ? ['Профиль фиксируется у задачи; его настройки могут изменяться. Снимок каждого вызова показывает применённую версию. Мягкие предпочтения не являются обязательными инвариантами.', ''] : []),
     'История сохраняется полностью. В LLM передаются последние N сообщений, карточка задачи и активные подтверждённые записи. Предложения требуют решения пользователя.', '',
     'Анализ кода моделью не является исполнением кода. Локальные оценки токенов приблизительны; usage ниже получен от API.', '',
     `Известный расход: ${summary.tokens} токенов, стоимость ≈ ${money(summary.cost)}. Вызовов без usage: ${summary.unknown}. Вызовов предложений памяти: ${proposals.length} (включены в итог).`, '',
@@ -99,6 +101,7 @@ export function memoryReport(title, runs, conversation, workspace) {
       `Дата: ${r.created_at}. Модель: ${r.requested_model} → ${r.returned_model || 'неизвестна'}.`, '',
       `API input / output / total: ${r.usage?.prompt_tokens ?? '—'} / ${r.usage?.completion_tokens ?? '—'} / ${r.usage?.total_tokens ?? '—'}. USD ≈ ${money(r.estimated_cost_usd)}. Время: ${r.duration_ms ?? '—'} мс.`, '',
       `Prompt ≈ ${r.estimate.prompt_tokens}; рабочая ≈ ${r.estimate.working_memory_tokens ?? 0}; долговременная ≈ ${r.estimate.long_term_memory_tokens ?? 0}. Метод: ${r.estimate.method}.`, '',
+      ...(r.memory_context?.profile ? [`Профиль: ${r.memory_context.profile.name}, версия ${r.memory_context.profile.revision}; оценка блока ≈ ${r.estimate.profile_tokens ?? '—'} токенов.`, ''] : []),
       `Ошибка: ${r.error_code || 'нет'} ${r.error_message || ''}. Завершение: ${r.finish_reason || '—'}.`, '',
       `Источник тарифов: ${r.pricing?.source || 'не задан'}. Проверен: ${r.pricing?.checked_at || '—'}.`, '',
       'Память на момент запроса:', '', json(r.memory_context), '',
@@ -106,6 +109,7 @@ export function memoryReport(title, runs, conversation, workspace) {
     '## Переписка', '',
     ...(conversation?.messages || []).flatMap(m => [`### ${m.role}`, '', m.content, '']),
     '## Что сравнить', '',
+    ...(personalized ? ['Сравните одну задачу с одинаковой моделью и условием в профилях новичка и опытного разработчика: подробность, формат, объяснение терминов. Затем явно попросите другой стиль и проверьте, что сохранённый профиль не изменился.', ''] : []),
     '1. Удалите раннее требование из окна N: агент больше не видит его в краткосрочной памяти.',
     '2. Сохраните требование в рабочую память: оно доступно после выхода сообщения из окна.',
     '3. Сохраните общее знание в долговременную память: оно доступно новой задаче; рабочая память туда не переносится.',
@@ -119,7 +123,7 @@ export function downloadReport(title, runs, conversation, workspace) {
   const url = URL.createObjectURL(new Blob([content], { type: 'text/markdown;charset=utf-8' }))
   const link = document.createElement('a')
   link.href = url
-  link.download = memory ? 'day-11-memory-layers.md' : 'day-10-context-strategies.md'
+  link.download = memory ? (workspace?.profile?.preferences ? 'day-12-personalization.md' : 'day-11-memory-layers.md') : 'day-10-context-strategies.md'
   link.click()
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }

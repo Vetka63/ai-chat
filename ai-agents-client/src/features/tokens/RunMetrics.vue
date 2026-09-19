@@ -14,6 +14,10 @@ defineProps({ run: Object })
         <dt>Время / завершение</dt><dd>{{ count(run.duration_ms) }} мс / {{ run.finish_reason || '—' }}</dd>
         <dt>Лимит ответа</dt><dd>{{ run.estimate.reserved_output_tokens == null ? 'По умолчанию API' : count(run.estimate.reserved_output_tokens) }}</dd>
         <dt>Оценка prompt</dt><dd>{{ count(run.estimate.prompt_tokens) }}</dd>
+        <template v-if="run.memory_context?.profile">
+          <dt>Профиль при вызове</dt><dd>{{ run.memory_context.profile.name }} · v{{ run.memory_context.profile.revision }}</dd>
+          <dt>Профиль, токены ≈</dt><dd>{{ count(run.estimate.profile_tokens) }}</dd>
+        </template>
         <template v-if="run.estimate.context_mode === 'memory_layers'">
           <dt>Рабочая / долговременная ≈</dt><dd>{{ count(run.estimate.working_memory_tokens) }} / {{ count(run.estimate.long_term_memory_tokens) }}</dd>
           <dt>Сообщений в контексте</dt><dd>{{ run.estimate.retained_message_count }} + текущий запрос</dd>

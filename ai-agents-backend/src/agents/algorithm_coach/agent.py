@@ -4,6 +4,7 @@ import json
 
 from agent_core.models import AgentError, AgentInfo, AgentResult, Message
 from capabilities.context_memory.models import ContextSettings
+from capabilities.personalization.context import profile_data, profile_text
 
 
 class AlgorithmCoachAgent:
@@ -17,14 +18,14 @@ class AlgorithmCoachAgent:
     @property
     def info(self):
         return AgentInfo(id=self.config.id, name=self.config.name, description=self.config.description,
-            capabilities=['persistent_history', 'token_accounting', 'memory_layers'])
+            capabilities=['persistent_history', 'token_accounting', 'memory_layers', 'personalization'])
 
-    async def create_conversation(self, title, settings, problem=None):
+    async def create_conversation(self, title, settings, problem=None, profile_id=None):
         if settings and settings.mode != 'sliding_window':
             raise AgentError('unsupported_context', 'У наставника используются три слоя памяти и окно последних сообщений')
         settings = settings or ContextSettings(mode='sliding_window', keep_last=4)
         problem = self.memory.policy.validate_problem(problem or {})
-        return await self.memory.repository.create(self.config.id, title, settings, problem)
+        return await self.memory.repository.create(self.config.id, title, settings, problem, profile_id or 'local')
 
     def output_limit(self, command, conversation, spec):
         value = command.max_output_tokens if 'max_output_tokens' in command.model_fields_set else conversation.max_output_tokens
@@ -41,6 +42,7 @@ class AlgorithmCoachAgent:
             estimate.context_mode = 'memory_layers'
             estimate.working_memory_tokens = counter.count_text(working)
             estimate.long_term_memory_tokens = counter.count_text(long_term)
+            estimate.profile_tokens = counter.count_text(profile_text(workspace.profile))
             estimate.history_message_count = workspace.history_message_count
             estimate.retained_message_count = len(history)
             estimate.discarded_message_count = workspace.history_message_count - len(history)
@@ -82,16 +84,18 @@ class AlgorithmCoachAgent:
         async with self._locks.setdefault(conversation_id, asyncio.Lock()):
             conversation = await self.store.get(self.config.id, conversation_id)
             workspace = await self.memory.repository.workspace(self.config.id, conversation_id)
-            if (workspace.task.revision, workspace.profile.memory_revision) != (command.task_revision, command.profile_revision):
+            if (workspace.task.revision, workspace.profile.memory_revision, workspace.profile.revision) != (
+                    command.task_revision, command.profile_revision, command.preferences_revision):
                 raise AgentError('state_conflict', 'Обновите панель памяти перед анализом', 409)
             source = await self.memory.repository.source(self.config.id, conversation_id, command.source_message_id)
-            payload_data = {'user_message': source.content,
+            payload_data = {'user_message': source.content, 'profile': profile_data(workspace.profile),
                 'existing_working': {e.key: e.value for e in workspace.working if e.active},
                 'existing_long_term': {e.key: e.value for e in workspace.long_term if e.active}}
             payload = json.dumps(payload_data, ensure_ascii=False)
             messages = [Message(role='system', content=self.config.proposals_prompt), Message(role='user', content=payload)]
             spec = self.catalog.get(conversation.selected_model_id or self.config.model)
             estimate = await asyncio.to_thread(self.accounting.estimate, messages, [], payload, spec, conversation.max_output_tokens)
+            estimate.profile_tokens = self.accounting.estimators[spec.provider].count_text(profile_text(workspace.profile))
             # Индекс исходного сообщения используется для отчёта, а ID — для происхождения записи.
             index = await self.memory.repository.source_index(self.config.id, conversation_id, source.id)
             async with self.calls.invoke(agent_id=self.config.id, conversation_id=conversation_id,
@@ -99,7 +103,7 @@ class AlgorithmCoachAgent:
                 max_tokens=conversation.max_output_tokens, purpose='memory_proposals',
                 memory_context={'source_message_id': source.id, 'task_id': workspace.task.id,
                     'task_revision': workspace.task.revision, 'profile_revision': workspace.profile.memory_revision,
-                    **payload_data}) as (completion, run):
+                    **payload_data, 'profile': workspace.profile.model_dump()}) as (completion, run):
                 candidates = self.output_policy.proposals(completion, self.memory.policy)
                 await self.memory.repository.save_proposals(workspace, source.id, candidates)
             return {'workspace': await self.memory.repository.workspace(self.config.id, conversation_id), 'run': run}

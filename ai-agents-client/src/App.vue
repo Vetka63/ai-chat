@@ -12,9 +12,12 @@ import TokenPanel from './features/tokens/TokenPanel.vue'
 import ContextPanel from './features/context/ContextPanel.vue'
 import MemoryPanel from './features/memory/MemoryPanel.vue'
 import { useMemoryLayers } from './features/memory/useMemoryLayers'
+import { useProfiles } from './features/profiles/useProfiles'
+import ProfilePanel from './features/profiles/ProfilePanel.vue'
 
 const chat = useAgentChat()
 const memory = useMemoryLayers(chat)
+const profiles = useProfiles(chat, memory)
 const lastMemoryContext = computed(() => [...chat.runs.value].reverse().find(r => r.purpose === 'dialogue' && r.memory_context)?.memory_context)
 const sidebarOpen = ref(false)
 const compact = ref(window.innerWidth <= 1180)
@@ -26,7 +29,7 @@ const chatsButton = ref(null)
 const settingsPanel = ref(null)
 const chatsPanel = ref(null)
 const newChatOpen = ref(false)
-const busy = computed(() => chat.loading.value || chat.sending.value || memory.busy.value)
+const busy = computed(() => chat.loading.value || chat.sending.value || memory.busy.value || profiles.busy.value)
 const overlay = computed(() => mobile.value && sidebarOpen.value ? 'chats' : compact.value && settingsOpen.value ? 'settings' : null)
 watch(theme, value => { document.documentElement.dataset.theme = value }, { immediate: true })
 
@@ -84,8 +87,8 @@ function chooseConversation(id) {
 function newChat() {
   newChatOpen.value = true
 }
-async function createNewChat({ title, contextSettings, problem }) {
-  await chat.newChat(title, contextSettings, problem)
+async function createNewChat({ title, contextSettings, problem, profileId }) {
+  await chat.newChat(title, contextSettings, problem, profileId)
   if (!chat.error.value) {
     newChatOpen.value = false
     if (mobile.value) closePanels()
@@ -111,7 +114,7 @@ async function removeConversation(item) {
     <main class="main-panel" :inert="Boolean(overlay) || newChatOpen" :aria-hidden="overlay || newChatOpen ? true : undefined">
       <header class="chat-header">
         <button ref="chatsButton" class="menu-button icon-button" aria-label="Открыть список чатов" aria-controls="chats-panel" :aria-expanded="sidebarOpen" @click="toggleChats">☰</button>
-        <div><strong>{{ chat.conversation.value?.title || chat.agent.value?.name || 'AI Agents' }}</strong><span><i></i>{{ chat.loading.value ? 'Загрузка истории…' : 'Контекст сохранён' }}</span></div>
+        <div><strong>{{ chat.conversation.value?.title || chat.agent.value?.name || 'AI Agents' }}</strong><span><i></i>{{ chat.loading.value ? 'Загрузка истории…' : memory.workspace.value?.profile ? memory.workspace.value.profile.name + ' · память сохранена' : 'Контекст сохранён' }}</span></div>
         <button ref="settingsButton" class="settings-toggle icon-button" aria-label="Настройки агента" aria-controls="settings-panel" :aria-expanded="settingsOpen" @click="toggleSettings"><span aria-hidden="true">☷</span><span class="settings-label">Настройки</span></button>
       </header>
       <div v-if="chat.error.value" class="error-banner" role="alert">{{ chat.error.value }} <button @click="chat.initialize">Повторить</button></div>
@@ -126,6 +129,9 @@ async function removeConversation(item) {
       :role="overlay === 'settings' ? 'dialog' : undefined" :aria-modal="overlay === 'settings' ? true : undefined"
       :agents="chat.agents.value" :selected-agent="chat.agentId.value" :theme="theme" :busy="busy"
       @select-agent="chat.selectAgent" @theme="theme = $event" @close="closePanels">
+      <ProfilePanel v-if="profiles.enabled.value" :profiles="profiles.profiles.value" :profile="memory.workspace.value?.profile"
+        :busy="busy" :loading="profiles.loading.value" :error="profiles.error.value" :notice="profiles.notice.value" :preferred-id="profiles.preferredId.value"
+        @save="profiles.save" @refresh="profiles.refresh" />
       <OutputSettings :limit="chat.outputLimit.value" :model="chat.selectedModel.value" :busy="busy" :memory-layers="memory.enabled.value" @change="chat.outputLimit.value = $event" />
       <MemoryPanel v-if="memory.enabled.value" :workspace="memory.workspace.value" :busy="busy"
         :loading="memory.loading.value" :error="memory.error.value" :last-context="lastMemoryContext"
@@ -139,6 +145,9 @@ async function removeConversation(item) {
       <TokenPanel :models="chat.models.value" :model-id="chat.modelId.value" :runs="chat.runs.value" :conversation="chat.conversation.value" :memory-workspace="memory.workspace.value"
         :estimate="chat.estimate.value" :estimating="chat.estimating.value" :preview-error="chat.previewError.value" :busy="busy" :title="chat.conversation.value?.title" />
     </AgentSidebar>
-    <NewChatDialog :open="newChatOpen" :busy="busy" :memory-layers="memory.enabled.value" @cancel="newChatOpen = false" @create="createNewChat" />
+    <NewChatDialog :open="newChatOpen" :busy="busy" :memory-layers="memory.enabled.value"
+      :personalization="profiles.enabled.value" :profiles="profiles.profiles.value"
+      :default-profile-id="profiles.preferredId.value || memory.workspace.value?.profile.id || 'local'"
+      @cancel="newChatOpen = false" @create="createNewChat" />
   </div>
 </template>

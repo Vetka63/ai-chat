@@ -26,6 +26,8 @@ from capabilities.context_memory.models import ContextSettings
 from capabilities.token_accounting.service import calculate_token_savings
 from infrastructure.sqlite_memory_layers import SqliteMemoryRepository
 from application.routes.memory import router as memory_router
+from application.routes.profiles import router as profile_router
+from infrastructure.sqlite_profiles import SqliteProfileRepository
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +56,7 @@ def create_app(
         await app.state.branches.initialize()
         app.state.memory_layers = SqliteMemoryRepository(active_store)
         await app.state.memory_layers.initialize()
+        app.state.profiles = SqliteProfileRepository(active_store)
         app.state.catalog = ModelCatalog.load(Path(__file__).with_name("models.json"), {
             "deepseek": resolved.mode == "demo" or bool(resolved.api_key.get_secret_value()),
             "mistral": resolved.mode == "demo" or bool(resolved.mistral_api_key.get_secret_value()),
@@ -73,8 +76,9 @@ def create_app(
             )
             yield
 
-    app = FastAPI(title="AI Agents · День 11", version="0.6.0", lifespan=lifespan)
+    app = FastAPI(title="AI Agents · День 12", version="0.7.0", lifespan=lifespan)
     app.include_router(memory_router)
+    app.include_router(profile_router)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=resolved.origins,
@@ -96,7 +100,7 @@ def create_app(
 
     @app.get("/health")
     async def health():
-        return {"status": "ok", "mode": resolved.mode, "day": 11}
+        return {"status": "ok", "mode": resolved.mode, "day": 12}
 
     @app.get("/api/v1/models")
     async def models(request: Request):
@@ -115,9 +119,9 @@ def create_app(
         agent = request.app.state.registry.get(agent_id)
         creator = getattr(agent, 'create_conversation', None)
         if creator is not None:
-            return await creator(body.title, body.context_settings if 'context_settings' in body.model_fields_set else None, body.problem)
-        if body.problem is not None:
-            raise AgentError('task_not_supported', 'Карточка задачи доступна у алгоритмического наставника')
+            return await creator(body.title, body.context_settings if 'context_settings' in body.model_fields_set else None, body.problem, body.profile_id)
+        if body.problem is not None or body.profile_id is not None:
+            raise AgentError('task_not_supported', 'Карточка задачи и профиль доступны у алгоритмического наставника')
         return await request.app.state.store.create(agent_id, body.title, body.context_settings)
 
     @app.get(

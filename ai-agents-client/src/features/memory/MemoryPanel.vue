@@ -28,12 +28,12 @@ function remove(entry) {
 
 <template>
   <section class="memory-panel sidebar-section">
-    <p class="section-title">Три слоя памяти · День 11</p>
+    <p class="section-title">Три слоя памяти</p>
     <p v-if="error" role="alert" class="token-warning">{{ error }}</p>
     <p v-if="!workspace" class="muted">{{ loading ? 'Загружаем память…' : 'Создайте задачу, чтобы настроить память.' }}</p>
     <button v-if="!workspace && error" :disabled="busy || loading" @click="emit('refresh')">Обновить память</button>
     <template v-if="workspace">
-      <small class="muted">Профиль: {{ workspace.profile.name }}. Один локальный профиль, без аккаунтов. Анализ кода моделью не означает его запуск.</small>
+      <small class="muted">Профиль: {{ workspace.profile.name }}. Долговременные записи изолированы по профилю и агенту. Анализ кода моделью не означает его запуск.</small>
       <details open>
         <summary>1. Краткосрочная · последние {{ workspace.keep_last }} сообщений</summary>
         <p>В запрос попадут {{ workspace.short_term.length }} из {{ workspace.history_message_count }} сохранённых сообщений + ваш новый запрос. Считаются сообщения, не пары.</p>
