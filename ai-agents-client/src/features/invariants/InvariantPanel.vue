@@ -6,8 +6,9 @@ const props = defineProps({ workspace: Object, conversationId: String, workflowS
 const emit = defineEmits(['save', 'refresh'])
 const open = ref(false)
 const draft = ref([])
-const editable = computed(() => props.workflowState?.phase === 'planning'
-  && props.workflowState?.status === 'active' && !props.busy && !props.sending)
+const editingPhase = computed(() => props.workflowState?.phase === 'planning'
+  && props.workflowState?.status === 'active')
+const editable = computed(() => editingPhase.value && !props.busy && !props.sending)
 const activeCount = computed(() => props.workspace?.rules.filter(rule => rule.active).length || 0)
 const latest = computed(() => [...(props.workspace?.checks || [])].reverse().slice(0, 3))
 const currentCheck = computed(() => latest.value.find(check => check.revision === props.workspace?.revision))
@@ -38,7 +39,7 @@ function save() {
     <p v-if="error" class="invariant-error" role="alert">{{ error }}</p>
     <div v-if="open" class="invariant-body">
       <p>Эти правила относятся только к текущей задаче. Агент проверяет запрос и ответ отдельным judge на DeepSeek Pro — это дополнительные платные API-вызовы.</p>
-      <p v-if="!editable" class="invariant-notice">Изменять правила можно только во время активного планирования, до принятия плана.</p>
+      <p v-if="!editingPhase" class="invariant-notice">Изменять правила можно только во время активного планирования, до принятия плана.</p>
       <div v-for="(rule, index) in draft" :key="rule.id || `new-${index}`" class="invariant-rule">
         <div class="rule-top"><strong>Правило {{ index + 1 }}</strong>
           <label><input v-model="rule.active" type="checkbox" :disabled="!editable"> Активно</label>

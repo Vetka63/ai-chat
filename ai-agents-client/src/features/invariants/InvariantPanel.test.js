@@ -37,4 +37,11 @@ describe('Day 14 invariant panel', () => {
     expect(wrapper.get('.save-rules').attributes('disabled')).toBeDefined()
     expect(wrapper.get('.invariant-rule textarea').attributes('disabled')).toBeDefined()
   })
+
+  it.each([{ busy: true }, { sending: true }])('does not show a phase warning during temporary activity: %j', async activity => {
+    const wrapper = mount(InvariantPanel, { props: { ...props, ...activity } })
+    await wrapper.get('.invariant-bar button').trigger('click')
+    expect(wrapper.text()).not.toContain('только во время активного планирования')
+    expect(wrapper.get('.save-rules').attributes('disabled')).toBeDefined()
+  })
 })
