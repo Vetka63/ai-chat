@@ -35,8 +35,10 @@ class SqliteMemoryRepository:
                 (id,agent_id,title,created_at,updated_at,context_settings,root_conversation_id)
                 VALUES(?,?,?,?,?,?,?)""", (item.id, agent_id, title, timestamp, timestamp,
                                            settings.model_dump_json(), item.id))
+            task_id = new_id()
             await db.execute("INSERT INTO tasks(id,conversation_id,agent_id,profile_id,problem) VALUES(?,?,?,?,?)",
-                (new_id(), item.id, agent_id, profile_id, json.dumps(problem, ensure_ascii=False)))
+                (task_id, item.id, agent_id, profile_id, json.dumps(problem, ensure_ascii=False)))
+            await db.execute("INSERT INTO task_workflow(task_id) VALUES(?)", (task_id,))
             await db.commit()
         return item
 
@@ -220,12 +222,20 @@ class SqliteMemoryRepository:
                              ('accepted' if action == 'accept' else 'rejected', proposal_id))
             await db.commit()
 
-    async def append_reply(self, workspace, reply):
+    async def append_reply(self, workspace, reply, workflow_revision=None):
         """Не сохраняет ответ как актуальный, если память изменилась во время генерации."""
         async with self.store.connection() as db:
             await db.execute("BEGIN IMMEDIATE")
             await self._task(db, workspace.task.agent_id, workspace.task.conversation_id, self.versions(workspace))
-            await db.execute("INSERT INTO messages(conversation_id,role,content,created_at) VALUES(?,?,?,?)",
-                             (workspace.task.conversation_id, 'assistant', reply, now()))
+            if workflow_revision is not None:
+                current = await (await db.execute('SELECT revision,status FROM task_workflow WHERE task_id=?',
+                    (workspace.task.id,))).fetchone()
+                if current['revision'] != workflow_revision or current['status'] != 'active':
+                    raise AgentError('state_conflict', 'Состояние задачи изменилось во время ответа. Обновите чат', 409)
+            cursor = await db.execute("INSERT INTO messages(conversation_id,role,content,created_at) VALUES(?,?,?,?)",
+                                      (workspace.task.conversation_id, 'assistant', reply, now()))
+            if workflow_revision is not None:
+                await db.execute('UPDATE task_workflow SET candidate_message_id=? WHERE task_id=?',
+                                 (cursor.lastrowid, workspace.task.id))
             await db.execute("UPDATE conversations SET updated_at=? WHERE id=?", (now(), workspace.task.conversation_id))
             await db.commit()

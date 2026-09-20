@@ -61,6 +61,10 @@ body {
 
 .app-shell { display: grid; grid-template-columns: 252px minmax(0, 1fr); height: 100dvh; color: var(--text); }
 .app-shell.settings-open { grid-template-columns: 252px minmax(0, 1fr) 320px; }
+.app-shell.focus-mode, .app-shell.focus-mode.settings-open { grid-template-columns: minmax(0, 1fr); }
+.app-shell.focus-mode .message-list, .app-shell.focus-mode .composer-wrap { max-width: 1220px; }
+.app-shell.focus-mode .composer-wrap { width: min(1220px, calc(100% - 48px)); }
+.app-shell.focus-mode .garland { left: 0; }
 .chat-sidebar, .settings-sidebar { min-height: 0; min-width: 0; background: var(--sidebar); display: flex; flex-direction: column; }
 .chat-sidebar { gap: 24px; padding: 24px 14px 16px; border-right: 1px solid var(--line); overflow: hidden; }
 .settings-sidebar { border-left: 1px solid var(--line); }
@@ -74,6 +78,8 @@ body {
 .icon-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; flex-shrink: 0; height: 36px; min-width: 36px; padding: 7px; border: 1px solid transparent; border-radius: 10px; color: var(--muted); background: transparent; cursor: pointer; font-size: 22px; }
 .icon-button:hover { background: var(--accent-soft); color: var(--text); }
 .settings-toggle { margin-left: auto; }
+.focus-toggle { gap: 8px; font-size: 19px; }
+.focus-label { font-size: 12px; font-weight: 600; white-space: nowrap; }
 .chat-header .settings-label { font-size: 12px; margin: 0; color: inherit; }
 .theme-section { font-size: 12px; }
 .theme-section summary > span { float: right; }
@@ -118,14 +124,14 @@ body {
 .day-note { display: flex; flex-direction: column; gap: 4px; padding: 12px; border-radius: 12px; background: color-mix(in srgb, var(--accent-soft) 70%, transparent); font-size: 11px; line-height: 1.5; }
 .day-note span, .muted { color: var(--muted); }
 
-.main-panel { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; min-width: 0; height: 100dvh; background: var(--panel); }
+.main-panel { position: relative; display: flex; flex-direction: column; min-width: 0; height: 100dvh; background: var(--panel); }
 .chat-header { display: flex; align-items: center; height: 68px; gap: 12px; padding: 0 24px; border-bottom: 1px solid var(--line); backdrop-filter: blur(16px); }
 .chat-header > div { display: flex; flex-direction: column; line-height: 1.25; }
 .chat-header span { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 11px; margin-top: 3px; }
 .chat-header span i { width: 6px; height: 6px; border-radius: 50%; background: #54a26e; box-shadow: 0 0 0 3px color-mix(in srgb, #54a26e 18%, transparent); }
 .chat-header .day-badge { margin: 0 0 0 auto; padding: 5px 9px; border: 1px solid var(--line); border-radius: 999px; letter-spacing: .12em; font-weight: 700; }
 .menu-button { display: none; }
-.thread { min-height: 0; overflow-y: auto; scrollbar-color: var(--line) transparent; }
+.thread { flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-color: var(--line) transparent; }
 .welcome { display: grid; justify-items: center; align-content: center; max-width: 720px; min-height: 100%; margin: auto; padding: 44px 30px 110px; text-align: center; }
 .welcome-orbit { display: grid; place-items: center; width: 64px; height: 64px; border: 1px solid var(--line); border-radius: 21px; background: var(--panel); box-shadow: var(--shadow); transform: rotate(-5deg); }
 .welcome-orbit i { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 15px; color: var(--accent); background: var(--accent-soft); font-style: normal; font-size: 22px; }
@@ -270,6 +276,8 @@ body {
   .mobile-close, .menu-button { display: block; }
   .chat-header { padding: 0 12px; gap: 8px; }
   .chat-header .settings-label { display: none; }
+  .chat-header .focus-label { display: none; }
+  .app-shell.focus-mode .composer-wrap { width: calc(100% - 24px); }
   .message-list { padding: 24px 16px; }
   .message { grid-template-columns: 32px minmax(0,1fr); gap: 10px; }
   .message-avatar { width: 32px; height: 32px; border-radius: 10px; }

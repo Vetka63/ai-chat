@@ -10,10 +10,10 @@ from .memory_policy import AlgorithmMemoryPolicy
 from .output_policy import CoachOutputPolicy
 
 
-def build_algorithm_coach(model, llm, store, repository, catalog, accounting):
+def build_algorithm_coach(model, llm, store, repository, catalog, accounting, workflow_repository=None):
     directory = Path(__file__).with_name('prompts')
     config = AlgorithmCoachConfig(model=model, system_prompt=(directory/'system.txt').read_text(encoding='utf-8'),
         proposals_prompt=(directory/'proposals.txt').read_text(encoding='utf-8'))
     return AlgorithmCoachAgent(config, store, LayeredMemory(repository, AlgorithmMemoryPolicy()),
         RecordedLlmCall(llm, accounting, catalog), catalog, accounting,
-        CoachInputPolicy(), CoachOutputPolicy(), CoachContextPolicy())
+        CoachInputPolicy(), CoachOutputPolicy(), CoachContextPolicy(), workflow_repository)

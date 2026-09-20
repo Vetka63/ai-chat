@@ -14,24 +14,29 @@ import MemoryPanel from './features/memory/MemoryPanel.vue'
 import { useMemoryLayers } from './features/memory/useMemoryLayers'
 import { useProfiles } from './features/profiles/useProfiles'
 import ProfilePanel from './features/profiles/ProfilePanel.vue'
+import WorkflowPanel from './features/workflow/WorkflowPanel.vue'
+import { useWorkflow } from './features/workflow/useWorkflow'
 
 const chat = useAgentChat()
 const memory = useMemoryLayers(chat)
 const profiles = useProfiles(chat, memory)
+const workflow = useWorkflow(chat)
 const lastMemoryContext = computed(() => [...chat.runs.value].reverse().find(r => r.purpose === 'dialogue' && r.memory_context)?.memory_context)
 const sidebarOpen = ref(false)
 const compact = ref(window.innerWidth <= 1180)
 const mobile = ref(window.innerWidth <= 760)
 const settingsOpen = ref(!compact.value)
+const focusMode = ref(localStorage.getItem('agents:focus-mode') === 'true')
 const theme = ref('light')
 const settingsButton = ref(null)
 const chatsButton = ref(null)
 const settingsPanel = ref(null)
 const chatsPanel = ref(null)
 const newChatOpen = ref(false)
-const busy = computed(() => chat.loading.value || chat.sending.value || memory.busy.value || profiles.busy.value)
-const overlay = computed(() => mobile.value && sidebarOpen.value ? 'chats' : compact.value && settingsOpen.value ? 'settings' : null)
+const busy = computed(() => chat.loading.value || chat.sending.value || memory.busy.value || profiles.busy.value || workflow.busy.value)
+const overlay = computed(() => focusMode.value ? null : mobile.value && sidebarOpen.value ? 'chats' : compact.value && settingsOpen.value ? 'settings' : null)
 watch(theme, value => { document.documentElement.dataset.theme = value }, { immediate: true })
+watch(focusMode, value => { localStorage.setItem('agents:focus-mode', String(value)) })
 
 function resize() {
   const nextCompact = window.innerWidth <= 1180
@@ -47,12 +52,18 @@ function closePanels() {
   nextTick(() => (wasChats ? chatsButton : settingsButton).value?.focus())
 }
 function toggleSettings() {
+  if (focusMode.value) { focusMode.value = false; settingsOpen.value = true; return }
   sidebarOpen.value = false
   settingsOpen.value = !settingsOpen.value
 }
 function toggleChats() {
+  if (focusMode.value) { focusMode.value = false; sidebarOpen.value = true; settingsOpen.value = false; return }
   settingsOpen.value = false
   sidebarOpen.value = !sidebarOpen.value
+}
+function toggleFocus() {
+  focusMode.value = !focusMode.value
+  sidebarOpen.value = false
 }
 // В выдвижной панели фокус остаётся внутри; Escape возвращает его на кнопку.
 watch(overlay, async value => {
@@ -101,12 +112,12 @@ async function removeConversation(item) {
 </script>
 
 <template>
-  <div class="app-shell" :class="{ 'settings-open': settingsOpen }">
+  <div class="app-shell" :class="{ 'settings-open': settingsOpen, 'focus-mode': focusMode }">
     <div v-if="theme === 'new-year'" class="garland" aria-hidden="true"><i v-for="n in 18" :key="n"></i></div>
     <button v-if="overlay" class="scrim" tabindex="-1" aria-label="Закрыть боковую панель" @click="closePanels"></button>
-    <ChatSidebar ref="chatsPanel" id="chats-panel" :class="{ open: sidebarOpen }"
-      :inert="newChatOpen || (mobile && !sidebarOpen) || overlay === 'settings'"
-      :aria-hidden="newChatOpen || (mobile && !sidebarOpen) || overlay === 'settings' ? true : undefined"
+    <ChatSidebar ref="chatsPanel" v-show="!focusMode" id="chats-panel" :class="{ open: sidebarOpen }"
+      :inert="newChatOpen || focusMode || (mobile && !sidebarOpen) || overlay === 'settings'"
+      :aria-hidden="newChatOpen || focusMode || (mobile && !sidebarOpen) || overlay === 'settings' ? true : undefined"
       :role="overlay === 'chats' ? 'dialog' : undefined" :aria-modal="overlay === 'chats' ? true : undefined"
       :conversations="chat.conversations.value" :selected-conversation="chat.conversation.value?.id"
       :agent-name="chat.agent.value?.name" :busy="busy"
@@ -115,17 +126,21 @@ async function removeConversation(item) {
       <header class="chat-header">
         <button ref="chatsButton" class="menu-button icon-button" aria-label="Открыть список чатов" aria-controls="chats-panel" :aria-expanded="sidebarOpen" @click="toggleChats">☰</button>
         <div><strong>{{ chat.conversation.value?.title || chat.agent.value?.name || 'AI Agents' }}</strong><span><i></i>{{ chat.loading.value ? 'Загрузка истории…' : memory.workspace.value?.profile ? memory.workspace.value.profile.name + ' · память сохранена' : 'Контекст сохранён' }}</span></div>
-        <button ref="settingsButton" class="settings-toggle icon-button" aria-label="Настройки агента" aria-controls="settings-panel" :aria-expanded="settingsOpen" @click="toggleSettings"><span aria-hidden="true">☷</span><span class="settings-label">Настройки</span></button>
+        <button class="focus-toggle icon-button" :aria-label="focusMode ? 'Вернуть боковые панели' : 'Развернуть чат'" :aria-pressed="focusMode" @click="toggleFocus"><span aria-hidden="true">{{ focusMode ? '◧' : '⛶' }}</span><span class="focus-label">{{ focusMode ? 'Обычный вид' : 'Развернуть чат' }}</span></button>
+        <button ref="settingsButton" class="settings-toggle icon-button" aria-label="Настройки агента" aria-controls="settings-panel" :aria-expanded="settingsOpen && !focusMode" @click="toggleSettings"><span aria-hidden="true">☷</span><span class="settings-label">Настройки</span></button>
       </header>
       <div v-if="chat.error.value" class="error-banner" role="alert">{{ chat.error.value }} <button @click="chat.initialize">Повторить</button></div>
       <div v-if="chat.warning.value" class="warning-banner" role="status">{{ chat.warning.value }}</div>
+      <WorkflowPanel v-if="workflow.enabled.value" :workspace="workflow.workspace.value"
+        :busy="workflow.busy.value || chat.loading.value" :sending="chat.sending.value" :error="workflow.error.value"
+        @apply="workflow.apply" @refresh="workflow.refresh" />
       <ChatThread :messages="chat.messages.value" :runs="chat.runs.value" :agent-name="chat.agent.value?.name" :sending="chat.sending.value" :memory-layers="memory.enabled.value" />
-      <MessageComposer v-model="chat.draft.value" :disabled="busy || !chat.agentId.value || !chat.conversation.value || !chat.outputLimitValid.value" :sending="chat.sending.value" @send="chat.send">
+      <MessageComposer v-model="chat.draft.value" :disabled="busy || !chat.agentId.value || !chat.conversation.value || !chat.outputLimitValid.value || (workflow.enabled.value && (!workflow.workspace.value || workflow.workspace.value.state.status === 'paused' || workflow.workspace.value.state.phase === 'done'))" :sending="chat.sending.value" @send="chat.send">
         <ModelPicker :models="chat.models.value" :model-id="chat.modelId.value" :busy="busy" @model="chat.changeModel" />
       </MessageComposer>
     </main>
-    <AgentSidebar ref="settingsPanel" id="settings-panel" v-show="settingsOpen" :inert="overlay === 'chats' || newChatOpen"
-      :aria-hidden="overlay === 'chats' || newChatOpen ? true : undefined"
+    <AgentSidebar ref="settingsPanel" id="settings-panel" v-show="settingsOpen && !focusMode" :inert="focusMode || overlay === 'chats' || newChatOpen"
+      :aria-hidden="focusMode || overlay === 'chats' || newChatOpen ? true : undefined"
       :role="overlay === 'settings' ? 'dialog' : undefined" :aria-modal="overlay === 'settings' ? true : undefined"
       :agents="chat.agents.value" :selected-agent="chat.agentId.value" :theme="theme" :busy="busy"
       @select-agent="chat.selectAgent" @theme="theme = $event" @close="closePanels">

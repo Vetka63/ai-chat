@@ -6,14 +6,16 @@ from capabilities.personalization.context import profile_text
 
 class CoachContextPolicy:
     """Добавляет карточку задачи и активные записи, затем выбранный хвост диалога."""
-    def blocks(self, workspace):
+    def blocks(self, workspace, workflow=None):
         working = json.dumps({'problem': workspace.task.problem,
-            'entries': {e.key: e.value for e in workspace.working if e.active}}, ensure_ascii=False)
+            'entries': {e.key: e.value for e in workspace.working if e.active},
+            **({'workflow': {'state': workflow.state.model_dump(),
+                'artifacts': {item.kind: item.content for item in workflow.artifacts}}} if workflow else {})}, ensure_ascii=False)
         long_term = json.dumps({e.key: e.value for e in workspace.long_term if e.active}, ensure_ascii=False)
         return working, long_term
 
-    def build(self, system, workspace, text):
-        working, long_term = self.blocks(workspace)
+    def build(self, system, workspace, text, workflow=None):
+        working, long_term = self.blocks(workspace, workflow)
         return [Message(role='system', content=system),
                 Message(role='user', content='Профиль пользователя (мягкие предпочтения):\n' + profile_text(workspace.profile)),
                 Message(role='user', content='Рабочая память задачи (подтверждённые данные):\n' + working),

@@ -28,6 +28,8 @@ from infrastructure.sqlite_memory_layers import SqliteMemoryRepository
 from application.routes.memory import router as memory_router
 from application.routes.profiles import router as profile_router
 from infrastructure.sqlite_profiles import SqliteProfileRepository
+from infrastructure.sqlite_task_workflow import SqliteWorkflowRepository
+from application.routes.workflow import router as workflow_router
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +58,8 @@ def create_app(
         await app.state.branches.initialize()
         app.state.memory_layers = SqliteMemoryRepository(active_store)
         await app.state.memory_layers.initialize()
+        app.state.workflow = SqliteWorkflowRepository(active_store)
+        await app.state.workflow.initialize()
         app.state.profiles = SqliteProfileRepository(active_store)
         app.state.catalog = ModelCatalog.load(Path(__file__).with_name("models.json"), {
             "deepseek": resolved.mode == "demo" or bool(resolved.api_key.get_secret_value()),
@@ -72,13 +76,14 @@ def create_app(
             app.state.registry = build_registry(
                 resolved, http, active_store, app.state.catalog, app.state.usage,
                 app.state.summaries, app.state.facts, app.state.branches,
-                app.state.memory_layers,
+                app.state.memory_layers, app.state.workflow,
             )
             yield
 
-    app = FastAPI(title="AI Agents · День 12", version="0.7.0", lifespan=lifespan)
+    app = FastAPI(title="AI Agents · День 13", version="0.8.0", lifespan=lifespan)
     app.include_router(memory_router)
     app.include_router(profile_router)
+    app.include_router(workflow_router)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=resolved.origins,
@@ -100,7 +105,7 @@ def create_app(
 
     @app.get("/health")
     async def health():
-        return {"status": "ok", "mode": resolved.mode, "day": 12}
+        return {"status": "ok", "mode": resolved.mode, "day": 13}
 
     @app.get("/api/v1/models")
     async def models(request: Request):

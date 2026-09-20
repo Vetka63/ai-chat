@@ -59,6 +59,23 @@ describe('Day 10 client', () => {
     wrapper.unmount()
   })
 
+  it('expands the chat without losing the draft and restores the side panels', async () => {
+    const wrapper = mount(App)
+    await flushPromises()
+    await wrapper.get('textarea').setValue('Черновик сообщения')
+    await wrapper.get('.focus-toggle').trigger('click')
+    expect(wrapper.get('.app-shell').classes()).toContain('focus-mode')
+    expect(wrapper.get('.focus-toggle').attributes('aria-pressed')).toBe('true')
+    expect(wrapper.get('.chat-sidebar').isVisible()).toBe(false)
+    expect(wrapper.get('.settings-sidebar').isVisible()).toBe(false)
+    expect(localStorage.getItem('agents:focus-mode')).toBe('true')
+    await wrapper.get('.focus-toggle').trigger('click')
+    expect(wrapper.get('.app-shell').classes()).not.toContain('focus-mode')
+    expect(wrapper.get('.chat-sidebar').attributes('style') || '').not.toContain('display: none')
+    expect(wrapper.get('.chat-sidebar').attributes('aria-hidden')).toBeUndefined()
+    expect(wrapper.get('textarea').element.value).toBe('Черновик сообщения')
+  })
+
   it('opens mobile drawers one at a time and restores focus on Escape', async () => {
     vi.stubGlobal('innerWidth', 390)
     const wrapper = mount(App, { attachTo: document.body })
