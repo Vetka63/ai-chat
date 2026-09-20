@@ -9,19 +9,21 @@ from capabilities.personalization.context import profile_data, profile_text
 
 class AlgorithmCoachAgent:
     """Оркестрирует диалог и явный анализ памяти, не хранит состояние задачи в экземпляре."""
-    def __init__(self, config, store, memory, calls, catalog, accounting, input_policy, output_policy, context_policy, workflow=None):
+    def __init__(self, config, store, memory, calls, catalog, accounting, input_policy, output_policy,
+                 context_policy, workflow=None, invariants=None):
         self.config, self.store, self.memory = config, store, memory
         self.calls, self.catalog, self.accounting = calls, catalog, accounting
         self.input_policy, self.output_policy, self.context_policy = input_policy, output_policy, context_policy
         self.workflow = workflow
+        self.invariants = invariants
         self._locks = {}
 
     @property
     def info(self):
         return AgentInfo(id=self.config.id, name=self.config.name, description=self.config.description,
             capabilities=['persistent_history', 'token_accounting', 'memory_layers', 'personalization',
-                          'task_workflow'] if self.workflow else
-                         ['persistent_history', 'token_accounting', 'memory_layers', 'personalization'])
+                          *(['task_workflow'] if self.workflow else []),
+                          *(['invariants'] if self.invariants else [])])
 
     async def create_conversation(self, title, settings, problem=None, profile_id=None):
         if settings and settings.mode != 'sliding_window':
@@ -58,26 +60,79 @@ class AlgorithmCoachAgent:
             conversation = await self.store.get(self.config.id, command.conversation_id)
             workspace = await self.memory.repository.workspace(self.config.id, command.conversation_id)
             workflow = await self.workflow.workspace(self.config.id, command.conversation_id) if self.workflow else None
+            invariants = await self.invariants.repository.workspace(self.config.id, command.conversation_id) if self.invariants else None
             if workflow and (workflow.state.status == 'paused' or workflow.state.phase == 'done'):
                 raise AgentError('task_unavailable', 'Задача на паузе или завершена. Продолжите её для общения', 409)
             spec = self.catalog.get(command.model_id or conversation.selected_model_id or self.config.model)
             limit = self.output_limit(command, conversation, spec)
-            messages = self.context_policy.build(self.config.system_prompt.replace('{provider}', spec.provider), workspace, text, workflow)
+            messages = self.context_policy.build(self.config.system_prompt.replace('{provider}', spec.provider),
+                workspace, text, workflow, invariants)
             estimate = await self.estimate(messages, workspace, text, spec, limit, workflow)
             await self.store.select_model(self.config.id, conversation.id, spec.id)
             await self.store.configure_output(self.config.id, conversation.id, limit)
             await self.store.append_message(self.config.id, conversation.id, 'user', text)
             if workflow:
                 await self.workflow.clear_candidate(self.config.id, conversation.id, workflow.state.revision)
+            extra_runs = []
+            if self.invariants:
+                _, check_run, refusal = await self.invariants.check(self.config.id, conversation.id,
+                    workspace.task, workflow, invariants, text, 'input',
+                    profile=workspace.profile, user_index=workspace.history_message_count)
+                if check_run:
+                    extra_runs.append(check_run)
+                if refusal:
+                    await self.memory.repository.append_reply(workspace, refusal,
+                        workflow.state.revision if workflow else None, invariants.revision, candidate=False)
+                    return AgentResult(agent_id=self.config.id, reply=refusal, model='Правила задачи',
+                        source='policy', additional_runs=extra_runs)
             async with self.calls.invoke(agent_id=self.config.id, conversation_id=conversation.id,
                 messages=messages, spec=spec, estimate=estimate, user_index=workspace.history_message_count,
                 temperature=self.config.temperature, max_tokens=limit,
-                memory_context=self.context_policy.snapshot(workspace)) as (completion, run):
+                memory_context=self.context_policy.snapshot(workspace, invariants)) as (completion, run):
                 reply = self.output_policy.present(completion)
+                refusal = None
+                if self.invariants:
+                    _, check_run, refusal = await self.invariants.check(self.config.id, conversation.id,
+                        workspace.task, workflow, invariants, reply, 'output', request=text,
+                        profile=workspace.profile, user_index=workspace.history_message_count)
+                    if check_run:
+                        extra_runs.append(check_run)
+                    if refusal:
+                        reply = refusal
                 await self.memory.repository.append_reply(workspace, reply,
-                    workflow.state.revision if workflow else None)
+                    workflow.state.revision if workflow else None,
+                    invariants.revision if invariants else None, candidate=not refusal)
                 run.assistant_index = workspace.history_message_count + 1
-            return AgentResult(agent_id=self.config.id, reply=reply, model=completion.model, source=completion.source, run=run)
+            return AgentResult(agent_id=self.config.id, reply=reply,
+                model='Правила задачи' if refusal else completion.model,
+                source='policy' if refusal else completion.source, run=run, additional_runs=extra_runs)
+
+    async def apply_workflow(self, conversation_id, command):
+        """Редактируемый артефакт не обходит проверку правил при подтверждении в UI."""
+        async with self._locks.setdefault(conversation_id, asyncio.Lock()):
+            if self.invariants and command.action in ('accept_plan', 'accept_solution', 'accept_validation'):
+                flow = await self.workflow.workspace(self.config.id, conversation_id)
+                if flow.state.revision != command.expected_revision:
+                    raise AgentError('state_conflict', 'Состояние задачи изменилось. Обновите панель', 409)
+                expected_phase = {'accept_plan': 'planning', 'accept_solution': 'execution',
+                    'accept_validation': 'validation'}[command.action]
+                if flow.state.phase != expected_phase:
+                    raise AgentError('invalid_transition', 'Результат не относится к текущему этапу', 409)
+                if flow.state.status != 'active' or flow.state.candidate_message_id is None:
+                    raise AgentError('missing_candidate', 'Сначала получите ответ агента на текущем этапе', 409)
+                memory_workspace = await self.memory.repository.workspace(self.config.id, conversation_id)
+                task = memory_workspace.task
+                snapshot = await self.invariants.repository.workspace(self.config.id, conversation_id)
+                content = command.content or {}
+                material = '\n'.join(content.get('steps', [])) if command.action == 'accept_plan' and isinstance(content.get('steps'), list) else content.get('text', '')
+                if not isinstance(material, str) or not material.strip():
+                    raise AgentError('invalid_artifact', 'Результат для сохранения пуст', 422)
+                _, _, refusal = await self.invariants.check(self.config.id, conversation_id,
+                    task, flow, snapshot, material, 'artifact', request='Подтверждение результата текущего этапа',
+                    profile=memory_workspace.profile, user_index=memory_workspace.history_message_count)
+                if refusal:
+                    raise AgentError('invariant_conflict', refusal, 422)
+            return await self.workflow.apply(self.config.id, conversation_id, command)
 
     async def preview(self, command):
         if not command.conversation_id:
@@ -85,8 +140,10 @@ class AlgorithmCoachAgent:
         conversation = await self.store.get(self.config.id, command.conversation_id)
         workspace = await self.memory.repository.workspace(self.config.id, conversation.id)
         workflow = await self.workflow.workspace(self.config.id, conversation.id) if self.workflow else None
+        invariants = await self.invariants.repository.workspace(self.config.id, conversation.id) if self.invariants else None
         spec = self.catalog.get(command.model_id or conversation.selected_model_id or self.config.model, False)
-        messages = self.context_policy.build(self.config.system_prompt.replace('{provider}', spec.provider), workspace, command.message, workflow)
+        messages = self.context_policy.build(self.config.system_prompt.replace('{provider}', spec.provider),
+            workspace, command.message, workflow, invariants)
         return await self.estimate(messages, workspace, command.message, spec, self.output_limit(command, conversation, spec), workflow)
 
     async def propose_memory(self, conversation_id, command):

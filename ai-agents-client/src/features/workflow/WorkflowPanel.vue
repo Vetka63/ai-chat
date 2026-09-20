@@ -10,7 +10,8 @@ const actions = { discuss_plan: 'Обсудите план с агентом', a
   review_solution: 'Проверьте сохранённое решение', accept_validation: 'Подтвердите проверку',
   resume: 'Продолжите задачу', completed: 'Задача завершена' }
 const eventLabels = { pause: 'Пауза', resume: 'Продолжение', select_step: 'Выбран шаг',
-  accept_plan: 'План принят', accept_solution: 'Решение сохранено', accept_validation: 'Проверка принята' }
+  accept_plan: 'План принят', accept_solution: 'Решение сохранено', accept_validation: 'Проверка принята',
+  invariants_changed: 'Правила задачи изменены' }
 const artifactLabels = { plan: 'План', solution: 'Решение', validation: 'Проверка' }
 const state = computed(() => props.workspace?.state)
 const latest = computed(() => Object.fromEntries((props.workspace?.artifacts || []).map(item => [item.kind, item])))

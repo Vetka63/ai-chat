@@ -21,4 +21,8 @@ async def get_workflow(agent_id: str, conversation_id: str, request: Request):
 
 @router.post('/actions', response_model=WorkflowWorkspace)
 async def apply_workflow(agent_id: str, conversation_id: str, command: WorkflowCommand, request: Request):
+    agent = request.app.state.registry.get(agent_id)
+    handler = getattr(agent, 'apply_workflow', None)
+    if handler is not None:
+        return await handler(conversation_id, command)
     return await repository(request, agent_id).apply(agent_id, conversation_id, command)

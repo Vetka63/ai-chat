@@ -16,11 +16,14 @@ import { useProfiles } from './features/profiles/useProfiles'
 import ProfilePanel from './features/profiles/ProfilePanel.vue'
 import WorkflowPanel from './features/workflow/WorkflowPanel.vue'
 import { useWorkflow } from './features/workflow/useWorkflow'
+import InvariantPanel from './features/invariants/InvariantPanel.vue'
+import { useInvariants } from './features/invariants/useInvariants'
 
 const chat = useAgentChat()
 const memory = useMemoryLayers(chat)
 const profiles = useProfiles(chat, memory)
 const workflow = useWorkflow(chat)
+const invariants = useInvariants(chat, workflow)
 const lastMemoryContext = computed(() => [...chat.runs.value].reverse().find(r => r.purpose === 'dialogue' && r.memory_context)?.memory_context)
 const sidebarOpen = ref(false)
 const compact = ref(window.innerWidth <= 1180)
@@ -33,7 +36,7 @@ const chatsButton = ref(null)
 const settingsPanel = ref(null)
 const chatsPanel = ref(null)
 const newChatOpen = ref(false)
-const busy = computed(() => chat.loading.value || chat.sending.value || memory.busy.value || profiles.busy.value || workflow.busy.value)
+const busy = computed(() => chat.loading.value || chat.sending.value || memory.busy.value || profiles.busy.value || workflow.busy.value || invariants.busy.value)
 const overlay = computed(() => focusMode.value ? null : mobile.value && sidebarOpen.value ? 'chats' : compact.value && settingsOpen.value ? 'settings' : null)
 watch(theme, value => { document.documentElement.dataset.theme = value }, { immediate: true })
 watch(focusMode, value => { localStorage.setItem('agents:focus-mode', String(value)) })
@@ -134,6 +137,11 @@ async function removeConversation(item) {
       <WorkflowPanel v-if="workflow.enabled.value" :workspace="workflow.workspace.value"
         :busy="workflow.busy.value || chat.loading.value" :sending="chat.sending.value" :error="workflow.error.value"
         @apply="workflow.apply" @refresh="workflow.refresh" />
+      <InvariantPanel v-if="invariants.enabled.value" :workspace="invariants.workspace.value"
+        :conversation-id="chat.conversation.value?.id" :workflow-state="workflow.workspace.value?.state"
+        :busy="invariants.busy.value || workflow.busy.value || chat.loading.value"
+        :sending="chat.sending.value" :error="invariants.error.value"
+        @save="invariants.save" @refresh="invariants.refresh" />
       <ChatThread :messages="chat.messages.value" :runs="chat.runs.value" :agent-name="chat.agent.value?.name" :sending="chat.sending.value" :memory-layers="memory.enabled.value" />
       <MessageComposer v-model="chat.draft.value" :disabled="busy || !chat.agentId.value || !chat.conversation.value || !chat.outputLimitValid.value || (workflow.enabled.value && (!workflow.workspace.value || workflow.workspace.value.state.status === 'paused' || workflow.workspace.value.state.phase === 'done'))" :sending="chat.sending.value" @send="chat.send">
         <ModelPicker :models="chat.models.value" :model-id="chat.modelId.value" :busy="busy" @model="chat.changeModel" />

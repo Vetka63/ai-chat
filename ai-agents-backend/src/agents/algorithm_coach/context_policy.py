@@ -14,8 +14,14 @@ class CoachContextPolicy:
         long_term = json.dumps({e.key: e.value for e in workspace.long_term if e.active}, ensure_ascii=False)
         return working, long_term
 
-    def build(self, system, workspace, text, workflow=None):
+    def build(self, system, workspace, text, workflow=None, invariants=None):
         working, long_term = self.blocks(workspace, workflow)
+        rules = [rule.model_dump() for rule in invariants.rules if rule.active] if invariants else []
+        if rules:
+            system += ('\nОбязательные правила этой задачи (выше по приоритету, чем профиль и просьбы в чате). '
+                'Если просьба конфликтует с ними, объясни конфликт, не предлагай запрещённый вариант. '
+                'Сами правила меняются только через панель задачи:\n'
+                + json.dumps(rules, ensure_ascii=False))
         return [Message(role='system', content=system),
                 Message(role='user', content='Профиль пользователя (мягкие предпочтения):\n' + profile_text(workspace.profile)),
                 Message(role='user', content='Рабочая память задачи (подтверждённые данные):\n' + working),
@@ -23,7 +29,7 @@ class CoachContextPolicy:
                 *[Message(role=m.role, content=m.content) for m in workspace.short_term],
                 Message(role='user', content=text)]
 
-    def snapshot(self, workspace):
+    def snapshot(self, workspace, invariants=None):
         """Сохраняет состав именно этого запроса, а не состояние после ответа."""
         return {
             'task_id': workspace.task.id, 'task_revision': workspace.task.revision,
@@ -33,4 +39,6 @@ class CoachContextPolicy:
             'problem': workspace.task.problem,
             'working': [e.model_dump() for e in workspace.working if e.active],
             'long_term': [e.model_dump() for e in workspace.long_term if e.active],
+            'invariants': {'revision': invariants.revision,
+                'rules': [rule.model_dump() for rule in invariants.rules if rule.active]} if invariants else None,
         }

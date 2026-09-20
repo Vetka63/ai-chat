@@ -99,7 +99,8 @@ class RunRecord(BaseModel):
     error_code: str | None = None
     error_message: str | None = None
     provider_status: int | None = None
-    purpose: Literal["dialogue", "summary", "facts", "memory_proposals"] = "dialogue"
+    purpose: Literal["dialogue", "summary", "facts", "memory_proposals",
+                     "invariant_input", "invariant_output", "invariant_artifact"] = "dialogue"
     memory_context: dict | None = None
     compression: CompressionDetails | None = None
 

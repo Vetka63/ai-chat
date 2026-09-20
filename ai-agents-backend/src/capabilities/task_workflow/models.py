@@ -5,7 +5,9 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 Phase = Literal['planning', 'execution', 'validation', 'done']
-Action = Literal['pause', 'resume', 'accept_plan', 'accept_solution', 'accept_validation', 'select_step']
+Action = Literal['pause', 'resume', 'accept_plan', 'accept_solution', 'accept_validation',
+                 'select_step', 'invariants_changed']
+CommandAction = Literal['pause', 'resume', 'accept_plan', 'accept_solution', 'accept_validation', 'select_step']
 
 
 class WorkflowModel(BaseModel):
@@ -49,7 +51,7 @@ class WorkflowWorkspace(WorkflowModel):
 
 
 class WorkflowCommand(WorkflowModel):
-    action: Action
+    action: CommandAction
     expected_revision: int = Field(ge=1)
     content: dict | None = None
     step_id: str | None = None

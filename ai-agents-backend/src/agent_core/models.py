@@ -67,7 +67,7 @@ class AgentResult(StrictModel):
     agent_id: str
     reply: str
     model: str
-    source: Literal["llm", "demo"] = "llm"
+    source: Literal["llm", "demo", "policy"] = "llm"
     run: RunRecord | None = None
     additional_runs: list[RunRecord] = Field(default_factory=list)
     summary: SummaryState | None = None

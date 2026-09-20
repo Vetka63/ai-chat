@@ -30,6 +30,7 @@ def build_registry(
     branch_service=None,
     memory_repository=None,
     workflow_repository=None,
+    invariant_repository=None,
 ) -> AgentRegistry:
     """Создаёт реестр; HTTP-маршруты не знают о DeepSeek и промптах."""
 
@@ -56,6 +57,6 @@ def build_registry(
     )]
     if memory_repository is not None:
         agents.append(build_algorithm_coach(settings.model, llm, store, memory_repository, catalog, accounting,
-                                            workflow_repository))
+                                            workflow_repository, invariant_repository))
     return AgentRegistry(agents)
 

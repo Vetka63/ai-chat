@@ -222,7 +222,7 @@ class SqliteMemoryRepository:
                              ('accepted' if action == 'accept' else 'rejected', proposal_id))
             await db.commit()
 
-    async def append_reply(self, workspace, reply, workflow_revision=None):
+    async def append_reply(self, workspace, reply, workflow_revision=None, invariant_revision=None, candidate=True):
         """Не сохраняет ответ как актуальный, если память изменилась во время генерации."""
         async with self.store.connection() as db:
             await db.execute("BEGIN IMMEDIATE")
@@ -232,9 +232,14 @@ class SqliteMemoryRepository:
                     (workspace.task.id,))).fetchone()
                 if current['revision'] != workflow_revision or current['status'] != 'active':
                     raise AgentError('state_conflict', 'Состояние задачи изменилось во время ответа. Обновите чат', 409)
+            if invariant_revision is not None:
+                current_rules = await (await db.execute('SELECT revision FROM task_invariant_sets WHERE task_id=?',
+                    (workspace.task.id,))).fetchone()
+                if (current_rules['revision'] if current_rules else 1) != invariant_revision:
+                    raise AgentError('state_conflict', 'Правила изменились во время ответа. Обновите чат', 409)
             cursor = await db.execute("INSERT INTO messages(conversation_id,role,content,created_at) VALUES(?,?,?,?)",
                                       (workspace.task.conversation_id, 'assistant', reply, now()))
-            if workflow_revision is not None:
+            if workflow_revision is not None and candidate:
                 await db.execute('UPDATE task_workflow SET candidate_message_id=? WHERE task_id=?',
                                  (cursor.lastrowid, workspace.task.id))
             await db.execute("UPDATE conversations SET updated_at=? WHERE id=?", (now(), workspace.task.conversation_id))
