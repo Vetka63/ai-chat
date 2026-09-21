@@ -73,20 +73,25 @@ class AlgorithmCoachAgent:
             lifecycle_response = lifecycle_refusal or lifecycle_status
             spec = self.catalog.get(command.model_id or conversation.selected_model_id or self.config.model)
             limit = self.output_limit(command, conversation, spec)
-            messages = self.context_policy.build(self.config.system_prompt.replace('{provider}', spec.provider),
-                workspace, text, workflow, invariants)
-            estimate = await self.estimate(messages, workspace, text, spec, limit, workflow)
             await self.store.select_model(self.config.id, conversation.id, spec.id)
             await self.store.configure_output(self.config.id, conversation.id, limit)
             await self.store.append_message(self.config.id, conversation.id, 'user', text)
-            if workflow:
+            requested_stage = (self.lifecycle_policy.requested_stage(text)
+                if workflow and self.lifecycle_policy else None)
+            replace_candidate = (workflow is not None and not lifecycle_response
+                and requested_stage == workflow.state.phase)
+            if replace_candidate:
                 await self.workflow.clear_candidate(self.config.id, conversation.id, workflow.state.revision)
+                workflow = await self.workflow.workspace(self.config.id, command.conversation_id)
             extra_runs = []
             if lifecycle_response:
                 await self.memory.repository.append_reply(workspace, lifecycle_response,
                     workflow.state.revision, invariants.revision if invariants else None, candidate=False)
                 return AgentResult(agent_id=self.config.id, reply=lifecycle_response,
                     model='Жизненный цикл задачи', source='policy')
+            messages = self.context_policy.build(self.config.system_prompt.replace('{provider}', spec.provider),
+                workspace, text, workflow, invariants)
+            estimate = await self.estimate(messages, workspace, text, spec, limit, workflow)
             if self.invariants:
                 _, check_run, refusal = await self.invariants.check(self.config.id, conversation.id,
                     workspace.task, workflow, invariants, text, 'input',
@@ -116,7 +121,7 @@ class AlgorithmCoachAgent:
                     if refusal:
                         reply = refusal
                 candidate = not refusal and (not self.lifecycle_policy
-                    or self.lifecycle_policy.can_be_candidate(text))
+                    or self.lifecycle_policy.can_be_candidate(text, workflow))
                 await self.memory.repository.append_reply(workspace, reply,
                     workflow.state.revision if workflow else None,
                     invariants.revision if invariants else None, candidate=candidate)
@@ -135,14 +140,17 @@ class AlgorithmCoachAgent:
                 flow.state.candidate_message_id, flow.control, flow.task_revision, flow.invariant_revision)
             if not option.allowed:
                 raise AgentError('transition_not_allowed', option.reason or 'Переход недоступен', 409)
-            if self.invariants and command.action in ('accept_plan', 'accept_solution', 'accept_validation'):
-                memory_workspace = await self.memory.repository.workspace(self.config.id, conversation_id)
-                task = memory_workspace.task
-                snapshot = await self.invariants.repository.workspace(self.config.id, conversation_id)
+            if command.action in ('accept_plan', 'accept_solution', 'accept_validation'):
                 content = command.content or {}
                 material = '\n'.join(content.get('steps', [])) if command.action == 'accept_plan' and isinstance(content.get('steps'), list) else content.get('text', '')
                 if not isinstance(material, str) or not material.strip():
                     raise AgentError('invalid_artifact', 'Результат для сохранения пуст', 422)
+                if self.lifecycle_policy:
+                    self.lifecycle_policy.validate_artifact(command.action, material)
+            if self.invariants and command.action in ('accept_plan', 'accept_solution', 'accept_validation'):
+                memory_workspace = await self.memory.repository.workspace(self.config.id, conversation_id)
+                task = memory_workspace.task
+                snapshot = await self.invariants.repository.workspace(self.config.id, conversation_id)
                 _, _, refusal = await self.invariants.check(self.config.id, conversation_id,
                     task, flow, snapshot, material, 'artifact', request='Подтверждение результата текущего этапа',
                     profile=memory_workspace.profile, user_index=memory_workspace.history_message_count)

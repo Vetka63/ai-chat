@@ -183,3 +183,58 @@ def test_planning_output_guard_and_problem_change_reset_lifecycle(tmp_path):
         assert reset['state']['phase'] == 'planning'
         assert reset['control']['approved_plan'] is None
         assert reset['events'][-1]['action'] == 'problem_changed'
+
+
+def test_only_current_stage_result_can_become_or_replace_candidate(tmp_path):
+    """Регрессия: статус нельзя сохранить как solution, а новый plan — как validation."""
+    settings = Settings(mode='demo', database_path=tmp_path / 'day15.sqlite3', _env_file=None)
+    with TestClient(create_app(settings)) as client:
+        chat = create(client)
+        fake = FakeLlm()
+        coach = client.app.state.registry.get('algorithm_coach')
+        coach.calls.llm = fake
+
+        assert run(client, chat, 'Окей, давай составим план работ').status_code == 200
+        plan_candidate = flow(client, chat)['state']['candidate_message_id']
+        assert plan_candidate is not None
+        premature = run(client, chat, 'Давай реализуем сразу твой план')
+        assert premature.status_code == 200 and premature.json()['source'] == 'policy'
+        assert flow(client, chat)['state']['candidate_message_id'] == plan_candidate
+        assert action(client, chat, 'accept_plan', {'steps': ['Словарь', 'Один проход']}).status_code == 200
+
+        fake.reply = '```java\nint[] twoSum(int[] nums, int target) { return new int[0]; }\n```'
+        assert run(client, chat, 'Давай перейдём к решению').status_code == 200
+        solution_candidate = flow(client, chat)['state']['candidate_message_id']
+        assert solution_candidate is not None
+        premature = run(client, chat, 'Проведи проверку текущего решения')
+        assert premature.status_code == 200 and premature.json()['source'] == 'policy'
+        assert 'Сначала сохраните' in premature.json()['reply']
+        assert flow(client, chat)['state']['candidate_message_id'] == solution_candidate
+        status = run(client, chat, 'Получается, что ты сделал проверку по решению?')
+        assert status.status_code == 200 and status.json()['source'] == 'policy'
+        assert flow(client, chat)['state']['candidate_message_id'] == solution_candidate
+        invalid_solution = action(client, chat, 'accept_solution', {
+            'text': 'Мы всё ещё обсуждаем состояние задачи, реализации здесь нет.'})
+        assert invalid_solution.status_code == 422
+        assert invalid_solution.json()['code'] == 'invalid_stage_artifact'
+        assert action(client, chat, 'accept_solution', {'text': fake.reply}).status_code == 200
+
+        fake.reply = ('# Проверка сохранённого решения\n'
+            'Тесты разобраны вручную; решение корректно и имеет сложность O(n).')
+        assert run(client, chat, 'Проведи проверку текущего решения').status_code == 200
+        validation_candidate = flow(client, chat)['state']['candidate_message_id']
+        assert validation_candidate is not None
+        clarification = run(client, chat, 'Это был ручной разбор или фактический запуск кода?')
+        assert clarification.status_code == 200
+        assert flow(client, chat)['state']['candidate_message_id'] == validation_candidate
+        wrong_stage = run(client, chat, 'Составь план решения задачи кстати')
+        assert wrong_stage.status_code == 200 and wrong_stage.json()['source'] == 'policy'
+        assert 'Перепланировать' in wrong_stage.json()['reply']
+        assert flow(client, chat)['state']['candidate_message_id'] == validation_candidate
+        invalid_validation = action(client, chat, 'accept_validation', {
+            'text': '# План\n1. Построить словарь', 'method': 'llm_review'})
+        assert invalid_validation.status_code == 422
+        assert invalid_validation.json()['code'] == 'invalid_stage_artifact'
+        done = action(client, chat, 'accept_validation', {
+            'text': fake.reply, 'method': 'llm_review'})
+        assert done.status_code == 200 and done.json()['state']['phase'] == 'done'

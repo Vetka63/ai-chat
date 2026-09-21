@@ -18,16 +18,28 @@ class CoachLifecyclePolicy:
         r'как(?:ая|ой|ом)\s+(?:сейчас\s+)?(?:фаз|этап|статус|шаг)',
         r'где\s+(?:мы|задача)\s+(?:сейчас\s+)?(?:находимся|остановились)',
         r'(?:план|решение|проверка)\s+(?:уже\s+)?(?:есть|принят|утвержд|сохран)',
+        r'(?:ты|мы).{0,40}(?:сделал|сделали|провёл|провели).{0,30}(?:проверк|валидац)',
     )]
-    control_requests = [re.compile(pattern, re.IGNORECASE | re.DOTALL) for pattern in (
-        r'(?:перейд|переход).{0,60}(?:этап|фаз|реализац|проверк|заверш)',
-        r'(?:заверш|законч).{0,40}(?:задач|работ)',
-        r'(?:подтверд|прими|сохрани).{0,50}(?:план|решение|проверк)',
+    plan_requests = [re.compile(pattern, re.IGNORECASE | re.DOTALL) for pattern in (
+        r'\b(?:составь|составим|составить|предложи|подготовь|сформируй|доработай|измени)\b.{0,80}\bплан',
+        r'\bкак\s+(?:будем|лучше)\s+решать\b',
+    )]
+    solution_requests = [re.compile(pattern, re.IGNORECASE | re.DOTALL) for pattern in (
+        r'\b(?:напиши|сгенерируй|покажи|дай|предложи)\b.{0,80}\b(?:код|решение|функци\w*|класс\w*)',
+        r'\bреализ(?:уй|уем|овать|ация|ацию)\b',
+        r'\b(?:перейд\w*|приступ\w*|продолж\w*)\b.{0,60}\b(?:решени|реализац|код|шаг)',
+        r'\b(?:implement|write|provide|generate)\b.{0,50}\b(?:code|implementation|function|class|solution)\b',
+    )]
+    validation_requests = [re.compile(pattern, re.IGNORECASE | re.DOTALL) for pattern in (
+        r'\b(?:проверь|проверить|протестируй|валидируй)\b',
+        r'\b(?:проведи|сделай)\b.{0,40}\b(?:проверку|валидацию|тестирование)',
+        r'\b(?:всё|все)\b.{0,30}\b(?:правильно|корректно)\b',
+        r'\b(?:validate|verify|test|review)\b.{0,60}\b(?:solution|code|implementation)?\b',
     )]
 
     implementation_requests = [re.compile(pattern, re.IGNORECASE | re.DOTALL) for pattern in (
         r'\b(?:напиши|сгенерируй|покажи|дай)\s+(?:мне\s+)?(?:полное\s+|готов(?:ое|ый|ую)\s+)?(?:решение|код|функци\w*|класс\w*)',
-        r'\bреализуй\b',
+        r'\bреализ(?:уй|уем|овать|ация|ацию)\b',
         r'\b(?:реши|выполни)\s+(?:эту\s+)?задач\w*',
         r'\b(?:сразу|без\s+(?:плана|планирования)).{0,60}(?:код|реализ\w*|решение)',
         r'\b(?:игнорируй|забудь|считай).{0,100}(?:план\w*\s+(?:принят|утвержд)|код|реализ\w*)',
@@ -38,7 +50,14 @@ class CoachLifecyclePolicy:
         r'```(?:python|java|javascript|typescript|cpp|c\+\+|csharp|c#|go|rust|kotlin|swift)?\s*\n',
         r'^\s*(?:def|class|function)\s+[A-Za-z_]\w*\s*[(:]',
         r'^\s*(?:public|private|protected)\s+(?:static\s+)?(?:class|\w+[<\[\], >]*\s+\w+\s*\()',
+        r'^\s*(?:const|let|var)\s+[A-Za-z_]\w*\s*=.*=>',
+        r'^\s*(?:fun|func)\s+[A-Za-z_]\w*\s*\(',
         r'^\s*#include\s*[<"]',
+    )]
+    validation_output = [re.compile(pattern, re.IGNORECASE) for pattern in (
+        r'\bпроверк\w*\b', r'\bвалидац\w*\b', r'\bтест\w*\b',
+        r'\bкоррект\w*\b', r'\bошиб\w*\b', r'\bсложност\w*\b',
+        r'\bсоответств\w*\b', r'\b(?:validation|verification|tests?)\b',
     )]
 
     @staticmethod
@@ -60,8 +79,25 @@ class CoachLifecyclePolicy:
                 'Проверка заблокирована: отсутствует актуальное решение', 409)
 
     def validate_input(self, text, workspace):
-        if workspace.state.phase == 'planning' and any(rule.search(text) for rule in self.implementation_requests):
+        phase, requested = workspace.state.phase, self.requested_stage(text)
+        if phase == 'planning' and (requested == 'execution' or (requested is None
+                and any(rule.search(text) for rule in self.implementation_requests))):
             return self._refusal()
+        if phase == 'planning' and requested == 'validation':
+            return ('Проверка пока недоступна: сначала подготовьте и подтвердите план, '
+                'затем сохраните решение на этапе реализации.')
+        if phase == 'execution' and requested == 'validation':
+            return ('Сначала сохраните актуальное решение в панели задачи. После перехода '
+                'в `validation` я проверю именно сохранённый артефакт.')
+        if phase == 'execution' and requested == 'planning':
+            return ('Сейчас действует утверждённый план. Чтобы заменить его, нажмите '
+                '«Перепланировать» и укажите причину возврата в `planning`.')
+        if phase == 'validation' and requested == 'planning':
+            return ('Новый план нельзя подменить отчётом проверки. Используйте действие '
+                '«Перепланировать», чтобы явно вернуться в `planning`.')
+        if phase == 'validation' and requested == 'execution':
+            return ('Текущее решение уже передано на проверку. Чтобы изменить код, нажмите '
+                '«Вернуть на доработку» и продолжите работу в `execution`.')
         return None
 
     def validate_output(self, text, workspace):
@@ -94,7 +130,25 @@ class CoachLifecyclePolicy:
             f'- {approved}.\n- {solution}.\n- {validation}.{step}\n'
             f'- Доступные действия: {", ".join(actions) if actions else "нет"}.')
 
-    def can_be_candidate(self, request):
-        """Служебный разговор о переходах не должен становиться артефактом текущего этапа."""
-        return not (any(rule.search(request) for rule in self.status_requests)
-            or any(rule.search(request) for rule in self.control_requests))
+    def requested_stage(self, text):
+        """Классифицирует только явный запрос результата этапа, а не свободный диалог."""
+        if any(rule.search(text) for rule in self.validation_requests):
+            return 'validation'
+        if any(rule.search(text) for rule in self.plan_requests):
+            return 'planning'
+        if any(rule.search(text) for rule in self.solution_requests):
+            return 'execution'
+        return None
+
+    def can_be_candidate(self, request, workspace):
+        """Ответ можно подтвердить только как результат именно текущего этапа."""
+        return self.requested_stage(request) == workspace.state.phase
+
+    def validate_artifact(self, action, text):
+        """Не позволяет отредактированному в UI тексту маскироваться под другой артефакт."""
+        if action == 'accept_solution' and not any(rule.search(text) for rule in self.implementation_output):
+            raise AgentError('invalid_stage_artifact',
+                'Решение должно содержать реализацию алгоритма или блок программного кода', 422)
+        if action == 'accept_validation' and not any(rule.search(text) for rule in self.validation_output):
+            raise AgentError('invalid_stage_artifact',
+                'Отчёт проверки должен описывать проверку, тесты, корректность или найденные ошибки', 422)

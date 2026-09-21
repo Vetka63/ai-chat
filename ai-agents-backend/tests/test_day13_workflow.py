@@ -104,14 +104,22 @@ def test_new_message_invalidates_old_candidate_and_versions_block_stale_action(t
     settings = Settings(mode='demo', database_path=tmp_path / 'day13.sqlite3', _env_file=None)
     with TestClient(create_app(settings)) as client:
         chat_id = chat(client)
-        assert run(client, chat_id, 'Первый план').status_code == 200
+        assert run(client, chat_id, 'Составь первый план').status_code == 200
         old = workflow(client, chat_id)
         assert old['state']['candidate_message_id'] is not None
+        assert run(client, chat_id, 'Доработай план').status_code == 200
+        refreshed = workflow(client, chat_id)
+        assert refreshed['state']['candidate_message_id'] != old['state']['candidate_message_id']
+        assert refreshed['state']['revision'] > old['state']['revision']
+        stale_candidate = client.post(f'{BASE}/conversations/{chat_id}/workflow/actions', json={
+            'action': 'accept_plan', 'expected_revision': old['state']['revision'],
+            'content': {'steps': ['Устаревший черновик']}})
+        assert stale_candidate.status_code == 409 and stale_candidate.json()['code'] == 'state_conflict'
         assert action(client, chat_id, 'pause').status_code == 200
         stale = client.post(f'{BASE}/conversations/{chat_id}/workflow/actions', json={
             'action': 'accept_plan', 'expected_revision': old['state']['revision'],
             'content': {'steps': ['Нельзя принять']}})
         assert stale.status_code == 409 and stale.json()['code'] == 'state_conflict'
         assert action(client, chat_id, 'resume').status_code == 200
-        assert run(client, chat_id, 'Доработай план').status_code == 200
+        assert run(client, chat_id, 'Доработай план ещё раз').status_code == 200
         assert workflow(client, chat_id)['state']['candidate_message_id'] != old['state']['candidate_message_id']

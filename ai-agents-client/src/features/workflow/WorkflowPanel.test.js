@@ -22,6 +22,14 @@ describe('Day 13 workflow panel', () => {
     expect(wrapper.emitted('apply')[0]).toEqual(['accept_plan', { content: { steps: ['Словарь', 'Цикл'] } }])
   })
 
+  it('takes only numbered steps and excludes later questions from a plan artifact', () => {
+    const wrapper = mount(WorkflowPanel, { props: {
+      workspace: { ...workspace('planning'), candidate_text:
+        '# План решения\n\n**Шаги**\n1. Словарь\n2. Один проход\n\n**Открытые вопросы**\n- Что вернуть без пары?' },
+    } })
+    expect(wrapper.get('textarea').element.value).toBe('Словарь\nОдин проход')
+  })
+
   it('shows pause and blocks confirmation while paused', async () => {
     const wrapper = mount(WorkflowPanel, { props: {
       workspace: { ...workspace('execution', 11, 'paused'), candidate_text: 'def two_sum(): pass' },

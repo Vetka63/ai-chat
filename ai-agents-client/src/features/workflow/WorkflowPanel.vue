@@ -54,12 +54,15 @@ function openTab(tab) {
 }
 
 function planLines(text) {
-  const sections = text.split(/\n(?=#{1,3}\s)/)
-  const stepsSection = sections.find(section => /^#{1,3}\s*(?:шаги|план решения)/i.test(section.trim()))
-  const lines = (stepsSection || text).split('\n').map(line => line.trim())
-    .filter(line => /^(?:\d+[.)]|[-*])\s+/.test(line))
-    .map(line => line.replace(/^(?:\d+[.)]|[-*])\s+/, '').replace(/^\*\*(.+?)\*\*/, '$1').trim())
-  return lines.length ? lines.join('\n') : text.trim().slice(0, 500)
+  const lines = text.split('\n').map(line => line.trim())
+  const heading = lines.findIndex(line => /^(?:#{1,6}\s*)?(?:\*\*)?(?:шаги|план решения)(?:\*\*)?\s*$/i.test(line))
+  const numbered = []
+  for (const line of lines.slice(heading >= 0 ? heading + 1 : 0)) {
+    const match = line.match(/^\d+[.)]\s+(.+)/)
+    if (match) { numbered.push(match[1].replace(/^\*\*(.+?)\*\*/, '$1').trim()); continue }
+    if (numbered.length && (line || /^(?:#{1,6}|\*\*)/.test(line))) break
+  }
+  return numbered.join('\n')
 }
 
 watch(() => [props.workspace?.task_id, state.value?.phase, state.value?.candidate_message_id, candidate.value], () => {

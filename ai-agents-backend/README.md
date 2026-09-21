@@ -70,3 +70,8 @@ uvicorn application.main:app --app-dir src --reload --port 8082
 
 Тесты: `pytest`.
 
+## Документация по заданиям
+
+- [День 15: архитектура контролируемой Task State Machine](docs/day15-state-machine-architecture.md)
+- [День 15 v2: сценарий проверки через UI](docs/day15-v2-guide.md)
+

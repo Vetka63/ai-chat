@@ -241,7 +241,8 @@ class SqliteMemoryRepository:
             cursor = await db.execute("INSERT INTO messages(conversation_id,role,content,created_at) VALUES(?,?,?,?)",
                                       (workspace.task.conversation_id, 'assistant', reply, now()))
             if workflow_revision is not None and candidate:
-                await db.execute('UPDATE task_workflow SET candidate_message_id=? WHERE task_id=?',
+                await db.execute('''UPDATE task_workflow
+                    SET candidate_message_id=?,revision=revision+1 WHERE task_id=?''',
                                  (cursor.lastrowid, workspace.task.id))
             await db.execute("UPDATE conversations SET updated_at=? WHERE id=?", (now(), workspace.task.conversation_id))
             await db.commit()

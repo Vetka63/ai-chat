@@ -34,7 +34,7 @@ class SqliteWorkflowRepository:
         await migrate_memory_layers(self.store)
 
     async def _task(self, db, agent_id, conversation_id):
-        row = await (await db.execute('''SELECT t.id,t.revision,
+        row = await (await db.execute('''SELECT t.id,t.conversation_id,t.revision,
                 COALESCE(s.revision,1) AS invariant_revision
             FROM tasks t JOIN conversations c ON c.id=t.conversation_id
             LEFT JOIN task_invariant_sets s ON s.task_id=t.id
@@ -75,8 +75,9 @@ class SqliteWorkflowRepository:
             FROM task_workflow_events WHERE task_id=? ORDER BY revision''', (task_id,))).fetchall()
         candidate = None
         if row['candidate_message_id'] is not None:
-            candidate = await (await db.execute('SELECT content FROM messages WHERE sequence=? AND role=?',
-                (row['candidate_message_id'], 'assistant'))).fetchone()
+            candidate = await (await db.execute('''SELECT content FROM messages
+                WHERE sequence=? AND conversation_id=? AND role=?''',
+                (row['candidate_message_id'], task['conversation_id'], 'assistant'))).fetchone()
         artifacts = [WorkflowArtifact(**{**dict(item), 'content': json.loads(item['content'])})
             for item in artifact_rows]
         control = await self._control(db, task_id, artifacts)
@@ -104,11 +105,14 @@ class SqliteWorkflowRepository:
         async with self.store.connection() as db:
             await db.execute('BEGIN IMMEDIATE')
             task = await self._task(db, agent_id, conversation_id)
-            row = await (await db.execute('SELECT revision,status,phase FROM task_workflow WHERE task_id=?',
+            row = await (await db.execute('''SELECT revision,status,phase,candidate_message_id
+                FROM task_workflow WHERE task_id=?''',
                 (task['id'],))).fetchone()
             if row['revision'] != expected_revision or row['status'] != 'active' or row['phase'] == 'done':
                 raise AgentError('state_conflict', 'Состояние задачи изменилось. Обновите чат', 409)
-            await db.execute('UPDATE task_workflow SET candidate_message_id=NULL WHERE task_id=?', (task['id'],))
+            if row['candidate_message_id'] is not None:
+                await db.execute('''UPDATE task_workflow SET candidate_message_id=NULL,revision=revision+1
+                    WHERE task_id=?''', (task['id'],))
             await db.commit()
 
     @staticmethod
