@@ -196,7 +196,7 @@ def test_only_current_stage_result_can_become_or_replace_candidate(tmp_path):
         coach = client.app.state.registry.get('algorithm_coach')
         coach.calls.llm = fake
 
-        assert run(client, chat, 'Окей, давай составим план работ').status_code == 200
+        assert run(client, chat, 'Окей, давай накидаем план работ').status_code == 200
         plan_candidate = flow(client, chat)['state']['candidate_message_id']
         assert plan_candidate is not None
         premature = run(client, chat, 'Давай реализуем сразу твой план')
@@ -273,3 +273,18 @@ def test_stale_history_cannot_turn_execution_response_back_into_planning(tmp_pat
         assert current['candidate_text'] == code
         assert any(message.role == 'system' and 'Актуальный workflow' in message.content
             for message in fake.last_messages)
+
+
+def test_structured_plan_response_becomes_candidate_for_conversational_request(tmp_path):
+    """Кнопка подтверждения не зависит от точного набора глаголов пользователя."""
+    settings = Settings(mode='demo', database_path=tmp_path / 'day15.sqlite3', _env_file=None)
+    with TestClient(create_app(settings)) as client:
+        chat = create(client)
+        fake = FakeLlm()
+        client.app.state.registry.get('algorithm_coach').calls.llm = fake
+        response = run(client, chat, 'Давай обсудим, что нам делать дальше')
+        assert response.status_code == 200
+        current = flow(client, chat)
+        assert current['state']['phase'] == 'planning'
+        assert current['state']['candidate_message_id'] is not None
+        assert current['candidate_text'] == fake.reply

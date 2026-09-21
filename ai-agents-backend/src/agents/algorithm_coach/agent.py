@@ -122,7 +122,7 @@ class AlgorithmCoachAgent:
                     if refusal:
                         output_reply = refusal
                 candidate = not refusal and (not self.lifecycle_policy
-                    or self.lifecycle_policy.can_be_candidate(text, workflow))
+                    or self.lifecycle_policy.can_be_candidate(text, output_reply, workflow))
                 await self.memory.repository.append_reply(workspace, output_reply,
                     workflow.state.revision if workflow else None,
                     invariants.revision if invariants else None, candidate=candidate)

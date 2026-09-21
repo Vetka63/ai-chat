@@ -23,7 +23,7 @@ class CoachLifecyclePolicy:
         r'(?:ты|мы).{0,40}(?:сделал|сделали|провёл|провели).{0,30}(?:проверк|валидац)',
     )]
     plan_requests = [re.compile(pattern, re.IGNORECASE | re.DOTALL) for pattern in (
-        r'\b(?:составь|составим|составить|предложи|подготовь|сформируй|доработай|измени)\b.{0,80}\bплан',
+        r'\b(?:составь|составим|составить|предложи|подготовь|сформируй|доработай|измени|накидай|накидаем|набросай)\b.{0,80}\bплан',
         r'\bкак\s+(?:будем|лучше)\s+решать\b',
     )]
     solution_requests = [re.compile(pattern, re.IGNORECASE | re.DOTALL) for pattern in (
@@ -61,6 +61,9 @@ class CoachLifecyclePolicy:
         r'\bкоррект\w*\b', r'\bошиб\w*\b', r'\bсложност\w*\b',
         r'\bсоответств\w*\b', r'\b(?:validation|verification|tests?)\b',
     )]
+    plan_heading = re.compile(r'^(?:#{1,6}\s*)?(?:\*\*)?(?:план(?:\s+решения)?|шаги)(?:\*\*)?\s*$',
+        re.IGNORECASE | re.MULTILINE)
+    numbered_step = re.compile(r'^\s*\d+[.)]\s+\S+', re.MULTILINE)
     @staticmethod
     def _refusal():
         return ('Сейчас задача находится на этапе планирования. Я могу уточнить условие и подготовить '
@@ -171,9 +174,23 @@ class CoachLifecyclePolicy:
             return 'execution'
         return None
 
-    def can_be_candidate(self, request, workspace):
-        """Ответ можно подтвердить только как результат именно текущего этапа."""
-        return self.requested_stage(request) == workspace.state.phase
+    def output_stage(self, text):
+        """Определяет тип структурированного результата по самому ответу модели."""
+        if any(rule.search(text) for rule in self.implementation_output):
+            return 'execution'
+        if self.plan_heading.search(text) and self.numbered_step.search(text):
+            return 'planning'
+        if any(rule.search(text) for rule in self.validation_output):
+            return 'validation'
+        return None
+
+    def can_be_candidate(self, request, output, workspace):
+        """Черновик должен совпадать с фазой по запросу или по структуре ответа."""
+        phase = workspace.state.phase
+        explicitly_requested = self.requested_stage(request) == phase
+        inferred_first_draft = (workspace.state.candidate_message_id is None
+            and self.output_stage(output) == phase)
+        return explicitly_requested or inferred_first_draft
 
     def validate_artifact(self, action, text):
         """Не позволяет отредактированному в UI тексту маскироваться под другой артефакт."""
