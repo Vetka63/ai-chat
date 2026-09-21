@@ -68,6 +68,9 @@ class AlgorithmCoachAgent:
             if workflow and self.lifecycle_policy:
                 self.lifecycle_policy.ensure_dialogue_allowed(workflow)
             lifecycle_refusal = self.lifecycle_policy.validate_input(text, workflow) if workflow and self.lifecycle_policy else None
+            lifecycle_status = (self.lifecycle_policy.status_response(text, workflow)
+                if workflow and self.lifecycle_policy and not lifecycle_refusal else None)
+            lifecycle_response = lifecycle_refusal or lifecycle_status
             spec = self.catalog.get(command.model_id or conversation.selected_model_id or self.config.model)
             limit = self.output_limit(command, conversation, spec)
             messages = self.context_policy.build(self.config.system_prompt.replace('{provider}', spec.provider),
@@ -79,10 +82,10 @@ class AlgorithmCoachAgent:
             if workflow:
                 await self.workflow.clear_candidate(self.config.id, conversation.id, workflow.state.revision)
             extra_runs = []
-            if lifecycle_refusal:
-                await self.memory.repository.append_reply(workspace, lifecycle_refusal,
+            if lifecycle_response:
+                await self.memory.repository.append_reply(workspace, lifecycle_response,
                     workflow.state.revision, invariants.revision if invariants else None, candidate=False)
-                return AgentResult(agent_id=self.config.id, reply=lifecycle_refusal,
+                return AgentResult(agent_id=self.config.id, reply=lifecycle_response,
                     model='Жизненный цикл задачи', source='policy')
             if self.invariants:
                 _, check_run, refusal = await self.invariants.check(self.config.id, conversation.id,
@@ -112,9 +115,11 @@ class AlgorithmCoachAgent:
                         extra_runs.append(check_run)
                     if refusal:
                         reply = refusal
+                candidate = not refusal and (not self.lifecycle_policy
+                    or self.lifecycle_policy.can_be_candidate(text))
                 await self.memory.repository.append_reply(workspace, reply,
                     workflow.state.revision if workflow else None,
-                    invariants.revision if invariants else None, candidate=not refusal)
+                    invariants.revision if invariants else None, candidate=candidate)
                 run.assistant_index = workspace.history_message_count + 1
             return AgentResult(agent_id=self.config.id, reply=reply,
                 model=('Жизненный цикл задачи' if lifecycle_output_refusal else 'Правила задачи') if refusal else completion.model,

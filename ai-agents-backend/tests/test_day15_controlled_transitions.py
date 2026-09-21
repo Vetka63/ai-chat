@@ -81,6 +81,12 @@ def test_backend_controls_order_versions_and_pause_across_restart(tmp_path):
         plan = execution['control']['approved_plan']
         assert execution['state']['phase'] == 'execution' and plan['revision'] == 1
         assert execution['control']['approved_task_revision'] == execution['task_revision']
+        calls_before_status = fake.calls
+        status = run(client, chat, 'А сейчас мы в какой фазе?')
+        assert status.status_code == 200 and status.json()['source'] == 'policy'
+        assert '`execution`' in status.json()['reply']
+        assert fake.calls == calls_before_status
+        assert flow(client, chat)['state']['candidate_message_id'] is None
         assert action(client, chat, 'accept_validation', {'text': 'Всё хорошо'}).status_code == 409
         paused = action(client, chat, 'pause').json()
         assert paused['state']['status'] == 'paused'
@@ -93,10 +99,16 @@ def test_backend_controls_order_versions_and_pause_across_restart(tmp_path):
         assert resumed['state']['phase'] == 'execution'
 
         validation = accept_solution(client, chat, fake)
+        assert '"phase": "execution"' in fake.last_messages[0].content
         solution = validation['control']['current_solution']
         solution_artifact = next(item for item in validation['artifacts'] if item['id'] == solution['id'])
         assert solution_artifact['based_on_artifact_id'] == plan['id']
         fake.reply = 'Решение соответствует плану; сложность O(n). Код фактически не запускался.'
+        calls_before_status = fake.calls
+        status = run(client, chat, 'На каком этапе мы сейчас находимся?')
+        assert status.status_code == 200 and '`validation`' in status.json()['reply']
+        assert fake.calls == calls_before_status
+        assert flow(client, chat)['state']['candidate_message_id'] is None
         assert run(client, chat, 'Проверь сохранённое решение').status_code == 200
         done = action(client, chat, 'accept_validation', {
             'text': fake.reply, 'method': 'llm_review'}).json()
@@ -123,6 +135,11 @@ def test_changes_and_replanning_invalidate_downstream_approvals(tmp_path):
         assert changes.json()['state']['phase'] == 'execution'
         assert changes.json()['control']['current_validation'] is None
         assert changes.json()['control']['change_request'] == 'Добавить обработку дубликатов'
+        status = run(client, chat, 'В какой фазе задача сейчас?')
+        assert status.status_code == 200 and status.json()['source'] == 'policy'
+        assert '`execution`' in status.json()['reply']
+        assert 'отправлено на доработку' in status.json()['reply']
+        assert flow(client, chat)['state']['candidate_message_id'] is None
         assert action(client, chat, 'accept_validation', {'text': 'Старая проверка'}).status_code == 409
 
         second_validation = accept_solution(client, chat, fake)

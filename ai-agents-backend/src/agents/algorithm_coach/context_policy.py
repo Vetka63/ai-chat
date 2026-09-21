@@ -6,6 +6,17 @@ from capabilities.personalization.context import profile_text
 
 class CoachContextPolicy:
     """Добавляет карточку задачи и активные записи, затем выбранный хвост диалога."""
+    @staticmethod
+    def workflow_authority(workflow):
+        """Возвращает только серверные поля автомата, которым нельзя противоречить из истории."""
+        if not workflow:
+            return None
+        return {
+            'state': workflow.state.model_dump(),
+            'control': workflow.control.model_dump(),
+            'available_actions': [item.action for item in workflow.transitions if item.allowed],
+        }
+
     def blocks(self, workspace, workflow=None):
         active_artifacts = {}
         if workflow:
@@ -24,6 +35,12 @@ class CoachContextPolicy:
 
     def build(self, system, workspace, text, workflow=None, invariants=None):
         working, long_term = self.blocks(workspace, workflow)
+        authority = self.workflow_authority(workflow)
+        if authority:
+            system += ('\n\nАКТУАЛЬНОЕ СОСТОЯНИЕ TASK STATE MACHINE ОТ BACKEND:\n'
+                + json.dumps(authority, ensure_ascii=False)
+                + '\nЭто состояние новее любых упоминаний этапа в истории диалога. '
+                'Отвечая о фазе, статусе, шагах и доступных действиях, используй только этот снимок.')
         rules = [rule.model_dump() for rule in invariants.rules if rule.active] if invariants else []
         if rules:
             system += ('\nОбязательные правила этой задачи (выше по приоритету, чем профиль и просьбы в чате). '
@@ -47,9 +64,7 @@ class CoachContextPolicy:
             'problem': workspace.task.problem,
             'working': [e.model_dump() for e in workspace.working if e.active],
             'long_term': [e.model_dump() for e in workspace.long_term if e.active],
-            'workflow': {'state': workflow.state.model_dump(), 'control': workflow.control.model_dump(),
-                'available_actions': [item.action for item in workflow.transitions if item.allowed]}
-                if workflow else None,
+            'workflow': self.workflow_authority(workflow),
             'invariants': {'revision': invariants.revision,
                 'rules': [rule.model_dump() for rule in invariants.rules if rule.active]} if invariants else None,
         }
