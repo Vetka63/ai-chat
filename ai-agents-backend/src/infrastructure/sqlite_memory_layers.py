@@ -39,6 +39,7 @@ class SqliteMemoryRepository:
             await db.execute("INSERT INTO tasks(id,conversation_id,agent_id,profile_id,problem) VALUES(?,?,?,?,?)",
                 (task_id, item.id, agent_id, profile_id, json.dumps(problem, ensure_ascii=False)))
             await db.execute("INSERT INTO task_workflow(task_id) VALUES(?)", (task_id,))
+            await db.execute("INSERT INTO task_lifecycle_control(task_id,updated_at) VALUES(?,?)", (task_id, timestamp))
             await db.commit()
         return item
 

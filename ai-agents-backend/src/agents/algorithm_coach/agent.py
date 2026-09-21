@@ -10,12 +10,13 @@ from capabilities.personalization.context import profile_data, profile_text
 class AlgorithmCoachAgent:
     """Оркестрирует диалог и явный анализ памяти, не хранит состояние задачи в экземпляре."""
     def __init__(self, config, store, memory, calls, catalog, accounting, input_policy, output_policy,
-                 context_policy, workflow=None, invariants=None):
+                 context_policy, workflow=None, invariants=None, lifecycle_policy=None):
         self.config, self.store, self.memory = config, store, memory
         self.calls, self.catalog, self.accounting = calls, catalog, accounting
         self.input_policy, self.output_policy, self.context_policy = input_policy, output_policy, context_policy
         self.workflow = workflow
         self.invariants = invariants
+        self.lifecycle_policy = lifecycle_policy
         self._locks = {}
 
     @property
@@ -23,7 +24,8 @@ class AlgorithmCoachAgent:
         return AgentInfo(id=self.config.id, name=self.config.name, description=self.config.description,
             capabilities=['persistent_history', 'token_accounting', 'memory_layers', 'personalization',
                           *(['task_workflow'] if self.workflow else []),
-                          *(['invariants'] if self.invariants else [])])
+                          *(['invariants'] if self.invariants else []),
+                          *(['controlled_lifecycle'] if self.lifecycle_policy else [])])
 
     async def create_conversation(self, title, settings, problem=None, profile_id=None):
         if settings and settings.mode != 'sliding_window':
@@ -63,6 +65,9 @@ class AlgorithmCoachAgent:
             invariants = await self.invariants.repository.workspace(self.config.id, command.conversation_id) if self.invariants else None
             if workflow and (workflow.state.status == 'paused' or workflow.state.phase == 'done'):
                 raise AgentError('task_unavailable', 'Задача на паузе или завершена. Продолжите её для общения', 409)
+            if workflow and self.lifecycle_policy:
+                self.lifecycle_policy.ensure_dialogue_allowed(workflow)
+            lifecycle_refusal = self.lifecycle_policy.validate_input(text, workflow) if workflow and self.lifecycle_policy else None
             spec = self.catalog.get(command.model_id or conversation.selected_model_id or self.config.model)
             limit = self.output_limit(command, conversation, spec)
             messages = self.context_policy.build(self.config.system_prompt.replace('{provider}', spec.provider),
@@ -74,6 +79,11 @@ class AlgorithmCoachAgent:
             if workflow:
                 await self.workflow.clear_candidate(self.config.id, conversation.id, workflow.state.revision)
             extra_runs = []
+            if lifecycle_refusal:
+                await self.memory.repository.append_reply(workspace, lifecycle_refusal,
+                    workflow.state.revision, invariants.revision if invariants else None, candidate=False)
+                return AgentResult(agent_id=self.config.id, reply=lifecycle_refusal,
+                    model='Жизненный цикл задачи', source='policy')
             if self.invariants:
                 _, check_run, refusal = await self.invariants.check(self.config.id, conversation.id,
                     workspace.task, workflow, invariants, text, 'input',
@@ -88,10 +98,13 @@ class AlgorithmCoachAgent:
             async with self.calls.invoke(agent_id=self.config.id, conversation_id=conversation.id,
                 messages=messages, spec=spec, estimate=estimate, user_index=workspace.history_message_count,
                 temperature=self.config.temperature, max_tokens=limit,
-                memory_context=self.context_policy.snapshot(workspace, invariants)) as (completion, run):
+                memory_context=self.context_policy.snapshot(workspace, invariants, workflow)) as (completion, run):
                 reply = self.output_policy.present(completion)
-                refusal = None
-                if self.invariants:
+                lifecycle_output_refusal = self.lifecycle_policy.validate_output(reply, workflow) if workflow and self.lifecycle_policy else None
+                refusal = lifecycle_output_refusal
+                if lifecycle_output_refusal:
+                    reply = lifecycle_output_refusal
+                if self.invariants and not refusal:
                     _, check_run, refusal = await self.invariants.check(self.config.id, conversation.id,
                         workspace.task, workflow, invariants, reply, 'output', request=text,
                         profile=workspace.profile, user_index=workspace.history_message_count)
@@ -104,22 +117,20 @@ class AlgorithmCoachAgent:
                     invariants.revision if invariants else None, candidate=not refusal)
                 run.assistant_index = workspace.history_message_count + 1
             return AgentResult(agent_id=self.config.id, reply=reply,
-                model='Правила задачи' if refusal else completion.model,
+                model=('Жизненный цикл задачи' if lifecycle_output_refusal else 'Правила задачи') if refusal else completion.model,
                 source='policy' if refusal else completion.source, run=run, additional_runs=extra_runs)
 
     async def apply_workflow(self, conversation_id, command):
         """Редактируемый артефакт не обходит проверку правил при подтверждении в UI."""
         async with self._locks.setdefault(conversation_id, asyncio.Lock()):
+            flow = await self.workflow.workspace(self.config.id, conversation_id)
+            if flow.state.revision != command.expected_revision:
+                raise AgentError('state_conflict', 'Состояние задачи изменилось. Обновите панель', 409)
+            option = self.workflow.policy.require(command.action, flow.state.phase, flow.state.status,
+                flow.state.candidate_message_id, flow.control, flow.task_revision, flow.invariant_revision)
+            if not option.allowed:
+                raise AgentError('transition_not_allowed', option.reason or 'Переход недоступен', 409)
             if self.invariants and command.action in ('accept_plan', 'accept_solution', 'accept_validation'):
-                flow = await self.workflow.workspace(self.config.id, conversation_id)
-                if flow.state.revision != command.expected_revision:
-                    raise AgentError('state_conflict', 'Состояние задачи изменилось. Обновите панель', 409)
-                expected_phase = {'accept_plan': 'planning', 'accept_solution': 'execution',
-                    'accept_validation': 'validation'}[command.action]
-                if flow.state.phase != expected_phase:
-                    raise AgentError('invalid_transition', 'Результат не относится к текущему этапу', 409)
-                if flow.state.status != 'active' or flow.state.candidate_message_id is None:
-                    raise AgentError('missing_candidate', 'Сначала получите ответ агента на текущем этапе', 409)
                 memory_workspace = await self.memory.repository.workspace(self.config.id, conversation_id)
                 task = memory_workspace.task
                 snapshot = await self.invariants.repository.workspace(self.config.id, conversation_id)
@@ -133,6 +144,12 @@ class AlgorithmCoachAgent:
                 if refusal:
                     raise AgentError('invariant_conflict', refusal, 422)
             return await self.workflow.apply(self.config.id, conversation_id, command)
+
+    async def save_problem(self, conversation_id, command):
+        """Новое условие аннулирует утверждения и возвращает задачу к планированию."""
+        async with self._locks.setdefault(conversation_id, asyncio.Lock()):
+            problem = self.memory.policy.validate_problem(command.problem)
+            await self.workflow.replace_problem(self.config.id, conversation_id, problem, command)
 
     async def preview(self, command):
         if not command.conversation_id:

@@ -1,7 +1,7 @@
 [project]
 name = "ai-agents-backend"
-version = "0.4.0"
-description = "Python-агент с постоянным контекстом для задания Дня 8"
+version = "0.10.0"
+description = "Python-агенты с памятью и контролируемым жизненным циклом Дней 6–15"
 requires-python = ">=3.12"
 dependencies = [
   "aiosqlite==0.21.0",

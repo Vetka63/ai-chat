@@ -8,6 +8,7 @@ from .context_policy import CoachContextPolicy
 from .input_policy import CoachInputPolicy
 from .memory_policy import AlgorithmMemoryPolicy
 from .output_policy import CoachOutputPolicy
+from .lifecycle_policy import CoachLifecyclePolicy
 from .validators.invariants import CoachInvariantPolicy
 from .llm_judge.invariants import InvariantJudge
 from capabilities.invariants.service import InvariantGuard
@@ -23,4 +24,4 @@ def build_algorithm_coach(model, llm, store, repository, catalog, accounting, wo
         InvariantJudge(calls, accounting, catalog)) if invariant_repository else None
     return AlgorithmCoachAgent(config, store, LayeredMemory(repository, AlgorithmMemoryPolicy()),
         calls, catalog, accounting, CoachInputPolicy(), CoachOutputPolicy(), CoachContextPolicy(),
-        workflow_repository, invariants)
+        workflow_repository, invariants, CoachLifecyclePolicy())

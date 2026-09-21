@@ -24,7 +24,11 @@ async def workspace(agent_id: str, conversation_id: str, request: Request):
 @router.put('/problem', response_model=MemoryWorkspace)
 async def problem(agent_id: str, conversation_id: str, body: SaveProblem, request: Request):
     agent = memory_agent(request, agent_id)
-    await agent.memory.save_problem(agent_id, conversation_id, body)
+    handler = getattr(agent, 'save_problem', None)
+    if handler is not None:
+        await handler(conversation_id, body)
+    else:
+        await agent.memory.save_problem(agent_id, conversation_id, body)
     return await agent.memory.repository.workspace(agent_id, conversation_id)
 
 

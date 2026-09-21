@@ -112,6 +112,10 @@ async function removeConversation(item) {
   const suffix = memory.enabled.value ? ' Карточка и рабочая память удалятся, долговременные записи останутся.' : ''
   if (window.confirm(`Удалить чат «${item.title}»?${suffix}`)) await chat.removeConversation(item.id)
 }
+async function saveProblem(problem) {
+  await memory.saveProblem(problem)
+  await workflow.refresh()
+}
 </script>
 
 <template>
@@ -158,7 +162,7 @@ async function removeConversation(item) {
       <OutputSettings :limit="chat.outputLimit.value" :model="chat.selectedModel.value" :busy="busy" :memory-layers="memory.enabled.value" @change="chat.outputLimit.value = $event" />
       <MemoryPanel v-if="memory.enabled.value" :workspace="memory.workspace.value" :busy="busy"
         :loading="memory.loading.value" :error="memory.error.value" :last-context="lastMemoryContext"
-        @refresh="memory.refresh" @problem="memory.saveProblem" @save="memory.saveEntry"
+        @refresh="memory.refresh" @problem="saveProblem" @save="memory.saveEntry"
         @delete="memory.deleteEntry" @propose="memory.propose" @resolve="memory.resolve" />
       <ContextPanel v-if="chat.agent.value?.capabilities?.includes('context_memory')" :settings="chat.contextSettings.value" :summary="chat.conversation.value?.summary"
         :facts="chat.conversation.value?.facts" :conversation="chat.conversation.value" :conversations="chat.conversations.value"

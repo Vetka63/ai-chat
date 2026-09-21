@@ -5,7 +5,9 @@ import WorkflowPanel from './WorkflowPanel.vue'
 const workspace = (phase, candidate = 10, status = 'active') => ({
   task_id: 'task-1', state: { phase, status, current_step_id: null,
     candidate_message_id: candidate, expected_action: 'accept_plan', revision: 2 },
-  candidate_text: null, artifacts: [], events: [],
+  task_revision: 1, invariant_revision: 1,
+  control: { approved_plan: null, current_solution: null, current_validation: null },
+  transitions: [], candidate_text: null, artifacts: [], events: [],
 })
 
 describe('Day 13 workflow panel', () => {
@@ -34,7 +36,8 @@ describe('Day 13 workflow panel', () => {
     const wrapper = mount(WorkflowPanel, { props: {
       workspace: { ...workspace('execution', null), state: {
         ...workspace('execution', null).state, expected_action: 'work_on_step', current_step_id: 'step-1',
-      }, artifacts: [{ id: 'artifact-1', kind: 'plan', revision: 1,
+      }, control: { ...workspace('execution').control, approved_plan: { id: 'artifact-1', revision: 1 } },
+      artifacts: [{ id: 'artifact-1', kind: 'plan', revision: 1,
         created_at: '2026-01-01', content: { steps: [{ id: 'step-1', title: 'Найти дополнение' }] } }],
       events: [{ action: 'accept_plan', revision: 1, from_phase: 'planning', to_phase: 'execution',
         to_status: 'active', created_at: '2026-01-01' }] },
@@ -49,5 +52,29 @@ describe('Day 13 workflow panel', () => {
     expect(wrapper.find('.task-tray').exists()).toBe(false)
     await wrapper.get('.task-tabs button:nth-child(2)').trigger('click')
     expect(wrapper.get('.task-tray').text()).toContain('План принят')
+  })
+
+  it('shows controlled versions and sends an explicit change request', async () => {
+    const base = workspace('validation', 12)
+    const wrapper = mount(WorkflowPanel, { props: { workspace: {
+      ...base,
+      control: { approved_plan: { id: 'plan-1', revision: 2 },
+        current_solution: { id: 'solution-1', revision: 3 }, current_validation: null },
+      transitions: [
+        { action: 'accept_validation', target_phase: 'done', allowed: false,
+          reason: 'Сначала получите отчёт проверки текущего решения' },
+        { action: 'request_changes', target_phase: 'execution', allowed: true, reason: null },
+        { action: 'request_replan', target_phase: 'planning', allowed: true, reason: null },
+      ],
+    } } })
+    expect(wrapper.text()).toContain('План v2 утверждён')
+    expect(wrapper.text()).toContain('Решение v3')
+    expect(wrapper.text()).toContain('Сначала получите отчёт проверки')
+    await wrapper.get('.lifecycle-actions button').trigger('click')
+    await wrapper.get('.transition-editor textarea').setValue('Исправить обработку дубликатов')
+    await wrapper.get('.transition-editor').trigger('submit')
+    expect(wrapper.emitted('apply')[0]).toEqual(['request_changes', {
+      content: { reason: 'Исправить обработку дубликатов' },
+    }])
   })
 })

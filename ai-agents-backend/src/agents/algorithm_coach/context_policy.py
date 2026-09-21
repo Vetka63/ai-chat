@@ -7,10 +7,18 @@ from capabilities.personalization.context import profile_text
 class CoachContextPolicy:
     """Добавляет карточку задачи и активные записи, затем выбранный хвост диалога."""
     def blocks(self, workspace, workflow=None):
+        active_artifacts = {}
+        if workflow:
+            active_ids = {reference.id for reference in (
+                workflow.control.approved_plan, workflow.control.current_solution,
+                workflow.control.current_validation) if reference}
+            active_artifacts = {item.kind: item.content for item in workflow.artifacts if item.id in active_ids}
         working = json.dumps({'problem': workspace.task.problem,
             'entries': {e.key: e.value for e in workspace.working if e.active},
             **({'workflow': {'state': workflow.state.model_dump(),
-                'artifacts': {item.kind: item.content for item in workflow.artifacts}}} if workflow else {})}, ensure_ascii=False)
+                'control': workflow.control.model_dump(),
+                'available_actions': [item.action for item in workflow.transitions if item.allowed],
+                'artifacts': active_artifacts}} if workflow else {})}, ensure_ascii=False)
         long_term = json.dumps({e.key: e.value for e in workspace.long_term if e.active}, ensure_ascii=False)
         return working, long_term
 
@@ -29,7 +37,7 @@ class CoachContextPolicy:
                 *[Message(role=m.role, content=m.content) for m in workspace.short_term],
                 Message(role='user', content=text)]
 
-    def snapshot(self, workspace, invariants=None):
+    def snapshot(self, workspace, invariants=None, workflow=None):
         """Сохраняет состав именно этого запроса, а не состояние после ответа."""
         return {
             'task_id': workspace.task.id, 'task_revision': workspace.task.revision,
@@ -39,6 +47,9 @@ class CoachContextPolicy:
             'problem': workspace.task.problem,
             'working': [e.model_dump() for e in workspace.working if e.active],
             'long_term': [e.model_dump() for e in workspace.long_term if e.active],
+            'workflow': {'state': workflow.state.model_dump(), 'control': workflow.control.model_dump(),
+                'available_actions': [item.action for item in workflow.transitions if item.allowed]}
+                if workflow else None,
             'invariants': {'revision': invariants.revision,
                 'rules': [rule.model_dump() for rule in invariants.rules if rule.active]} if invariants else None,
         }

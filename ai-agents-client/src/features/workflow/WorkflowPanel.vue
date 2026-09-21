@@ -11,22 +11,33 @@ const actions = { discuss_plan: 'Обсудите план с агентом', a
   resume: 'Продолжите задачу', completed: 'Задача завершена' }
 const eventLabels = { pause: 'Пауза', resume: 'Продолжение', select_step: 'Выбран шаг',
   accept_plan: 'План принят', accept_solution: 'Решение сохранено', accept_validation: 'Проверка принята',
-  invariants_changed: 'Правила задачи изменены' }
+  request_changes: 'Возврат на доработку', request_replan: 'Запрошено перепланирование',
+  invariants_changed: 'Правила задачи изменены', problem_changed: 'Условие задачи изменено' }
 const artifactLabels = { plan: 'План', solution: 'Решение', validation: 'Проверка' }
 const state = computed(() => props.workspace?.state)
-const latest = computed(() => Object.fromEntries((props.workspace?.artifacts || []).map(item => [item.kind, item])))
+const artifactById = computed(() => Object.fromEntries((props.workspace?.artifacts || []).map(item => [item.id, item])))
+const control = computed(() => props.workspace?.control || {})
+const transition = action => props.workspace?.transitions?.find(item => item.action === action)
+const primaryAction = computed(() => ({ planning: 'accept_plan', execution: 'accept_solution',
+  validation: 'accept_validation' })[state.value?.phase])
+const primaryTransition = computed(() => transition(primaryAction.value))
+const activePlan = computed(() => artifactById.value[control.value.approved_plan?.id])
 const candidate = computed(() => props.workspace?.candidate_text || '')
 const draft = ref('')
 const method = ref('llm_review')
 const trayOpen = ref(false)
 const activeTab = ref('proposal')
 const trayExpanded = ref(false)
+const transitionMode = ref(null)
+const transitionReason = ref('')
 
 watch(() => [props.workspace?.task_id, state.value?.phase, state.value?.candidate_message_id], (current, previous) => {
   if (current[0] !== previous?.[0]) {
     trayOpen.value = Boolean(current[2])
     activeTab.value = 'proposal'
     trayExpanded.value = false
+    transitionMode.value = null
+    transitionReason.value = ''
   } else if (current[2] && current[2] !== previous?.[2]) {
     trayOpen.value = true
     activeTab.value = 'proposal'
@@ -56,7 +67,7 @@ watch(() => [props.workspace?.task_id, state.value?.phase, state.value?.candidat
 }, { immediate: true })
 
 const canAccept = computed(() => Boolean(candidate.value && draft.value.trim() && state.value?.status === 'active'
-  && state.value?.phase !== 'done' && !props.busy && !props.sending))
+  && state.value?.phase !== 'done' && primaryTransition.value?.allowed !== false && !props.busy && !props.sending))
 
 function accept() {
   if (!canAccept.value) return
@@ -66,12 +77,24 @@ function accept() {
     : { text: draft.value.trim(), ...(phase === 'validation' ? { method: method.value } : {}) }
   emit('apply', { planning: 'accept_plan', execution: 'accept_solution', validation: 'accept_validation' }[phase], { content })
 }
+
+function beginTransition(action) {
+  transitionMode.value = action
+  transitionReason.value = ''
+}
+
+function applyTransition() {
+  if (!transitionMode.value || !transitionReason.value.trim() || props.busy || props.sending) return
+  emit('apply', transitionMode.value, { content: { reason: transitionReason.value.trim() } })
+  transitionMode.value = null
+  transitionReason.value = ''
+}
 </script>
 
 <template>
   <section v-if="workspace" class="workflow" aria-label="Состояние задачи">
     <div class="workflow-top">
-      <div class="task-heading"><small>Задача · День 13</small><strong>{{ phases[state.phase] }}</strong>
+      <div class="task-heading"><small>Задача · День 15</small><strong>{{ phases[state.phase] }}</strong>
         <span v-if="state.status === 'paused'" class="pause-badge">На паузе</span></div>
       <ol class="phases" aria-label="Этапы задачи"><li v-for="(label, phase) in phases" :key="phase"
         :class="{ current: state.phase === phase, complete: phaseOrder.indexOf(phase) < phaseOrder.indexOf(state.phase) }"
@@ -82,7 +105,11 @@ function accept() {
         <button :disabled="busy" aria-label="Обновить состояние задачи" title="Обновить" @click="emit('refresh')">↻</button>
       </div>
     </div>
-    <div class="workflow-lower"><p class="next-action">Сейчас: {{ actions[state.expected_action] }}</p>
+    <div class="workflow-lower"><div><p class="next-action">Сейчас: {{ actions[state.expected_action] }}</p>
+      <p v-if="primaryTransition && !primaryTransition.allowed" class="transition-reason">{{ primaryTransition.reason }}</p>
+      <div class="lifecycle-links"><span v-if="control.approved_plan">План v{{ control.approved_plan.revision }} утверждён</span>
+        <span v-if="control.current_solution">Решение v{{ control.current_solution.revision }}</span>
+        <span v-if="control.current_validation">Проверка v{{ control.current_validation.revision }}</span></div></div>
       <div class="task-tabs">
         <button v-if="candidate" :class="{ selected: trayOpen && activeTab === 'proposal' }"
           :aria-expanded="trayOpen && activeTab === 'proposal'" @click="openTab('proposal')">✦ Предложение <span class="unread-dot" aria-label="Новое"></span></button>
@@ -92,11 +119,24 @@ function accept() {
           @click="openTab('events')">◷ История</button>
       </div>
     </div>
+    <div v-if="state.phase === 'execution' || state.phase === 'validation'" class="lifecycle-actions">
+      <button v-if="state.phase === 'validation'" :disabled="busy || sending || transition('request_changes')?.allowed === false"
+        :title="transition('request_changes')?.reason" @click="beginTransition('request_changes')">Вернуть на доработку</button>
+      <button :disabled="busy || sending || transition('request_replan')?.allowed === false"
+        :title="transition('request_replan')?.reason" @click="beginTransition('request_replan')">Перепланировать</button>
+    </div>
+    <form v-if="transitionMode" class="transition-editor" @submit.prevent="applyTransition">
+      <label>{{ transitionMode === 'request_changes' ? 'Что требуется доработать' : 'Почему нужен новый план' }}
+        <textarea v-model="transitionReason" maxlength="5000" rows="2" autofocus></textarea></label>
+      <div><button type="button" @click="transitionMode = null">Отмена</button>
+        <button class="confirm" :disabled="!transitionReason.trim() || busy || sending" type="submit">
+          {{ transitionMode === 'request_changes' ? 'Вернуть в реализацию' : 'Вернуть к планированию' }}</button></div>
+    </form>
     <p v-if="error" role="alert" class="workflow-error">{{ error }}</p>
-    <label v-if="state.phase === 'execution' && latest.plan" class="step-picker">Текущий шаг
+    <label v-if="state.phase === 'execution' && activePlan" class="step-picker">Текущий шаг
       <select :value="state.current_step_id" :disabled="busy || sending || state.status === 'paused'"
         @change="emit('apply', 'select_step', { step_id: $event.target.value })">
-        <option v-for="step in latest.plan.content.steps" :key="step.id" :value="step.id">{{ step.title }}</option>
+        <option v-for="step in activePlan?.content.steps || []" :key="step.id" :value="step.id">{{ step.title }}</option>
       </select>
     </label>
     <div v-if="trayOpen" class="task-tray" :class="{ expanded: trayExpanded }">
@@ -123,6 +163,8 @@ function accept() {
             <span><strong>{{ artifactLabels[item.kind] }} · версия {{ item.revision }}</strong><small>{{ item.created_at }}</small></span><span aria-hidden="true">⌄</span></summary>
           <ol v-if="item.kind === 'plan'"><li v-for="step in item.content.steps" :key="step.id">{{ step.title }}</li></ol>
           <pre v-else>{{ item.content.text }}</pre>
+          <small v-if="item.based_on_artifact_id">Основано на: {{ artifactLabels[artifactById[item.based_on_artifact_id]?.kind] }}
+            v{{ artifactById[item.based_on_artifact_id]?.revision }}</small>
           <small v-if="item.kind === 'validation'">{{ item.content.method === 'llm_review' ? 'Анализ LLM, код не запускался' : 'Результат запуска со слов пользователя' }}</small>
         </details>
       </div>
@@ -138,7 +180,8 @@ function accept() {
 
 <style scoped>
 .workflow { flex: 0 0 auto; min-width: 0; container-type: inline-size; padding: 10px 20px; border-bottom: 1px solid var(--line); background: var(--panel); }
-.workflow-top, .workflow-actions, .workflow-lower, .task-tabs, .tray-header, .tray-header > div, .tray-footer { display: flex; align-items: center; gap: 9px; }
+.workflow-top, .workflow-actions, .workflow-lower, .task-tabs, .tray-header, .tray-header > div, .tray-footer,
+.lifecycle-links, .lifecycle-actions, .transition-editor > div { display: flex; align-items: center; gap: 9px; }
 .workflow-top, .workflow-lower, .tray-header { justify-content: space-between; }
 .task-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 5px 9px; flex: 0 0 auto; }
 .task-heading small { width: 100%; color: var(--muted); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; }
@@ -152,6 +195,16 @@ function accept() {
 .phases li.complete span { color: var(--accent); border-color: var(--accent); }
 .workflow-lower { min-height: 33px; border-top: 1px solid var(--line); margin-top: 8px; padding-top: 7px; }
 .next-action { min-width: 0; margin: 0; color: var(--muted); font-size: 12px; }
+.transition-reason { margin: 3px 0 0; color: var(--danger); font-size: 11px; }
+.lifecycle-links { flex-wrap: wrap; margin-top: 5px; }
+.lifecycle-links span { padding: 3px 7px; border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line)); border-radius: 999px; color: var(--accent); background: var(--accent-soft); font-size: 10px; font-weight: 700; }
+.lifecycle-actions { justify-content: flex-end; padding-top: 7px; }
+.lifecycle-actions button, .transition-editor button { padding: 6px 9px; border: 1px solid var(--line); border-radius: 8px; color: var(--text); background: var(--page); cursor: pointer; font-size: 11px; }
+.transition-editor { display: grid; gap: 8px; margin-top: 8px; padding: 9px; border: 1px solid var(--line); border-radius: 10px; background: var(--page); }
+.transition-editor label { display: grid; gap: 5px; color: var(--muted); font-size: 11px; }
+.transition-editor textarea { width: 100%; padding: 8px 10px; resize: vertical; border: 1px solid var(--line); border-radius: 8px; color: var(--text); background: var(--panel); font: inherit; }
+.transition-editor > div { justify-content: flex-end; }
+.transition-editor .confirm { color: white; border-color: var(--accent); background: var(--accent); }
 .task-tabs { flex-wrap: wrap; justify-content: flex-end; }
 .task-tabs button, .workflow-actions button, .tray-header button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 5px 9px; border: 1px solid transparent; border-radius: 8px; background: transparent; cursor: pointer; font-size: 12px; white-space: nowrap; }
 .task-tabs button:hover, .task-tabs button.selected, .workflow-actions button:hover, .tray-header button:hover { background: var(--accent-soft); }
@@ -196,6 +249,7 @@ button:disabled, select:disabled, textarea:disabled { opacity: .55; cursor: defa
   .phases { flex-wrap: nowrap; justify-content: space-between; gap: 1px; }
   .phases li { flex-direction: column; gap: 2px; padding: 4px 2px; font-size: 9px; }
   .task-tabs { justify-content: flex-start; }
+  .lifecycle-actions { justify-content: flex-start; }
   .step-picker { align-items: stretch; flex-direction: column; gap: 4px; }
   .task-tray { height: min(35vh, 330px); min-height: 190px; }
 }
