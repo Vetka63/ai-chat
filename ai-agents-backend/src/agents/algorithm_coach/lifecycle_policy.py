@@ -16,6 +16,8 @@ class CoachLifecyclePolicy:
     status_requests = [re.compile(pattern, re.IGNORECASE | re.DOTALL) for pattern in (
         r'(?:в|на)\s+как(?:ой|ом)\s+(?:мы\s+)?(?:сейчас\s+)?(?:фаз|этап|шаг)',
         r'как(?:ая|ой|ом)\s+(?:сейчас\s+)?(?:фаз|этап|статус|шаг)',
+        r'как(?:ой|ов)\s+(?:у\s+нас\s+)?план',
+        r'(?:мы|задача)\s+(?:сейчас\s+)?(?:не\s+)?на\s+(?:шаге|этапе|фазе)',
         r'где\s+(?:мы|задача)\s+(?:сейчас\s+)?(?:находимся|остановились)',
         r'(?:план|решение|проверка)\s+(?:уже\s+)?(?:есть|принят|утвержд|сохран)',
         r'(?:ты|мы).{0,40}(?:сделал|сделали|провёл|провели).{0,30}(?:проверк|валидац)',
@@ -25,7 +27,7 @@ class CoachLifecyclePolicy:
         r'\bкак\s+(?:будем|лучше)\s+решать\b',
     )]
     solution_requests = [re.compile(pattern, re.IGNORECASE | re.DOTALL) for pattern in (
-        r'\b(?:напиши|сгенерируй|покажи|дай|предложи)\b.{0,80}\b(?:код|решение|функци\w*|класс\w*)',
+        r'\b(?:напиши|сгенерируй|покажи|дай|выдай|предложи)\b.{0,80}\b(?:код|решение|функци\w*|класс\w*)',
         r'\bреализ(?:уй|уем|овать|ация|ацию)\b',
         r'\b(?:перейд\w*|приступ\w*|продолж\w*)\b.{0,60}\b(?:решени|реализац|код|шаг)',
         r'\b(?:implement|write|provide|generate)\b.{0,50}\b(?:code|implementation|function|class|solution)\b',
@@ -59,7 +61,6 @@ class CoachLifecyclePolicy:
         r'\bкоррект\w*\b', r'\bошиб\w*\b', r'\bсложност\w*\b',
         r'\bсоответств\w*\b', r'\b(?:validation|verification|tests?)\b',
     )]
-
     @staticmethod
     def _refusal():
         return ('Сейчас задача находится на этапе планирования. Я могу уточнить условие и подготовить '
@@ -100,10 +101,40 @@ class CoachLifecyclePolicy:
                 '«Вернуть на доработку» и продолжите работу в `execution`.')
         return None
 
-    def validate_output(self, text, workspace):
-        if workspace.state.phase == 'planning' and any(rule.search(text) for rule in self.implementation_output):
-            return self._refusal()
+    def output_issue(self, request, text, workspace):
+        """Обнаруживает ответ LLM, который нельзя считать результатом запрошенного этапа."""
+        phase = workspace.state.phase
+        if phase == 'planning' and any(rule.search(text) for rule in self.implementation_output):
+            return ('Backend отклонил предыдущий ответ: в planning нельзя выдавать готовый код. '
+                'Верни нумерованный план без реализации.')
+        if self.requested_stage(request) != phase:
+            return None
+        valid = {
+            # Структуру плана дополнительно разбирает UI. На backend достаточно
+            # гарантировать, что planning-ответ не маскирует готовую реализацию.
+            'planning': True,
+            'execution': any(rule.search(text) for rule in self.implementation_output),
+            'validation': any(rule.search(text) for rule in self.validation_output),
+            'done': False,
+        }[phase]
+        if not valid:
+            expected = {
+                'planning': 'нумерованный план решения',
+                'execution': 'реализацию алгоритма с блоком программного кода',
+                'validation': 'отчёт проверки сохранённого решения',
+                'done': 'никакой новый результат',
+            }[phase]
+            return (f'Backend отклонил предыдущий ответ: актуальная фаза — {phase}. '
+                f'Нужно выдать {expected}, не определяя фазу по старой переписке.')
         return None
+
+    @staticmethod
+    def output_failure(workspace):
+        """Безопасный ответ, когда LLM дважды не соблюла контракт текущей фазы."""
+        if workspace.state.phase == 'planning':
+            return CoachLifecyclePolicy._refusal()
+        return (f'LLM дважды вернула ответ, не соответствующий этапу `{workspace.state.phase}`. '
+            'Черновик не сохранён; состояние задачи не изменилось. Повторите запрос.')
 
     def status_response(self, text, workspace):
         """Отвечает на вопрос о состоянии из БД, не предлагая LLM угадывать его по истории."""

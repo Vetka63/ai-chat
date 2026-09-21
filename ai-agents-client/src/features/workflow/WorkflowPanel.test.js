@@ -30,6 +30,15 @@ describe('Day 13 workflow panel', () => {
     expect(wrapper.get('textarea').element.value).toBe('Словарь\nОдин проход')
   })
 
+  it('keeps every top-level step when steps contain nested bullet details', () => {
+    const wrapper = mount(WorkflowPanel, { props: {
+      workspace: { ...workspace('planning'), candidate_text:
+        '**Шаги**\n1. **Уточнить условие**\n   - Проверить ограничения\n   - Уточнить ответ\n2. **Выбрать структуру**\n   - Хеш-таблица\n3. **Оценить сложность**\n\n**Что дальше**\nПодтвердить план' },
+    } })
+    expect(wrapper.get('textarea').element.value)
+      .toBe('Уточнить условие\nВыбрать структуру\nОценить сложность')
+  })
+
   it('shows pause and blocks confirmation while paused', async () => {
     const wrapper = mount(WorkflowPanel, { props: {
       workspace: { ...workspace('execution', 11, 'paused'), candidate_text: 'def two_sum(): pass' },

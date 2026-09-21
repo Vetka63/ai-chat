@@ -54,13 +54,14 @@ function openTab(tab) {
 }
 
 function planLines(text) {
-  const lines = text.split('\n').map(line => line.trim())
-  const heading = lines.findIndex(line => /^(?:#{1,6}\s*)?(?:\*\*)?(?:шаги|план решения)(?:\*\*)?\s*$/i.test(line))
+  const lines = text.split('\n')
+  const heading = lines.findIndex(line => /^(?:#{1,6}\s*)?(?:\*\*)?(?:шаги|план решения)(?:\*\*)?\s*$/i.test(line.trim()))
   const numbered = []
-  for (const line of lines.slice(heading >= 0 ? heading + 1 : 0)) {
-    const match = line.match(/^\d+[.)]\s+(.+)/)
+  for (const rawLine of lines.slice(heading >= 0 ? heading + 1 : 0)) {
+    const line = rawLine.trim()
+    const match = rawLine.match(/^\s{0,3}\d+[.)]\s+(.+)/)
     if (match) { numbered.push(match[1].replace(/^\*\*(.+?)\*\*/, '$1').trim()); continue }
-    if (numbered.length && (line || /^(?:#{1,6}|\*\*)/.test(line))) break
+    if (numbered.length && (/^#{1,6}\s/.test(line) || /^\*\*[^*]+\*\*$/.test(line))) break
   }
   return numbered.join('\n')
 }

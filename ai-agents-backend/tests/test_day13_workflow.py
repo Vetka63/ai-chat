@@ -9,6 +9,14 @@ from capabilities.task_workflow.models import WorkflowCommand
 BASE = '/api/v1/agents/algorithm_coach'
 
 
+class StaticLlm:
+    def __init__(self, content):
+        self.content = content
+
+    async def complete(self, messages, *, model, temperature, max_tokens):
+        return Completion(content=self.content, model=model)
+
+
 def chat(client):
     response = client.post(BASE + '/conversations', json={
         'title': 'Two Sum', 'problem': {'statement': 'Найти индексы двух чисел с суммой target'},
@@ -56,12 +64,16 @@ def test_two_sum_workflow_is_persistent_and_sequential(tmp_path):
         assert action(client, chat_id, 'resume').json()['state']['current_step_id'] == state['current_step_id']
         second = workflow(client, chat_id)['artifacts'][0]['content']['steps'][1]['id']
         assert action(client, chat_id, 'select_step', step_id=second).json()['state']['current_step_id'] == second
+        client.app.state.registry.get('algorithm_coach').calls.llm = StaticLlm(
+            '```python\ndef two_sum(nums, target): return []\n```')
         assert run(client, chat_id, 'Напиши код').status_code == 200
         assert action(client, chat_id, 'accept_solution', content={'text': 'def two_sum(nums, target): return []'}).json()['state']['phase'] == 'validation'
         assert action(client, chat_id, 'pause').json()['state']['status'] == 'paused'
     with TestClient(create_app(settings)) as client:
         assert workflow(client, chat_id)['state']['phase'] == 'validation'
         assert action(client, chat_id, 'resume').status_code == 200
+        client.app.state.registry.get('algorithm_coach').calls.llm = StaticLlm(
+            'Проверка решения: нужны тесты, сложность O(n), код соответствует плану.')
         assert run(client, chat_id, 'Проверь сохранённое решение').status_code == 200
         result = action(client, chat_id, 'accept_validation', content={'text': 'Нужны тесты', 'method': 'llm_review'})
         assert result.json()['state']['phase'] == 'done'

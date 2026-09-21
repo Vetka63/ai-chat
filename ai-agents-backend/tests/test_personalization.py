@@ -76,7 +76,8 @@ def test_each_request_has_one_profile_and_task_facts_stay_equal(rig):
         chat = create(client, profile_id=persona, problem={'statement': 'Two Sum', 'constraints': 'Массив не менять'})
         results.append(run(client, chat, 'Объясни поиск дополнения').json())
     first, second = llm.calls
-    assert len(first) == len(second) == 5  # system, profile, working, long-term, current
+    # system, profile, working, long-term, свежий workflow authority, current
+    assert len(first) == len(second) == 6
     first_profile = json.loads(first[1].content.split('\n', 1)[1])
     second_profile = json.loads(second[1].content.split('\n', 1)[1])
     assert first_profile['preferences']['detail_level'] == 'detailed'

@@ -96,11 +96,14 @@ def test_three_layers_are_sent_and_original_history_is_retained(rig):
     assert run(client, chat, 'Средний вопрос').status_code == 200
     result = run(client, chat, 'Последний вопрос').json()
     sent = llm.calls[-1]
-    assert len(sent) == 7  # system + profile + working + long-term + N=2 + current
+    # system + profile + working + long-term + N=2 + свежий workflow authority + current
+    assert len(sent) == 8
     assert 'Линейное время' in sent[2].content
     assert 'Найти пару' in sent[2].content
     assert 'Использовать Python' in sent[3].content
-    assert [m.content for m in sent[4:]] == ['Средний вопрос', llm.answer, 'Последний вопрос']
+    assert [m.content for m in sent[4:6]] == ['Средний вопрос', llm.answer]
+    assert sent[-2].role == 'system' and 'backend' in sent[-2].content.lower()
+    assert sent[-1].content == 'Последний вопрос'
     assert result['run']['estimate']['context_mode'] == 'memory_layers'
     assert result['run']['estimate']['working_memory_tokens'] > 0
     assert len(result['run']['memory_context']['message_ids']) == 2

@@ -12,13 +12,15 @@ BASE = '/api/v1/agents/algorithm_coach'
 class FakeLlm:
     def __init__(self):
         self.reply = '## Шаги\n1. Построить словарь\n2. Найти дополнение'
+        self.replies = []
         self.calls = 0
         self.last_messages = []
 
     async def complete(self, messages, *, model, temperature, max_tokens):
         self.calls += 1
         self.last_messages = messages
-        return Completion(content=self.reply, model=model, finish_reason='stop')
+        content = self.replies.pop(0) if self.replies else self.reply
+        return Completion(content=content, model=model, finish_reason='stop')
 
 
 def create(client):
@@ -238,3 +240,36 @@ def test_only_current_stage_result_can_become_or_replace_candidate(tmp_path):
         done = action(client, chat, 'accept_validation', {
             'text': fake.reply, 'method': 'llm_review'})
         assert done.status_code == 200 and done.json()['state']['phase'] == 'done'
+
+
+def test_stale_history_cannot_turn_execution_response_back_into_planning(tmp_path):
+    """Если LLM поверила старой истории, backend один раз исправляет ответ и проверяет код."""
+    settings = Settings(mode='demo', database_path=tmp_path / 'day15.sqlite3', _env_file=None)
+    with TestClient(create_app(settings)) as client:
+        chat = create(client)
+        fake = FakeLlm()
+        client.app.state.registry.get('algorithm_coach').calls.llm = fake
+        accept_plan(client, chat)
+
+        calls_before = fake.calls
+        first_status = run(client, chat, 'Какой у нас план?')
+        second_status = run(client, chat, 'А мы не на шаге реализации?')
+        assert first_status.json()['source'] == second_status.json()['source'] == 'policy'
+        assert '`execution`' in first_status.json()['reply']
+        assert '`execution`' in second_status.json()['reply']
+        assert fake.calls == calls_before
+
+        code = '```python\ndef two_sum(nums, target):\n    return [0, 1]\n```'
+        fake.replies = [
+            'Нет, по старой переписке мы всё ещё на этапе planning.',
+            code,
+        ]
+        response = run(client, chat, 'Выдай решение задачи')
+        assert response.status_code == 200, response.text
+        assert response.json()['reply'] == code
+        assert fake.calls == calls_before + 2
+        current = flow(client, chat)
+        assert current['state']['phase'] == 'execution'
+        assert current['candidate_text'] == code
+        assert any(message.role == 'system' and 'Актуальный workflow' in message.content
+            for message in fake.last_messages)

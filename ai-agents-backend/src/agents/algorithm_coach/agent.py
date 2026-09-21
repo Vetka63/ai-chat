@@ -1,10 +1,14 @@
 """Самостоятельный алгоритмический агент с тремя слоями памяти."""
 import asyncio
 import json
+import logging
 
 from agent_core.models import AgentError, AgentInfo, AgentResult, Message
 from capabilities.context_memory.models import ContextSettings
 from capabilities.personalization.context import profile_data, profile_text
+
+
+logger = logging.getLogger(__name__)
 
 
 class AlgorithmCoachAgent:
@@ -103,29 +107,60 @@ class AlgorithmCoachAgent:
                         workflow.state.revision if workflow else None, invariants.revision, candidate=False)
                     return AgentResult(agent_id=self.config.id, reply=refusal, model='Правила задачи',
                         source='policy', additional_runs=extra_runs)
-            async with self.calls.invoke(agent_id=self.config.id, conversation_id=conversation.id,
-                messages=messages, spec=spec, estimate=estimate, user_index=workspace.history_message_count,
-                temperature=self.config.temperature, max_tokens=limit,
-                memory_context=self.context_policy.snapshot(workspace, invariants, workflow)) as (completion, run):
-                reply = self.output_policy.present(completion)
-                lifecycle_output_refusal = self.lifecycle_policy.validate_output(reply, workflow) if workflow and self.lifecycle_policy else None
+            async def persist_result(output_completion, output_run, output_reply, output_issue):
+                lifecycle_output_refusal = (self.lifecycle_policy.output_failure(workflow)
+                    if output_issue and self.lifecycle_policy else None)
                 refusal = lifecycle_output_refusal
                 if lifecycle_output_refusal:
-                    reply = lifecycle_output_refusal
+                    output_reply = lifecycle_output_refusal
                 if self.invariants and not refusal:
                     _, check_run, refusal = await self.invariants.check(self.config.id, conversation.id,
-                        workspace.task, workflow, invariants, reply, 'output', request=text,
+                        workspace.task, workflow, invariants, output_reply, 'output', request=text,
                         profile=workspace.profile, user_index=workspace.history_message_count)
                     if check_run:
                         extra_runs.append(check_run)
                     if refusal:
-                        reply = refusal
+                        output_reply = refusal
                 candidate = not refusal and (not self.lifecycle_policy
                     or self.lifecycle_policy.can_be_candidate(text, workflow))
-                await self.memory.repository.append_reply(workspace, reply,
+                await self.memory.repository.append_reply(workspace, output_reply,
                     workflow.state.revision if workflow else None,
                     invariants.revision if invariants else None, candidate=candidate)
-                run.assistant_index = workspace.history_message_count + 1
+                output_run.assistant_index = workspace.history_message_count + 1
+                return (output_completion, output_run, output_reply, refusal,
+                    lifecycle_output_refusal)
+
+            snapshot = self.context_policy.snapshot(workspace, invariants, workflow)
+            async with self.calls.invoke(agent_id=self.config.id, conversation_id=conversation.id,
+                messages=messages, spec=spec, estimate=estimate, user_index=workspace.history_message_count,
+                temperature=self.config.temperature, max_tokens=limit,
+                memory_context=snapshot) as (completion, run):
+                reply = self.output_policy.present(completion)
+                issue = (self.lifecycle_policy.output_issue(text, reply, workflow)
+                    if workflow and self.lifecycle_policy else None)
+                if issue:
+                    logger.warning('lifecycle_output_retry agent=%s conversation=%s phase=%s reason=%s',
+                        self.config.id, conversation.id, workflow.state.phase, issue)
+                    extra_runs.append(run)
+                    retry_messages = self.context_policy.corrective_retry(messages, reply, issue, workflow)
+                    retry_estimate = await self.estimate(
+                        retry_messages, workspace, text, spec, limit, workflow)
+                    retry_context = {**snapshot, 'lifecycle_retry': {'reason': issue}}
+                    async with self.calls.invoke(agent_id=self.config.id, conversation_id=conversation.id,
+                        messages=retry_messages, spec=spec, estimate=retry_estimate,
+                        user_index=workspace.history_message_count,
+                        temperature=self.config.temperature, max_tokens=limit,
+                        memory_context=retry_context) as (retry_completion, retry_run):
+                        retry_reply = self.output_policy.present(retry_completion)
+                        retry_issue = self.lifecycle_policy.output_issue(text, retry_reply, workflow)
+                        if retry_issue:
+                            logger.error('lifecycle_output_rejected agent=%s conversation=%s phase=%s reason=%s',
+                                self.config.id, conversation.id, workflow.state.phase, retry_issue)
+                        completion, run, reply, refusal, lifecycle_output_refusal = await persist_result(
+                            retry_completion, retry_run, retry_reply, retry_issue)
+                else:
+                    completion, run, reply, refusal, lifecycle_output_refusal = await persist_result(
+                        completion, run, reply, None)
             return AgentResult(agent_id=self.config.id, reply=reply,
                 model=('Жизненный цикл задачи' if lifecycle_output_refusal else 'Правила задачи') if refusal else completion.model,
                 source='policy' if refusal else completion.source, run=run, additional_runs=extra_runs)
