@@ -1,4 +1,8 @@
-# Python Agents — День 15
+# Python Agents — День 16
+
+Добавлен отдельный MCP-раздел: официальный Python MCP SDK подключается к
+локальному учебному серверу по `stdio` и возвращает его инструменты через API.
+Чат и LLM в этом флоу не участвуют. [Пошаговая проверка Дня 16](docs/day16-guide.md).
 
 Алгоритмический наставник использует контролируемый жизненный цикл
 `planning → execution → validation → done`. План, решение и проверка связаны
@@ -30,6 +34,8 @@ FastAPI-сервис с инкапсулированным агентом и п�
 
 - `GET /health`
 - `GET /api/v1/agents`
+- `GET /api/v1/mcp/servers`
+- `POST /api/v1/mcp/servers/local-demo/discover`
 - `POST /api/v1/agents/{agent_id}/conversations`
 - `GET /api/v1/agents/{agent_id}/conversations`
 - `GET /api/v1/agents/{agent_id}/conversations/{conversation_id}`

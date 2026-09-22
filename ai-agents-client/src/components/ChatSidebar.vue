@@ -1,7 +1,7 @@
 <script setup>
 import { computed } from 'vue'
-const props = defineProps({ conversations: Array, selectedConversation: String, agentName: String, busy: Boolean })
-defineEmits(['new', 'select', 'delete', 'close'])
+const props = defineProps({ conversations: Array, selectedConversation: String, agentName: String, busy: Boolean, mcpActive: Boolean })
+defineEmits(['new', 'select', 'delete', 'close', 'open-mcp'])
 const badge = mode => ({ full: '∞', summary: 'Σ', sliding_window: '⇥', sticky_facts: '◆', branching: '⑂' }[mode] || '∞')
 const ordered = computed(() => {
   const source = props.conversations || []
@@ -28,6 +28,9 @@ const ordered = computed(() => {
       <button class="mobile-close" aria-label="Закрыть список чатов" @click="$emit('close')">×</button>
     </div>
     <button class="new-chat" :disabled="busy || !agentName" @click="$emit('new')"><span>＋</span> Новый чат</button>
+    <button class="mcp-nav" :class="{ active: mcpActive }" :aria-current="mcpActive ? 'page' : undefined" @click="$emit('open-mcp')">
+      <span aria-hidden="true">⌘</span><span><strong>MCP</strong><small>День 16 · инструменты</small></span>
+    </button>
     <section class="sidebar-section conversations-section">
       <p class="section-title">Сохранённые чаты</p>
       <nav class="conversation-list" tabindex="0" aria-label="Сохранённые чаты">

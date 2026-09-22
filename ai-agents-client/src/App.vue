@@ -18,6 +18,7 @@ import WorkflowPanel from './features/workflow/WorkflowPanel.vue'
 import { useWorkflow } from './features/workflow/useWorkflow'
 import InvariantPanel from './features/invariants/InvariantPanel.vue'
 import { useInvariants } from './features/invariants/useInvariants'
+import McpExplorer from './features/mcp/McpExplorer.vue'
 
 const chat = useAgentChat()
 const memory = useMemoryLayers(chat)
@@ -36,8 +37,10 @@ const chatsButton = ref(null)
 const settingsPanel = ref(null)
 const chatsPanel = ref(null)
 const newChatOpen = ref(false)
+const mcpMode = ref(false)
+const mcpExplorer = ref(null)
 const busy = computed(() => chat.loading.value || chat.sending.value || memory.busy.value || profiles.busy.value || workflow.busy.value || invariants.busy.value)
-const overlay = computed(() => focusMode.value ? null : mobile.value && sidebarOpen.value ? 'chats' : compact.value && settingsOpen.value ? 'settings' : null)
+const overlay = computed(() => focusMode.value ? null : mobile.value && sidebarOpen.value ? 'chats' : !mcpMode.value && compact.value && settingsOpen.value ? 'settings' : null)
 watch(theme, value => { document.documentElement.dataset.theme = value }, { immediate: true })
 watch(focusMode, value => { localStorage.setItem('agents:focus-mode', String(value)) })
 
@@ -52,7 +55,10 @@ function closePanels() {
   const wasChats = overlay.value === 'chats'
   if (wasChats) sidebarOpen.value = false
   else settingsOpen.value = false
-  nextTick(() => (wasChats ? chatsButton : settingsButton).value?.focus())
+  nextTick(() => {
+    if (wasChats && mcpMode.value) mcpExplorer.value?.focusMenu()
+    else (wasChats ? chatsButton : settingsButton).value?.focus()
+  })
 }
 function toggleSettings() {
   if (focusMode.value) { focusMode.value = false; settingsOpen.value = true; return }
@@ -95,11 +101,19 @@ onBeforeUnmount(() => {
   document.removeEventListener('keydown', keyboard)
 })
 function chooseConversation(id) {
+  mcpMode.value = false
   chat.selectConversation(id)
   if (mobile.value) closePanels()
 }
 function newChat() {
+  mcpMode.value = false
   newChatOpen.value = true
+}
+function openMcp() {
+  mcpMode.value = true
+  focusMode.value = false
+  settingsOpen.value = false
+  sidebarOpen.value = false
 }
 async function createNewChat({ title, contextSettings, problem, profileId }) {
   await chat.newChat(title, contextSettings, problem, profileId)
@@ -119,7 +133,7 @@ async function saveProblem(problem) {
 </script>
 
 <template>
-  <div class="app-shell" :class="{ 'settings-open': settingsOpen, 'focus-mode': focusMode }">
+  <div class="app-shell" :class="{ 'settings-open': settingsOpen && !mcpMode, 'focus-mode': focusMode, 'mcp-mode': mcpMode }">
     <div v-if="theme === 'new-year'" class="garland" aria-hidden="true"><i v-for="n in 18" :key="n"></i></div>
     <button v-if="overlay" class="scrim" tabindex="-1" aria-label="Закрыть боковую панель" @click="closePanels"></button>
     <ChatSidebar ref="chatsPanel" v-show="!focusMode" id="chats-panel" :class="{ open: sidebarOpen }"
@@ -127,9 +141,11 @@ async function saveProblem(problem) {
       :aria-hidden="newChatOpen || focusMode || (mobile && !sidebarOpen) || overlay === 'settings' ? true : undefined"
       :role="overlay === 'chats' ? 'dialog' : undefined" :aria-modal="overlay === 'chats' ? true : undefined"
       :conversations="chat.conversations.value" :selected-conversation="chat.conversation.value?.id"
-      :agent-name="chat.agent.value?.name" :busy="busy"
-      @new="newChat" @select="chooseConversation" @delete="removeConversation" @close="closePanels" />
+      :agent-name="chat.agent.value?.name" :busy="busy" :mcp-active="mcpMode"
+      @new="newChat" @select="chooseConversation" @delete="removeConversation" @close="closePanels" @open-mcp="openMcp" />
     <main class="main-panel" :inert="Boolean(overlay) || newChatOpen" :aria-hidden="overlay || newChatOpen ? true : undefined">
+      <McpExplorer v-if="mcpMode" ref="mcpExplorer" @open-chats="toggleChats" />
+      <template v-else>
       <header class="chat-header">
         <button ref="chatsButton" class="menu-button icon-button" aria-label="Открыть список чатов" aria-controls="chats-panel" :aria-expanded="sidebarOpen" @click="toggleChats">☰</button>
         <div><strong>{{ chat.conversation.value?.title || chat.agent.value?.name || 'AI Agents' }}</strong><span><i></i>{{ chat.loading.value ? 'Загрузка истории…' : memory.workspace.value?.profile ? memory.workspace.value.profile.name + ' · память сохранена' : 'Контекст сохранён' }}</span></div>
@@ -150,8 +166,9 @@ async function saveProblem(problem) {
       <MessageComposer v-model="chat.draft.value" :disabled="busy || !chat.agentId.value || !chat.conversation.value || !chat.outputLimitValid.value || (workflow.enabled.value && (!workflow.workspace.value || workflow.workspace.value.state.status === 'paused' || workflow.workspace.value.state.phase === 'done'))" :sending="chat.sending.value" @send="chat.send">
         <ModelPicker :models="chat.models.value" :model-id="chat.modelId.value" :busy="busy" @model="chat.changeModel" />
       </MessageComposer>
+      </template>
     </main>
-    <AgentSidebar ref="settingsPanel" id="settings-panel" v-show="settingsOpen && !focusMode" :inert="focusMode || overlay === 'chats' || newChatOpen"
+    <AgentSidebar ref="settingsPanel" id="settings-panel" v-show="settingsOpen && !focusMode && !mcpMode" :inert="focusMode || mcpMode || overlay === 'chats' || newChatOpen"
       :aria-hidden="focusMode || overlay === 'chats' || newChatOpen ? true : undefined"
       :role="overlay === 'settings' ? 'dialog' : undefined" :aria-modal="overlay === 'settings' ? true : undefined"
       :agents="chat.agents.value" :selected-agent="chat.agentId.value" :theme="theme" :busy="busy"

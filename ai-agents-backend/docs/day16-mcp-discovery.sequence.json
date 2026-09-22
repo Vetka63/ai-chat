@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "День 16 · Подключение MCP и обнаружение инструментов",
+    "quality_profile": "showcase",
+    "viewBox": [1040, 650],
+    "column_fit": "spread"
+  },
+  "participants": [
+    { "id": "ui", "type": "frontend", "label": "Vue UI", "sublabel": "раздел MCP" },
+    { "id": "api", "type": "backend", "label": "FastAPI", "sublabel": "MCP route" },
+    { "id": "discovery", "type": "security", "label": "Discovery", "sublabel": "каталог + таймаут" },
+    { "id": "client", "type": "backend", "label": "MCP Client", "sublabel": "Python SDK" },
+    { "id": "server", "type": "external", "label": "Demo Server", "sublabel": "stdio-процесс" }
+  ],
+  "messages": [
+    { "id": "request", "from": "ui", "to": "api", "y": 180, "label": "POST /discover", "variant": "emphasis" },
+    { "id": "allowed", "from": "api", "to": "discovery", "y": 215, "label": "discover(server_id)", "variant": "security" },
+    { "id": "open", "from": "discovery", "to": "client", "y": 250, "label": "Client(known stdio)", "variant": "default" },
+    { "id": "launch", "from": "client", "to": "server", "y": 285, "label": "запуск + MCP", "variant": "default" },
+    { "id": "negotiated", "from": "server", "to": "client", "y": 320, "label": "версия протокола", "variant": "return" },
+    { "id": "list", "from": "client", "to": "server", "y": 355, "label": "tools/list", "variant": "emphasis" },
+    { "id": "definitions", "from": "server", "to": "client", "y": 390, "label": "имена + схемы", "variant": "return" },
+    { "id": "tool-result", "from": "client", "to": "discovery", "y": 425, "label": "ListToolsResult", "variant": "return" },
+    { "id": "api-result", "from": "discovery", "to": "api", "y": 460, "label": "McpDiscoveryResult", "variant": "return" },
+    { "id": "render", "from": "api", "to": "ui", "y": 495, "label": "200 JSON · 2 tools", "variant": "return" }
+  ],
+  "activations": [
+    { "participant": "api", "from": 180, "to": 500, "type": "backend" },
+    { "participant": "discovery", "from": 215, "to": 465, "type": "security" },
+    { "participant": "client", "from": 250, "to": 430, "type": "backend" },
+    { "participant": "server", "from": 285, "to": 395, "type": "external" }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Что подтверждает день 16",
+      "items": [
+        "Сервер отвечает на настоящее MCP-соединение по stdio.",
+        "tools/list возвращает два объявления инструментов.",
+        "После ответа соединение закрывается; вызовов tools/call нет."
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Граница доступа",
+      "items": [
+        "UI передаёт только ID из фиксированного каталога backend.",
+        "Команда запуска и LLM-ключи не отправляются браузером."
+      ]
+    }
+  ]
+}

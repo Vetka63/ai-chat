@@ -30,6 +30,7 @@ describe('Day 10 client', () => {
       if (url.endsWith('/models')) return response({ models: [{ id: 'flash', title: 'Flash', available: true, pricing: {} }], default_model_id: 'flash' })
       if (url.endsWith('/preview')) return response({})
       if (url.endsWith('/agents')) return response({ agents: [agent] })
+      if (url.endsWith('/mcp/servers')) return response([{ id: 'local-demo', name: 'Учебный MCP', description: 'Демо', transport: 'stdio' }])
       if (url.endsWith('/conversations') && !options.method) return response([])
       if (url.endsWith('/conversations') && options.method === 'POST') {
         const body = JSON.parse(options.body)
@@ -57,6 +58,32 @@ describe('Day 10 client', () => {
     expect(wrapper.get('.settings-toggle').attributes('aria-expanded')).toBe('false')
     expect(wrapper.get('textarea').element.value).toBe('Не потерять черновик')
     wrapper.unmount()
+  })
+
+  it('opens the separate MCP section and returns to the chat', async () => {
+    const wrapper = mount(App)
+    await flushPromises()
+    await wrapper.get('.mcp-nav').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('.mcp-hero h1').text()).toBe('Подключение к инструментам')
+    expect(wrapper.find('form.composer').exists()).toBe(false)
+    expect(wrapper.get('.mcp-nav').attributes('aria-current')).toBe('page')
+    await wrapper.get('.new-chat').trigger('click')
+    expect(wrapper.find('.mcp-hero').exists()).toBe(false)
+    expect(wrapper.find('form.composer').exists()).toBe(true)
+  })
+
+  it('returns keyboard focus to the MCP navigation button after closing the mobile drawer', async () => {
+    vi.stubGlobal('innerWidth', 390)
+    const wrapper = mount(App, { attachTo: document.body })
+    await flushPromises()
+    await wrapper.get('.mcp-nav').trigger('click')
+    await flushPromises()
+    await wrapper.get('.mcp-header .menu-button').trigger('click')
+    expect(wrapper.get('.chat-sidebar').attributes('role')).toBe('dialog')
+    await wrapper.get('[aria-label="Закрыть список чатов"]').trigger('click')
+    await flushPromises()
+    expect(document.activeElement).toBe(wrapper.get('.mcp-header .menu-button').element)
   })
 
   it('expands the chat without losing the draft and restores the side panels', async () => {

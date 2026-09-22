@@ -32,6 +32,8 @@ from infrastructure.sqlite_task_workflow import SqliteWorkflowRepository
 from application.routes.workflow import router as workflow_router
 from infrastructure.sqlite_invariants import SqliteInvariantRepository
 from application.routes.invariants import router as invariants_router
+from application.routes.mcp import router as mcp_router
+from capabilities.mcp_discovery.service import McpDiscoveryError, McpDiscoveryService
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +67,7 @@ def create_app(
         app.state.invariants = SqliteInvariantRepository(active_store)
         await app.state.invariants.initialize()
         app.state.profiles = SqliteProfileRepository(active_store)
+        app.state.mcp_discovery = McpDiscoveryService()
         app.state.catalog = ModelCatalog.load(Path(__file__).with_name("models.json"), {
             "deepseek": resolved.mode == "demo" or bool(resolved.api_key.get_secret_value()),
             "mistral": resolved.mode == "demo" or bool(resolved.mistral_api_key.get_secret_value()),
@@ -84,11 +87,12 @@ def create_app(
             )
             yield
 
-    app = FastAPI(title="AI Agents · День 15", version="0.10.0", lifespan=lifespan)
+    app = FastAPI(title="AI Agents · День 16", version="0.11.0", lifespan=lifespan)
     app.include_router(memory_router)
     app.include_router(profile_router)
     app.include_router(workflow_router)
     app.include_router(invariants_router)
+    app.include_router(mcp_router)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=resolved.origins,
@@ -100,6 +104,10 @@ def create_app(
     async def agent_error(_: Request, exc: AgentError):
         return JSONResponse(status_code=exc.status, content={"code": exc.code, "error": exc.message, "provider_status": exc.provider_status})
 
+    @app.exception_handler(McpDiscoveryError)
+    async def mcp_error(_: Request, exc: McpDiscoveryError):
+        return JSONResponse(status_code=exc.status, content={"code": exc.code, "error": exc.message})
+
     @app.exception_handler(RequestValidationError)
     async def validation_error(_: Request, exc: RequestValidationError):
         logger.info("invalid_request count=%s", len(exc.errors()))
@@ -110,7 +118,7 @@ def create_app(
 
     @app.get("/health")
     async def health():
-        return {"status": "ok", "mode": resolved.mode, "day": 15}
+        return {"status": "ok", "mode": resolved.mode, "day": 16}
 
     @app.get("/api/v1/models")
     async def models(request: Request):
