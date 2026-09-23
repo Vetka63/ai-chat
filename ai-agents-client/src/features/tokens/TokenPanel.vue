@@ -24,7 +24,7 @@ const savingsStatus = computed(() => {
 <template>
   <section class="token-panel sidebar-section">
     <p class="section-title">Токены и расход</p>
-    <details open class="token-details">
+    <details v-if="conversation?.agent_id !== 'mcp_games'" open class="token-details">
       <summary>Следующий запрос <span v-if="estimating">· подсчёт…</span></summary>
       <template v-if="estimate">
         <dl class="token-grid">
@@ -57,7 +57,7 @@ const savingsStatus = computed(() => {
       </template>
       <p v-else class="muted">{{ previewError || (busy ? 'Ожидаем результат вызова…' : 'Считаем контекст…') }}</p>
     </details>
-    <details v-if="conversation?.agent_id !== 'algorithm_coach'" class="token-details savings-details" :open="Boolean(savings?.summary_runs || savings?.compared_dialogue_runs)">
+    <details v-if="conversation?.agent_id !== 'algorithm_coach' && conversation?.agent_id !== 'mcp_games'" class="token-details savings-details" :open="Boolean(savings?.summary_runs || savings?.compared_dialogue_runs)">
       <summary>Эффект сжатия</summary>
       <template v-if="savings">
         <dl class="token-grid">
@@ -87,13 +87,14 @@ const savingsStatus = computed(() => {
     <details class="token-details" :open="runs?.length > 0">
       <summary>Расход диалога · {{ runs?.length || 0 }} вызовов LLM</summary>
       <small v-if="memoryWorkspace" class="muted">{{ (runs || []).filter(r => r.purpose === 'dialogue').length }} основных вызовов + {{ (runs || []).filter(r => r.purpose === 'memory_proposals').length }} анализов памяти по кнопке. Ошибочные попытки тоже учитываются.</small>
+      <small v-else-if="conversation?.agent_id === 'mcp_games'" class="muted">{{ (runs || []).filter(r => r.purpose === 'mcp_selection').length }} вызовов выбора инструмента + {{ (runs || []).filter(r => r.purpose === 'mcp_answer').length }} итоговых ответов модели. Вызов MCP-инструмента не расходует LLM-токены.</small>
       <small v-else class="muted">{{ (runs || []).filter(r => !r.purpose || r.purpose === 'dialogue').length }} ответов + {{ (runs || []).filter(r => r.purpose === 'summary').length }} summary + {{ (runs || []).filter(r => r.purpose === 'facts').length }} facts. Один запрос может вызвать два LLM-вызова; ошибки тоже учитываются.</small>
       <dl class="token-grid">
         <dt>API total, сумма</dt><dd>{{ summary.known ? count(summary.tokens) : '—' }}</dd>
         <dt>Стоимость ≈</dt><dd>{{ summary.known ? money(summary.cost) : '—' }}</dd>
-        <dt>В т.ч. сжатие, токены</dt><dd>{{ compression.known ? count(compression.tokens) : (compression.unknown ? '—' : '0') }}</dd>
+        <template v-if="conversation?.agent_id !== 'mcp_games'"><dt>В т.ч. сжатие, токены</dt><dd>{{ compression.known ? count(compression.tokens) : (compression.unknown ? '—' : '0') }}</dd>
         <dt>В т.ч. сжатие, USD ≈</dt><dd>{{ compression.known ? money(compression.cost) : (compression.unknown ? '—' : '$0') }}</dd>
-        <dt>В т.ч. facts, токены</dt><dd>{{ factsRuns.known ? count(factsRuns.tokens) : (factsRuns.unknown ? '—' : '0') }}</dd>
+        <dt>В т.ч. facts, токены</dt><dd>{{ factsRuns.known ? count(factsRuns.tokens) : (factsRuns.unknown ? '—' : '0') }}</dd></template>
         <template v-if="memoryWorkspace">
           <dt>Предложения памяти, API</dt><dd>{{ proposalRuns.known ? count(proposalRuns.tokens) : (proposalRuns.unknown ? '—' : '0') }}</dd>
         </template>
@@ -111,6 +112,7 @@ const savingsStatus = computed(() => {
       <button class="report-button" :disabled="!runs?.length || busy" @click="downloadReport(title, runs, conversation, memoryWorkspace)">↓ Скачать MD-отчёт</button>
       <small class="muted">Отчёт содержит переписку и память, в том числе общую с другими задачами. Проверьте его перед публикацией.</small>
       <small v-if="memoryWorkspace" class="muted">Предложения памяти — отдельные вызовы, уже включённые в общий расход.</small>
+      <small v-else-if="conversation?.agent_id === 'mcp_games'" class="muted">Локальная оценка prompt приблизительна; фактические токены берутся из usage ответа API. При demo-режиме usage отсутствует.</small>
       <small v-else class="muted">Σ — вызов сжатия, уже включён в общий расход. Блок «Эффект сжатия» вычитает его API usage из оценочного сокращения prompt.</small>
     </details>
     <a v-if="model" class="pricing-link" :href="model.pricing.source" target="_blank" rel="noopener noreferrer">Тарифы {{ model.provider }} ↗</a>

@@ -1,6 +1,8 @@
 """Интерфейсы, позволяющие подключать новых агентов и LLM-провайдеров."""
 
-from typing import Literal, Protocol
+from __future__ import annotations
+
+from typing import Any, Literal, Protocol
 from capabilities.context_memory.models import ContextSettings
 
 from agent_core.models import (
@@ -11,6 +13,7 @@ from agent_core.models import (
     Conversation,
     ConversationSummary,
     Message,
+    ToolCompletion,
 )
 
 
@@ -34,6 +37,15 @@ class LlmClient(Protocol):
         temperature: float,
         max_tokens: int | None,
     ) -> Completion: ...
+
+
+class ToolLlmClient(Protocol):
+    """Отдельный контракт LLM-вызова с объявлениями инструментов."""
+
+    async def complete_with_tools(
+        self, messages: list[dict[str, Any]], tools: list[dict[str, Any]], *,
+        model: str, temperature: float, max_tokens: int | None, tool_choice: str,
+    ) -> ToolCompletion: ...
 
 
 class InputPolicy(Protocol):
@@ -70,7 +82,8 @@ class ConversationStore(Protocol):
     """Порт постоянного хранилища, не привязанный к SQLite в коде агента."""
 
     async def initialize(self) -> None: ...
-    async def create(self, agent_id: str, title: str, settings: ContextSettings | None = None) -> ConversationSummary: ...
+    async def create(self, agent_id: str, title: str, settings: ContextSettings | None = None,
+                     mcp_server_ids: list[str] | None = None) -> ConversationSummary: ...
     async def list(self, agent_id: str) -> list[ConversationSummary]: ...
     async def get(self, agent_id: str, conversation_id: str) -> Conversation: ...
     async def delete(self, agent_id: str, conversation_id: str) -> None: ...
@@ -83,4 +96,5 @@ class ConversationStore(Protocol):
         conversation_id: str,
         role: Literal["user", "assistant"],
         content: str,
+        mcp_server_ids: list[str] | None = None,
     ) -> None: ...

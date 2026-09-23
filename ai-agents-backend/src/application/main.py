@@ -34,6 +34,7 @@ from infrastructure.sqlite_invariants import SqliteInvariantRepository
 from application.routes.invariants import router as invariants_router
 from application.routes.mcp import router as mcp_router
 from capabilities.mcp_discovery.service import McpDiscoveryError, McpDiscoveryService
+from infrastructure.sqlite_mcp_events import SqliteMcpEventRepository
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +68,12 @@ def create_app(
         app.state.invariants = SqliteInvariantRepository(active_store)
         await app.state.invariants.initialize()
         app.state.profiles = SqliteProfileRepository(active_store)
-        app.state.mcp_discovery = McpDiscoveryService()
+        app.state.mcp_events = SqliteMcpEventRepository(active_store)
+        await app.state.mcp_events.initialize()
+        app.state.mcp_discovery = McpDiscoveryService(
+            python_mcp_url=resolved.python_mcp_url,
+            java_mcp_url=resolved.java_mcp_url,
+        )
         app.state.catalog = ModelCatalog.load(Path(__file__).with_name("models.json"), {
             "deepseek": resolved.mode == "demo" or bool(resolved.api_key.get_secret_value()),
             "mistral": resolved.mode == "demo" or bool(resolved.mistral_api_key.get_secret_value()),
@@ -84,10 +90,11 @@ def create_app(
                 resolved, http, active_store, app.state.catalog, app.state.usage,
                 app.state.summaries, app.state.facts, app.state.branches,
                 app.state.memory_layers, app.state.workflow, app.state.invariants,
+                app.state.mcp_discovery, app.state.mcp_events,
             )
             yield
 
-    app = FastAPI(title="AI Agents · День 16", version="0.11.0", lifespan=lifespan)
+    app = FastAPI(title="AI Agents · День 17", version="0.12.0", lifespan=lifespan)
     app.include_router(memory_router)
     app.include_router(profile_router)
     app.include_router(workflow_router)
@@ -118,7 +125,7 @@ def create_app(
 
     @app.get("/health")
     async def health():
-        return {"status": "ok", "mode": resolved.mode, "day": 16}
+        return {"status": "ok", "mode": resolved.mode, "day": 17}
 
     @app.get("/api/v1/models")
     async def models(request: Request):
@@ -135,6 +142,11 @@ def create_app(
     )
     async def create_conversation(agent_id: str, body: CreateConversation, request: Request):
         agent = request.app.state.registry.get(agent_id)
+        tool_creator = getattr(agent, "create_conversation_with_tools", None)
+        if tool_creator is not None:
+            return await tool_creator(body)
+        if body.mcp_server_ids:
+            raise AgentError("mcp_not_supported", "Этот агент не поддерживает MCP-инструменты", 422)
         creator = getattr(agent, 'create_conversation', None)
         if creator is not None:
             return await creator(body.title, body.context_settings if 'context_settings' in body.model_fields_set else None, body.problem, body.profile_id)
@@ -162,6 +174,7 @@ def create_app(
         result.facts = await request.app.state.facts.get(agent_id, conversation_id)
         result.checkpoints = await request.app.state.branches.list_checkpoints(agent_id, conversation_id)
         result.token_savings = calculate_token_savings(result.runs)
+        result.tool_events = await request.app.state.mcp_events.list(agent_id, conversation_id)
         return result
 
     @app.patch("/api/v1/agents/{agent_id}/conversations/{conversation_id}/context")
@@ -233,6 +246,8 @@ def create_app(
     @app.post("/api/v1/agents/{agent_id}/runs", response_model=AgentResult)
     async def run(agent_id: str, command: AgentCommand, request: Request):
         agent = request.app.state.registry.get(agent_id)
+        if command.mcp_server_ids is not None and "mcp_tools" not in agent.info.capabilities:
+            raise AgentError("mcp_not_supported", "Этот агент не поддерживает MCP-инструменты", 422)
         return await agent.run(command)
 
     return app

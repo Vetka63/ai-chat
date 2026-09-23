@@ -1,12 +1,13 @@
 """Строгие модели данных на границах агента и LLM-провайдера."""
 
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Any, Literal
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 from capabilities.token_accounting.models import RunRecord, TokenSavings, TokenUsage
 from capabilities.context_memory.models import Checkpoint, ContextSettings, FactsState, SummaryState
+from capabilities.mcp_discovery.models import McpToolEvent
 
 
 class StrictModel(BaseModel):
@@ -28,10 +29,11 @@ def now() -> str:
 
 
 class Message(StrictModel):
-    """Одно сообщение, подготовленное сервером для LLM API."""
+    """Сообщение истории; MCP-выбор виден UI, но не отправляется в LLM API."""
 
     role: Literal["system", "user", "assistant"]
     content: str
+    mcp_server_ids: list[str] | None = Field(default=None, exclude_if=lambda value: value is None)
 
 
 class Completion(StrictModel):
@@ -44,6 +46,20 @@ class Completion(StrictModel):
     finish_reason: str | None = None
 
 
+class ToolCall(StrictModel):
+    """Запрошенный моделью вызов функции; код приложения ещё не выполнялся."""
+
+    id: str
+    name: str
+    arguments: dict[str, Any]
+
+
+class ToolCompletion(Completion):
+    """Ответ LLM, который может содержать текст или запросы инструментов."""
+
+    tool_calls: list[ToolCall] = Field(default_factory=list)
+
+
 class AgentCommand(StrictModel):
     """Команда агенту: идентификатор серверного диалога и новое сообщение."""
 
@@ -51,6 +67,7 @@ class AgentCommand(StrictModel):
     message: str = Field(min_length=1)
     model_id: str | None = None
     max_output_tokens: int | None = Field(default=None, gt=0, strict=True)
+    mcp_server_ids: list[str] | None = Field(default=None, max_length=5)
 
 
 class PreviewCommand(StrictModel):
@@ -74,6 +91,7 @@ class AgentResult(StrictModel):
     facts: FactsState | None = None
     memory_warnings: list[str] = Field(default_factory=list)
     token_savings: TokenSavings | None = None
+    tool_events: list[McpToolEvent] = Field(default_factory=list)
 
 
 class AgentInfo(StrictModel):
@@ -100,6 +118,7 @@ class ConversationSummary(StrictModel):
     parent_conversation_id: str | None = None
     checkpoint_id: str | None = None
     branch_name: str | None = None
+    mcp_server_ids: list[str] = Field(default_factory=list)
 
 
 class Conversation(ConversationSummary):
@@ -111,6 +130,7 @@ class Conversation(ConversationSummary):
     facts: FactsState | None = None
     checkpoints: list[Checkpoint] = Field(default_factory=list)
     token_savings: TokenSavings | None = None
+    tool_events: list[McpToolEvent] = Field(default_factory=list)
 
 
 class AgentError(Exception):

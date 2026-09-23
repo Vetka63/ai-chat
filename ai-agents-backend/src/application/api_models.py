@@ -13,6 +13,7 @@ class CreateConversation(StrictModel):
     context_settings: ContextSettings = Field(default_factory=ContextSettings)
     problem: dict[str, str] | None = None
     profile_id: str | None = Field(default=None, min_length=1, max_length=64)
+    mcp_server_ids: list[str] = Field(default_factory=list, max_length=5)
 
 
 class SelectModel(StrictModel):

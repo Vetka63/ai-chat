@@ -9,7 +9,8 @@ class McpServerSummary(BaseModel):
     id: str
     name: str
     description: str
-    transport: Literal["stdio"] = "stdio"
+    transport: Literal["stdio", "streamable_http"] = "stdio"
+    chat_enabled: bool = False
 
 
 class McpToolSummary(BaseModel):
@@ -24,3 +25,26 @@ class McpDiscoveryResult(BaseModel):
     server_name: str
     protocol_version: str
     tools: list[McpToolSummary]
+
+
+class McpToolExecution(BaseModel):
+    """Проверенный результат одного реального вызова MCP-инструмента."""
+
+    server_id: str
+    tool_name: str
+    structured_content: dict[str, Any]
+
+
+class McpToolEvent(BaseModel):
+    """Сохранённый след вызова инструмента, привязанный к вопросу в чате."""
+
+    id: str
+    agent_id: str
+    conversation_id: str
+    user_index: int
+    created_at: str
+    server_id: str
+    tool_name: str
+    arguments: dict[str, Any]
+    result: dict[str, Any]
+    status: Literal["success", "error"]

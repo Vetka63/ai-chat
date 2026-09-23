@@ -43,6 +43,42 @@ describe('Day 10 client', () => {
 
   afterEach(() => vi.unstubAllGlobals())
 
+  it('sends checked MCP servers only for the current message', async () => {
+    const mcpAgent = { id: 'mcp_games', name: 'Игровой агент', capabilities: ['mcp_tools'] }
+    const servers = [
+      { id: 'games-mock', name: 'Python MCP', chat_enabled: true },
+      { id: 'java-games-mock', name: 'Java MCP', chat_enabled: true },
+    ]
+    let created = null
+    fetch.mockImplementation((url, options = {}) => {
+      if (url.endsWith('/models')) return response({ models: [{ id: 'flash', title: 'Flash', available: true, pricing: {} }], default_model_id: 'flash' })
+      if (url.endsWith('/agents')) return response({ agents: [mcpAgent] })
+      if (url.endsWith('/mcp/servers')) return response(servers)
+      if (url.endsWith('/conversations') && options.method === 'POST') {
+        const body = JSON.parse(options.body)
+        created = { ...summary, agent_id: 'mcp_games', mcp_server_ids: body.mcp_server_ids, context_settings: body.context_settings }
+        return response(created, true, 201)
+      }
+      if (url.endsWith('/conversations')) return response(created ? [created] : [])
+      if (url.includes('/runs')) return response({ reply: 'Ответ', model: 'flash', source: 'llm' })
+      throw new Error(`Unexpected request: ${url}`)
+    })
+    const wrapper = mount(App)
+    await flushPromises()
+    await wrapper.get('.new-chat').trigger('click')
+    await flushPromises()
+    await wrapper.get('.new-chat-dialog form').trigger('submit')
+    await flushPromises()
+    await wrapper.get('.mcp-trigger').trigger('click')
+    await wrapper.findAll('.mcp-menu-option input')[0].setValue(false)
+    await wrapper.findAll('.mcp-menu-option input')[1].setValue(true)
+    await wrapper.get('textarea').setValue('Найди игру')
+    await wrapper.get('form.composer').trigger('submit')
+    await flushPromises()
+    expect(JSON.parse(fetch.mock.calls.find(([url]) => url.includes('/runs'))[1].body).mcp_server_ids).toEqual(['java-games-mock'])
+    expect(wrapper.text()).toContain('MCP: java-games-mock')
+  })
+
   it('separates chats from settings and keeps the model beside the composer', async () => {
     const wrapper = mount(App)
     await flushPromises()

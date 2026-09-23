@@ -1,6 +1,21 @@
 # AI Chat
 
-## Текущая итерация: День 10 (Python)
+## День 17: два игровых MCP-сервера
+
+В ветке `ai-challenge-day-17` Python-агент может обращаться к одному игровому
+mock API через два независимых MCP-сервера по Streamable HTTP: `games-mock`
+([Python](python-mcp-games/README.md)) и `java-games-mock`
+([Java/Spring Boot](java-mcp-games/README.md)). Оба проекта расположены рядом
+с `ai-agents-backend`, а не внутри него.
+Оба варианта можно выбрать в меню MCP у поля ввода на порту 8083: выбор
+действует на отдельное сообщение; пустой набор отправляет запрос без MCP.
+[Сценарий проверки и сравнения](ai-agents-backend/docs/day17-guide.md).
+
+```powershell
+docker compose up -d --build games-mock-api python-mcp-games java-mcp-games agents-backend agents-client
+```
+
+## Архивная итерация: День 10 (Python)
 
 Ветка `ai-challenge-day-10`: Sliding Window, Sticky Facts и Branching подключены
 к одному агенту через реестр стратегий. Настройки выбираются при создании отдельного чата и затем фиксируются;
@@ -38,6 +53,9 @@ docker compose -p ai-chat-day-8 up -d --build agents-backend agents-client
 - **ai-chat-client** — Vue 3 + Vite интерфейс;
 - **ai-agents-backend** — FastAPI backend с изолированным агентом Дней 6–7;
 - **ai-agents-client** — отдельный Vue 3 интерфейс для Python-агентов;
+- **ai-games-mock-api** — общий HTTP-каталог вымышленных игр;
+- **python-mcp-games** — самостоятельный Python MCP-сервер по HTTP;
+- **java-mcp-games** — независимый Spring Boot MCP-сервер для сравнения с Python-версией;
 - API-ключ и системные промпты не передаются в браузер;
 - профиль рецептов отдельным вызовом DeepSeek отклоняет некулинарные запросы;
 - по умолчанию включён fallback-режим без внешних запросов.

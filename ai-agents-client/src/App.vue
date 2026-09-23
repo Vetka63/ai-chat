@@ -4,6 +4,7 @@ import AgentSidebar from './components/AgentSidebar.vue'
 import ChatSidebar from './components/ChatSidebar.vue'
 import OutputSettings from './components/OutputSettings.vue'
 import ModelPicker from './components/ModelPicker.vue'
+import McpToolPicker from './components/McpToolPicker.vue'
 import ChatThread from './components/ChatThread.vue'
 import MessageComposer from './components/MessageComposer.vue'
 import NewChatDialog from './components/NewChatDialog.vue'
@@ -115,8 +116,8 @@ function openMcp() {
   settingsOpen.value = false
   sidebarOpen.value = false
 }
-async function createNewChat({ title, contextSettings, problem, profileId }) {
-  await chat.newChat(title, contextSettings, problem, profileId)
+async function createNewChat({ title, contextSettings, problem, profileId, mcpServerIds }) {
+  await chat.newChat(title, contextSettings, problem, profileId, mcpServerIds)
   if (!chat.error.value) {
     newChatOpen.value = false
     if (mobile.value) closePanels()
@@ -148,7 +149,7 @@ async function saveProblem(problem) {
       <template v-else>
       <header class="chat-header">
         <button ref="chatsButton" class="menu-button icon-button" aria-label="Открыть список чатов" aria-controls="chats-panel" :aria-expanded="sidebarOpen" @click="toggleChats">☰</button>
-        <div><strong>{{ chat.conversation.value?.title || chat.agent.value?.name || 'AI Agents' }}</strong><span><i></i>{{ chat.loading.value ? 'Загрузка истории…' : memory.workspace.value?.profile ? memory.workspace.value.profile.name + ' · память сохранена' : 'Контекст сохранён' }}</span></div>
+        <div><strong>{{ chat.conversation.value?.title || chat.agent.value?.name || 'AI Agents' }}</strong><span><i></i>{{ chat.loading.value ? 'Загрузка истории…' : chat.agent.value?.capabilities?.includes('mcp_tools') ? 'Следующее сообщение: ' + (chat.mcpServerIds.value.length ? `MCP · ${chat.mcpServerIds.value.length}` : 'без MCP') : memory.workspace.value?.profile ? memory.workspace.value.profile.name + ' · память сохранена' : 'Контекст сохранён' }}</span></div>
         <button class="focus-toggle icon-button" :aria-label="focusMode ? 'Вернуть боковые панели' : 'Развернуть чат'" :aria-pressed="focusMode" @click="toggleFocus"><span aria-hidden="true">{{ focusMode ? '◧' : '⛶' }}</span><span class="focus-label">{{ focusMode ? 'Обычный вид' : 'Развернуть чат' }}</span></button>
         <button ref="settingsButton" class="settings-toggle icon-button" aria-label="Настройки агента" aria-controls="settings-panel" :aria-expanded="settingsOpen && !focusMode" @click="toggleSettings"><span aria-hidden="true">☷</span><span class="settings-label">Настройки</span></button>
       </header>
@@ -162,8 +163,11 @@ async function saveProblem(problem) {
         :busy="invariants.busy.value || workflow.busy.value || chat.loading.value"
         :sending="chat.sending.value" :error="invariants.error.value"
         @save="invariants.save" @refresh="invariants.refresh" />
-      <ChatThread :messages="chat.messages.value" :runs="chat.runs.value" :agent-name="chat.agent.value?.name" :sending="chat.sending.value" :memory-layers="memory.enabled.value" />
+      <ChatThread :messages="chat.messages.value" :runs="chat.runs.value" :tool-events="chat.conversation.value?.tool_events || []" :agent-name="chat.agent.value?.name" :sending="chat.sending.value" :memory-layers="memory.enabled.value" :mcp-tools="chat.agent.value?.capabilities?.includes('mcp_tools')" />
       <MessageComposer v-model="chat.draft.value" :disabled="busy || !chat.agentId.value || !chat.conversation.value || !chat.outputLimitValid.value || (workflow.enabled.value && (!workflow.workspace.value || workflow.workspace.value.state.status === 'paused' || workflow.workspace.value.state.phase === 'done'))" :sending="chat.sending.value" @send="chat.send">
+        <McpToolPicker v-if="chat.agent.value?.capabilities?.includes('mcp_tools')" :servers="chat.mcpServers.value"
+          :selected-ids="chat.mcpServerIds.value" :busy="busy" :loading="chat.mcpLoading.value" :error="chat.mcpError.value"
+          @change="chat.mcpServerIds.value = $event" @refresh="chat.refreshMcpServers" />
         <ModelPicker :models="chat.models.value" :model-id="chat.modelId.value" :busy="busy" @model="chat.changeModel" />
       </MessageComposer>
       </template>
@@ -189,7 +193,7 @@ async function saveProblem(problem) {
       <TokenPanel :models="chat.models.value" :model-id="chat.modelId.value" :runs="chat.runs.value" :conversation="chat.conversation.value" :memory-workspace="memory.workspace.value"
         :estimate="chat.estimate.value" :estimating="chat.estimating.value" :preview-error="chat.previewError.value" :busy="busy" :title="chat.conversation.value?.title" />
     </AgentSidebar>
-    <NewChatDialog :open="newChatOpen" :busy="busy" :memory-layers="memory.enabled.value"
+    <NewChatDialog :open="newChatOpen" :busy="busy" :memory-layers="memory.enabled.value" :mcp-tools="chat.agent.value?.capabilities?.includes('mcp_tools')"
       :personalization="profiles.enabled.value" :profiles="profiles.profiles.value"
       :default-profile-id="profiles.preferredId.value || memory.workspace.value?.profile.id || 'local'"
       @cancel="newChatOpen = false" @create="createNewChat" />

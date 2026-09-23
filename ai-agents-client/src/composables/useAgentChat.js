@@ -1,5 +1,6 @@
 import { computed, ref, watch, onScopeDispose } from 'vue'
 import * as api from '../api/agents'
+import { listMcpServers } from '../features/mcp/api'
 
 export function useAgentChat() {
   const agents = ref([])
@@ -19,6 +20,10 @@ export function useAgentChat() {
   const estimating = ref(false)
   const contextSettings = ref({ mode: 'full', keep_last: 10, summarize_every: 10 })
   const outputLimit = ref(null)
+  const mcpServers = ref([])
+  const mcpServerIds = ref([])
+  const mcpLoading = ref(false)
+  const mcpError = ref('')
   const outputLimitValid = computed(() => outputLimit.value == null || (Number.isInteger(outputLimit.value) && outputLimit.value > 0 && outputLimit.value <= (selectedModel.value?.max_output_tokens || 1200)))
   const runs = computed(() => conversation.value?.runs || [])
   const selectedModel = computed(() => models.value.find((m) => m.id === modelId.value))
@@ -36,7 +41,7 @@ export function useAgentChat() {
     estimate.value = null
     previewError.value = ''
     estimating.value = false
-    if (!agentId.value || !modelId.value || sending.value || (agent.value?.capabilities?.includes('memory_layers') && !conversation.value)) return
+    if (!agentId.value || !modelId.value || sending.value || !agent.value?.capabilities?.includes('token_accounting') || (agent.value?.capabilities?.includes('memory_layers') && !conversation.value)) return
     estimating.value = true
     previewTimer = setTimeout(async () => {
       previewController = new AbortController()
@@ -68,6 +73,10 @@ export function useAgentChat() {
 
   async function loadConversation(id) {
     conversation.value = await api.getConversation(agentId.value, id)
+    if (agent.value?.capabilities?.includes('mcp_tools')) {
+      const lastUser = [...conversation.value.messages].reverse().find(item => item.role === 'user' && Array.isArray(item.mcp_server_ids))
+      mcpServerIds.value = [...(lastUser?.mcp_server_ids ?? conversation.value.mcp_server_ids ?? [])]
+    }
     warning.value = ''
     outputLimit.value = conversation.value.max_output_tokens ?? null
     modelId.value = conversation.value.selected_model_id || defaultModelId.value
@@ -78,12 +87,29 @@ export function useAgentChat() {
   async function loadAgent(id) {
     agentId.value = id
     conversation.value = null
+    mcpServers.value = []
+    mcpServerIds.value = []
+    mcpError.value = ''
     outputLimit.value = null
     modelId.value = defaultModelId.value
     conversations.value = await api.listConversations(id)
     const saved = localStorage.getItem(selectedKey(id)) || localStorage.getItem(`day9:selected:${id}`)
     const selected = conversations.value.find((item) => item.id === saved) || conversations.value[0]
     if (selected) await loadConversation(selected.id)
+    if (agent.value?.capabilities?.includes('mcp_tools')) await refreshMcpServers()
+  }
+
+  async function refreshMcpServers() {
+    if (!agent.value?.capabilities?.includes('mcp_tools')) return
+    mcpLoading.value = true
+    mcpError.value = ''
+    try {
+      const response = await listMcpServers()
+      mcpServers.value = (Array.isArray(response) ? response : response.servers || []).filter(item => item.chat_enabled)
+      const available = new Set(mcpServers.value.map(item => item.id))
+      mcpServerIds.value = mcpServerIds.value.filter(id => available.has(id))
+    } catch (cause) { mcpError.value = cause.message || 'Не удалось загрузить MCP-серверы' }
+    finally { mcpLoading.value = false }
   }
 
   async function initialize() {
@@ -129,15 +155,16 @@ export function useAgentChat() {
     }
   }
 
-  async function newChat(title = 'Новый чат', settings = { mode: 'full', keep_last: 10, summarize_every: 10 }, problem, profileId) {
+  async function newChat(title = 'Новый чат', settings = { mode: 'full', keep_last: 10, summarize_every: 10 }, problem, profileId, mcpServerIds) {
     if (!agentId.value || loading.value || sending.value) return
     loading.value = true
     error.value = ''
     warning.value = ''
     try {
-      const created = await api.createConversation(agentId.value, title, settings, problem, profileId)
+      const created = await api.createConversation(agentId.value, title, settings, problem, profileId, mcpServerIds)
       conversations.value.unshift(created)
-      conversation.value = { ...created, messages: [] }
+      conversation.value = { ...created, messages: [], tool_events: [] }
+      if (agent.value?.capabilities?.includes('mcp_tools')) mcpServerIds.value = [...(created.mcp_server_ids || [])]
       contextSettings.value = { ...created.context_settings }
       localStorage.setItem(selectedKey(agentId.value), created.id)
       draft.value = ''
@@ -158,6 +185,7 @@ export function useAgentChat() {
       conversations.value = conversations.value.filter((item) => item.id !== id)
       if (conversation.value?.id === id) {
         conversation.value = null
+        mcpServerIds.value = []
         outputLimit.value = null
         localStorage.removeItem(selectedKey(agentId.value))
         if (conversations.value[0]) await loadConversation(conversations.value[0].id)
@@ -178,11 +206,13 @@ export function useAgentChat() {
     try {
       if (!conversation.value) return
       const target = conversation.value
-      target.messages.push({ role: 'user', content: text })
+      const selectedMcp = agent.value?.capabilities?.includes('mcp_tools') ? [...mcpServerIds.value] : undefined
+      target.messages.push({ role: 'user', content: text, ...(selectedMcp ? { mcp_server_ids: selectedMcp } : {}) })
       draft.value = ''
-      const result = await api.runConversationAgent(agentId.value, target.id, text, modelId.value, outputLimit.value)
+      const result = await api.runConversationAgent(agentId.value, target.id, text, modelId.value, outputLimit.value, selectedMcp)
       target.messages.push({ role: 'assistant', content: result.reply, model: result.model, source: result.source })
       target.runs = [...(target.runs || []), ...(result.additional_runs || []), ...(result.run ? [result.run] : [])]
+      target.tool_events = [...(target.tool_events || []), ...(result.tool_events || [])]
       target.summary = result.summary || null
       target.facts = result.facts || null
       target.token_savings = result.token_savings || null
@@ -214,6 +244,7 @@ export function useAgentChat() {
     models, modelId, selectedModel, runs, estimate, estimating, previewError, changeModel,
     contextSettings, forkChat, createCheckpoint, createBranches,
     outputLimit, outputLimitValid, warning,
+    mcpServers, mcpServerIds, mcpLoading, mcpError, refreshMcpServers,
   }
 
   async function forkChat() {

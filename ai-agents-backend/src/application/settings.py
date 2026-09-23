@@ -36,6 +36,8 @@ class Settings(BaseSettings):
     mistral_api_key: SecretStr = Field(default=SecretStr(""), validation_alias="MISTRAL_API_KEY")
     mistral_base_url: str = Field(default="https://api.mistral.ai/v1", validation_alias="MISTRAL_BASE_URL")
     mistral_tokenizer_path: str = ""
+    python_mcp_url: str = ""
+    java_mcp_url: str = ""
 
     @property
     def origins(self) -> list[str]:

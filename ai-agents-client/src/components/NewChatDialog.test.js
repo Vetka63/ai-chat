@@ -1,6 +1,13 @@
 import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { flushPromises } from '@vue/test-utils'
 import NewChatDialog from './NewChatDialog.vue'
+
+vi.mock('../features/mcp/api', () => ({ listMcpServers: vi.fn(async () => [
+  { id: 'local-demo', name: 'Демо', chat_enabled: false },
+  { id: 'games-mock', name: 'Каталог игр', description: 'Mock API', chat_enabled: true },
+  { id: 'java-games-mock', name: 'Каталог игр · Java / Spring Boot', description: 'HTTP MCP', chat_enabled: true },
+]) }))
 
 describe('new chat configuration', () => {
   it('creates a chat with the selected immutable strategy', async () => {
@@ -26,5 +33,32 @@ describe('new chat configuration', () => {
     await wrapper.setProps({ open: true })
     expect(wrapper.get('.dialog-title input').element.value).toBe('Новый чат')
     expect(wrapper.get('input[value="full"]').element.checked).toBe(true)
+  })
+
+  it('sets editable initial MCP servers for a new chat', async () => {
+    const wrapper = mount(NewChatDialog, { props: { open: true, mcpTools: true } })
+    await flushPromises()
+    expect(wrapper.text()).toContain('Каталог игр')
+    expect(wrapper.text()).toContain('Java / Spring Boot')
+    expect(wrapper.text()).not.toContain('Демо')
+    expect(wrapper.find('.strategy-grid').exists()).toBe(false)
+    await wrapper.get('form').trigger('submit')
+    expect(wrapper.emitted('create')[0][0].mcpServerIds).toEqual(['games-mock'])
+    await wrapper.get('.mcp-server-option input').setValue(false)
+    expect(wrapper.get('button[type="submit"]').attributes('disabled')).toBeUndefined()
+    await wrapper.get('form').trigger('submit')
+    expect(wrapper.emitted('create')[1][0].mcpServerIds).toEqual([])
+  })
+
+  it('allows choosing only the Java MCP server for comparison', async () => {
+    const wrapper = mount(NewChatDialog, { props: { open: true, mcpTools: true } })
+    await flushPromises()
+    const [python, java] = wrapper.findAll('.mcp-server-option input')
+    expect(python.element.checked).toBe(true)
+    expect(java.element.checked).toBe(false)
+    await python.setValue(false)
+    await java.setValue(true)
+    await wrapper.get('form').trigger('submit')
+    expect(wrapper.emitted('create')[0][0].mcpServerIds).toEqual(['java-games-mock'])
   })
 })

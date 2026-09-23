@@ -17,6 +17,8 @@ from capabilities.token_accounting.service import TokenAccounting
 from capabilities.context_memory.service import ContextMemory, LlmSummarizer
 from capabilities.context_memory.facts import LlmFactsExtractor
 from agents.algorithm_coach.factory import build_algorithm_coach
+from agents.mcp_games.agent import McpGamesAgent
+from infrastructure.tool_completions import ChatCompletionsToolClient, DemoToolClient, ToolProviderRouter
 
 
 def build_registry(
@@ -31,6 +33,8 @@ def build_registry(
     memory_repository=None,
     workflow_repository=None,
     invariant_repository=None,
+    mcp_gateway=None,
+    mcp_events=None,
 ) -> AgentRegistry:
     """Создаёт реестр; HTTP-маршруты не знают о DeepSeek и промптах."""
 
@@ -58,5 +62,13 @@ def build_registry(
     if memory_repository is not None:
         agents.append(build_algorithm_coach(settings.model, llm, store, memory_repository, catalog, accounting,
                                             workflow_repository, invariant_repository))
+    if mcp_gateway is not None and mcp_events is not None and catalog is not None:
+        tool_llm = ToolProviderRouter(catalog, {
+            "deepseek": DemoToolClient() if settings.mode == "demo" else ChatCompletionsToolClient(
+                http, settings.api_key.get_secret_value(), "deepseek", settings.base_url),
+            "mistral": DemoToolClient() if settings.mode == "demo" else ChatCompletionsToolClient(
+                http, settings.mistral_api_key.get_secret_value(), "mistral", settings.mistral_base_url),
+        })
+        agents.append(McpGamesAgent(tool_llm, store, catalog, accounting, mcp_gateway, mcp_events, settings.model))
     return AgentRegistry(agents)
 

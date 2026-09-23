@@ -1,5 +1,8 @@
 """Постоянное SQLite-хранилище разговоров и сообщений."""
 
+from __future__ import annotations
+
+import json
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal
@@ -64,10 +67,16 @@ class SqliteConversationStore:
                 await database.execute("ALTER TABLE conversations ADD COLUMN checkpoint_id TEXT")
             if "branch_name" not in {column["name"] for column in columns}:
                 await database.execute("ALTER TABLE conversations ADD COLUMN branch_name TEXT")
+            if "mcp_server_ids" not in {column["name"] for column in columns}:
+                await database.execute("ALTER TABLE conversations ADD COLUMN mcp_server_ids TEXT NOT NULL DEFAULT '[]'")
+            message_columns = await (await database.execute("PRAGMA table_info(messages)")).fetchall()
+            if "mcp_server_ids" not in {column["name"] for column in message_columns}:
+                await database.execute("ALTER TABLE messages ADD COLUMN mcp_server_ids TEXT")
             await database.execute("UPDATE conversations SET root_conversation_id=id WHERE root_conversation_id IS NULL")
             await database.commit()
 
-    async def create(self, agent_id: str, title: str, settings: ContextSettings | None = None) -> ConversationSummary:
+    async def create(self, agent_id: str, title: str, settings: ContextSettings | None = None,
+                     mcp_server_ids: list[str] | None = None) -> ConversationSummary:
         """Атомарно создаёт чат вместе с неизменяемой стратегией контекста."""
 
         timestamp = now()
@@ -79,14 +88,16 @@ class SqliteConversationStore:
             created_at=timestamp,
             updated_at=timestamp,
             context_settings=context_settings,
+            mcp_server_ids=mcp_server_ids or [],
         )
         item.root_conversation_id = item.id
         async with self.connection() as database:
             await database.execute(
-                """INSERT INTO conversations(id, agent_id, title, created_at, updated_at, context_settings, root_conversation_id)
-                   VALUES(?,?,?,?,?,?,?)""",
+                """INSERT INTO conversations(id, agent_id, title, created_at, updated_at, context_settings,
+                                              root_conversation_id, mcp_server_ids)
+                   VALUES(?,?,?,?,?,?,?,?)""",
                 (item.id, item.agent_id, item.title, item.created_at, item.updated_at,
-                 context_settings.model_dump_json(), item.root_conversation_id),
+                 context_settings.model_dump_json(), item.root_conversation_id, json.dumps(item.mcp_server_ids)),
             )
             await database.commit()
         return item
@@ -96,7 +107,7 @@ class SqliteConversationStore:
             rows = await (
                 await database.execute(
                     """SELECT id, agent_id, title, created_at, updated_at, selected_model_id, context_settings, max_output_tokens,
-                              root_conversation_id, parent_conversation_id, checkpoint_id, branch_name
+                              root_conversation_id, parent_conversation_id, checkpoint_id, branch_name, mcp_server_ids
                        FROM conversations WHERE agent_id=? ORDER BY updated_at DESC, id DESC""",
                     (agent_id,),
                 )
@@ -108,7 +119,7 @@ class SqliteConversationStore:
             row = await (
                 await database.execute(
                     """SELECT id, agent_id, title, created_at, updated_at, selected_model_id, context_settings, max_output_tokens,
-                              root_conversation_id, parent_conversation_id, checkpoint_id, branch_name
+                              root_conversation_id, parent_conversation_id, checkpoint_id, branch_name, mcp_server_ids
                        FROM conversations WHERE id=? AND agent_id=?""",
                     (conversation_id, agent_id),
                 )
@@ -117,13 +128,15 @@ class SqliteConversationStore:
                 raise AgentError("conversation_not_found", "Диалог не найден у выбранного агента", 404)
             message_rows = await (
                 await database.execute(
-                    "SELECT role, content FROM messages WHERE conversation_id=? ORDER BY sequence",
+                    "SELECT role, content, mcp_server_ids FROM messages WHERE conversation_id=? ORDER BY sequence",
                     (conversation_id,),
                 )
             ).fetchall()
         return Conversation(
             **self.decode(row),
-            messages=[Message.model_validate(dict(message)) for message in message_rows],
+            messages=[Message.model_validate({**dict(message), "mcp_server_ids":
+                json.loads(message["mcp_server_ids"]) if message["mcp_server_ids"] is not None else None})
+                for message in message_rows],
         )
 
     @staticmethod
@@ -131,6 +144,7 @@ class SqliteConversationStore:
         """Читает настройки старых и новых разговоров без изменения истории."""
         result = dict(row)
         result['context_settings'] = ContextSettings.model_validate_json(result['context_settings'])
+        result['mcp_server_ids'] = json.loads(result['mcp_server_ids'])
         return result
 
     async def configure_output(self, agent_id: str, conversation_id: str, max_tokens: int | None):
@@ -193,6 +207,7 @@ class SqliteConversationStore:
         conversation_id: str,
         role: Literal["user", "assistant"],
         content: str,
+        mcp_server_ids: list[str] | None = None,
     ) -> None:
         """Сохраняет сообщение сразу, чтобы вопрос пользователя не терялся при сбое LLM."""
 
@@ -208,8 +223,9 @@ class SqliteConversationStore:
             if row is None:
                 raise AgentError("conversation_not_found", "Диалог не найден у выбранного агента", 404)
             await database.execute(
-                "INSERT INTO messages(conversation_id, role, content, created_at) VALUES(?,?,?,?)",
-                (conversation_id, role, content, timestamp),
+                "INSERT INTO messages(conversation_id, role, content, created_at, mcp_server_ids) VALUES(?,?,?,?,?)",
+                (conversation_id, role, content, timestamp,
+                 json.dumps(mcp_server_ids) if mcp_server_ids is not None else None),
             )
             title = row["title"]
             if role == "user" and title == "Новый чат":

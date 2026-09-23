@@ -1,0 +1,12 @@
+# Games Mock API
+
+Отдельный детерминированный сервис Дня 17. `GET /games?query=слово` ищет
+совпадение всех слов в названии и описании вымышленных игр из `games.json`.
+Ответ содержит `query` и список `games`, каждая запись — `title` и
+`description`. Пустой запрос отклоняется; незнакомая игра даёт пустой список.
+
+Запуск вместе с агентом: `docker compose up -d --build games-mock-api agents-backend agents-client`
+из корня репозитория. Сервис доступен по <http://localhost:8084/>.
+
+Он не принимает ключи LLM и не вызывает модель. MCP-адаптер расположен в
+`ai-agents-backend/src/capabilities/mcp_games/server.py`.

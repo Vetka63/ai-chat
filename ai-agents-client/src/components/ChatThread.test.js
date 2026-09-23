@@ -30,4 +30,16 @@ describe('ChatThread', () => {
     expect(wrapper.get('.summary-event').text()).toContain('№1–4')
     wrapper.unmount()
   })
+
+  it('shows the MCP call between the user question and the answer', () => {
+    const wrapper = mount(ChatThread, { props: {
+      messages: [{ role: 'user', content: 'Игры про космос?' }, { role: 'assistant', content: 'Звёздные тропы' }],
+      toolEvents: [{ id: 'event-1', user_index: 0, server_id: 'games-mock', tool_name: 'search_games',
+        status: 'success', arguments: { query: 'космос' }, result: { games: [{ title: 'Звёздные тропы' }] } }],
+    } })
+    expect(wrapper.findAll('article.message')).toHaveLength(2)
+    expect(wrapper.findAll('article.tool-event')).toHaveLength(1)
+    expect(wrapper.text()).toContain('games-mock / search_games')
+    expect(wrapper.text()).toContain('Результат получен')
+  })
 })

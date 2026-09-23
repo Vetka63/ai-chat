@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "День 17: два HTTP MCP-сервера игр",
+    "output": "day17-http-mcp-comparison.html",
+    "quality_profile": "showcase",
+    "viewBox": [1390, 680]
+  },
+  "components": [
+    { "id": "browser", "type": "frontend", "label": "Чат Vue", "sublabel": "localhost:8083", "pos": [70, 345], "size": [170, 72] },
+    { "id": "agent", "type": "backend", "label": "Игровой агент", "sublabel": "ai-agents-backend", "pos": [355, 345], "size": [205, 72] },
+    { "id": "pythonMcp", "type": "backend", "label": "Python MCP", "sublabel": "python-mcp-games /mcp", "pos": [735, 175], "size": [210, 76] },
+    { "id": "javaMcp", "type": "backend", "label": "Java MCP", "sublabel": "java-mcp-games /mcp", "pos": [735, 515], "size": [210, 76] },
+    { "id": "catalog", "type": "backend", "label": "Mock API игр", "sublabel": "GET /games?query=", "pos": [1120, 345], "size": [210, 72] },
+    { "id": "model", "type": "external", "label": "DeepSeek", "sublabel": "выбор инструмента и ответ", "pos": [355, 50], "size": [205, 72] },
+    { "id": "history", "type": "database", "label": "SQLite", "sublabel": "диалог и MCP-вызовы", "pos": [355, 570], "size": [205, 72] }
+  ],
+  "connections": [
+    { "id": "clientRequest", "from": "browser", "to": "agent", "label": "HTTP", "variant": "emphasis" },
+    { "id": "llmDecision", "from": "agent", "to": "model", "label": "tool_calls", "fromSide": "top", "toSide": "bottom" },
+    { "id": "dialogPersistence", "from": "agent", "to": "history", "label": "сохранение", "fromSide": "bottom", "toSide": "top", "labelAt": [458, 450] },
+    { "id": "pythonTool", "from": "agent", "to": "pythonMcp", "label": "MCP / HTTP", "fromSide": "right", "toSide": "left" },
+    { "id": "javaTool", "from": "agent", "to": "javaMcp", "label": "MCP / HTTP", "fromSide": "right", "toSide": "left" },
+    { "id": "pythonCatalog", "from": "pythonMcp", "to": "catalog", "label": "GET /games", "fromSide": "right", "toSide": "left" },
+    { "id": "javaCatalog", "from": "javaMcp", "to": "catalog", "label": "GET /games", "fromSide": "right", "toSide": "left" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Одинаковый протокол", "items": ["Оба MCP-сервера доступны по Streamable HTTP", "В новом чате выбирается один из них"] },
+    { "dot": "emerald", "title": "Общий источник", "items": ["Оба инструмента search_games читают один mock API", "Данные каталога не копируются между проектами"] }
+  ]
+}

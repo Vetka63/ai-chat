@@ -1,8 +1,17 @@
-# Python Agents — День 16
+# Python Agents — День 17
+
+Новый «Игровой MCP-агент» вызывает MCP-инструмент поиска через отдельный
+[Python HTTP MCP-сервис](../python-mcp-games/README.md) по
+отдельному mock API игр, получает результат и показывает его в UI вместе со
+следом вызова. [Сценарий проверки и архитектура Дня 17](docs/day17-guide.md).
 
 Добавлен отдельный MCP-раздел: официальный Python MCP SDK подключается к
 локальному учебному серверу по `stdio` и возвращает его инструменты через API.
 Чат и LLM в этом флоу не участвуют. [Пошаговая проверка Дня 16](docs/day16-guide.md).
+
+Для Дня 17 добавлен независимый [Java MCP-сервер игр](../java-mcp-games/README.md):
+тот же `search_games` и общий mock API доступны в отдельном чате через
+`java-games-mock` по Streamable HTTP. [Сценарий сравнения](docs/day17-guide.md).
 
 Алгоритмический наставник использует контролируемый жизненный цикл
 `planning → execution → validation → done`. План, решение и проверка связаны
@@ -36,6 +45,8 @@ FastAPI-сервис с инкапсулированным агентом и п�
 - `GET /api/v1/agents`
 - `GET /api/v1/mcp/servers`
 - `POST /api/v1/mcp/servers/local-demo/discover`
+- `POST /api/v1/mcp/servers/games-mock/discover`
+- `POST /api/v1/mcp/servers/java-games-mock/discover`
 - `POST /api/v1/agents/{agent_id}/conversations`
 - `GET /api/v1/agents/{agent_id}/conversations`
 - `GET /api/v1/agents/{agent_id}/conversations/{conversation_id}`

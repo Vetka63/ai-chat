@@ -7,7 +7,7 @@ from agent_core.registry import AgentRegistry
 from application.main import create_app
 from application.settings import Settings
 from capabilities.mcp_discovery.models import McpServerSummary
-from capabilities.mcp_discovery.service import McpDiscoveryError, McpDiscoveryService, McpServerDefinition
+from capabilities.mcp_discovery.service import McpDiscoveryError, McpDiscoveryService, McpServerDefinition, default_servers
 from infrastructure.sqlite_store import SqliteConversationStore
 
 
@@ -24,12 +24,25 @@ async def test_local_mcp_connection_returns_real_tools():
 @pytest.mark.asyncio
 async def test_server_command_cannot_be_supplied_by_client():
     service = McpDiscoveryService()
-    assert service.list_servers()[0].model_dump().keys() == {"id", "name", "description", "transport"}
+    assert service.list_servers()[0].model_dump().keys() == {"id", "name", "description", "transport", "chat_enabled"}
 
     with pytest.raises(McpDiscoveryError) as error:
         await service.discover("not-allowed")
     assert error.value.code == "mcp_server_not_found"
     assert error.value.status == 404
+
+
+def test_both_games_servers_are_separate_http_options():
+    servers = default_servers("http://python-mcp-games:8080/mcp", "http://java-mcp-games:8080/mcp")
+    summaries = {item.summary.id: item.summary for item in servers}
+
+    assert summaries["games-mock"].transport == "streamable_http"
+    assert next(item for item in servers if item.summary.id == "games-mock").url == "http://python-mcp-games:8080/mcp"
+    assert next(item for item in servers if item.summary.id == "games-mock").command is None
+    assert summaries["java-games-mock"].transport == "streamable_http"
+    assert summaries["java-games-mock"].chat_enabled
+    assert next(item for item in servers if item.summary.id == "java-games-mock").url == "http://java-mcp-games:8080/mcp"
+    assert next(item for item in servers if item.summary.id == "java-games-mock").command is None
 
 
 @pytest.mark.asyncio

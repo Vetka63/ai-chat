@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "День 17 · MCP-каталог игр",
+    "quality_profile": "showcase",
+    "viewBox": [1370, 680]
+  },
+  "components": [
+    { "id": "gameChat", "type": "frontend", "label": "Чат Vue", "sublabel": "Выбор MCP и вопрос", "pos": [20, 275], "size": [165, 76] },
+    { "id": "fastApi", "type": "backend", "label": "FastAPI", "sublabel": "Маршруты /api/v1", "pos": [245, 275], "size": [165, 76] },
+    { "id": "gameAgent", "type": "backend", "label": "MCP-агент", "sublabel": "Tool calling и ответ", "pos": [470, 275], "size": [165, 76] },
+    { "id": "gateway", "type": "backend", "label": "MCP-клиент", "sublabel": "Allowlist · tools/list", "pos": [695, 275], "size": [165, 76] },
+    { "id": "gameMcp", "type": "backend", "label": "MCP-сервер", "sublabel": "search_games(query)", "pos": [920, 275], "size": [165, 76] },
+    { "id": "mockCatalog", "type": "external", "label": "Mock API игр", "sublabel": "Отдельный контейнер", "pos": [1145, 275], "size": [165, 76] },
+    { "id": "modelApi", "type": "cloud", "label": "DeepSeek / Mistral", "sublabel": "Выбор и итоговый ответ", "pos": [470, 70], "size": [165, 76] },
+    { "id": "sqlite", "type": "database", "label": "SQLite", "sublabel": "Чат и MCP-события", "pos": [245, 480], "size": [165, 76] }
+  ],
+  "connections": [
+    { "id": "chatRequest", "from": "gameChat", "to": "fastApi", "label": "HTTP-запрос" },
+    { "id": "routeToAgent", "from": "fastApi", "to": "gameAgent", "label": "Команда" },
+    { "id": "agentToGateway", "from": "gameAgent", "to": "gateway", "label": "Вызов инструмента", "labelDy": 62 },
+    { "id": "gatewayToMcp", "from": "gateway", "to": "gameMcp", "label": "MCP stdio" },
+    { "id": "mcpToMock", "from": "gameMcp", "to": "mockCatalog", "label": "GET /games" },
+    { "id": "agentToModel", "from": "gameAgent", "to": "modelApi", "label": "tools + результат", "fromSide": "top", "toSide": "bottom" },
+    { "id": "apiToStore", "from": "fastApi", "to": "sqlite", "label": "Сообщения и следы", "fromSide": "bottom", "toSide": "top", "labelDy": 24 }
+  ],
+  "cards": [
+    { "dot": "emerald", "title": "Граница доверия", "items": ["Браузер передаёт только ID разрешённого сервера", "Модель предлагает вызов, но исполняет его Python-бэкенд"] },
+    { "dot": "cyan", "title": "Проверяемый результат", "items": ["Mock API возвращает детерминированные данные игр", "В SQLite остаются история и аргументы MCP-вызова"] }
+  ]
+}

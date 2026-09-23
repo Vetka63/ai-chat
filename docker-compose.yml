@@ -48,6 +48,15 @@ services:
       MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
       MISTRAL_BASE_URL: ${MISTRAL_BASE_URL:-https://api.mistral.ai/v1}
       PY_AGENT_MISTRAL_TOKENIZER_PATH: /app/tokenizers/ministral-3b/tekken.json
+      PY_AGENT_PYTHON_MCP_URL: http://python-mcp-games:8080/mcp
+      PY_AGENT_JAVA_MCP_URL: http://java-mcp-games:8080/mcp
+    depends_on:
+      games-mock-api:
+        condition: service_healthy
+      python-mcp-games:
+        condition: service_healthy
+      java-mcp-games:
+        condition: service_healthy
     volumes:
       - agents-data:/app/data
     ports:
@@ -67,6 +76,52 @@ services:
         condition: service_healthy
     ports:
       - "8083:80"
+
+  games-mock-api:
+    build:
+      context: ./ai-games-mock-api
+    ports:
+      - "8084:8080"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  python-mcp-games:
+    build:
+      context: ./python-mcp-games
+    environment:
+      GAMES_API_BASE_URL: http://games-mock-api:8080
+    depends_on:
+      games-mock-api:
+        condition: service_healthy
+    ports:
+      - "8086:8080"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.create_connection(('127.0.0.1', 8080), timeout=2); s.close()"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  java-mcp-games:
+    build:
+      context: ./java-mcp-games
+    environment:
+      GAMES_API_BASE_URL: http://games-mock-api:8080
+    depends_on:
+      games-mock-api:
+        condition: service_healthy
+    ports:
+      - "8085:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/8080'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
 
 volumes:
   agents-data:
