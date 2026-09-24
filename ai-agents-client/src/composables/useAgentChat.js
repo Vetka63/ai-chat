@@ -31,6 +31,24 @@ export function useAgentChat() {
   const agent = computed(() => agents.value.find((item) => item.id === agentId.value))
   const messages = computed(() => conversation.value?.messages || [])
   const selectedKey = (id) => `agents:selected:${id}`
+  const selectedAgentKey = 'agents:selected-agent'
+  const mcpSelectionKey = (id) => `agents:mcp-selection:${id}`
+
+  function changeMcpServers(ids) {
+    mcpServerIds.value = [...ids]
+    if (agent.value?.capabilities?.includes('mcp_tools') && conversation.value) {
+      localStorage.setItem(mcpSelectionKey(conversation.value.id), JSON.stringify(mcpServerIds.value))
+    }
+  }
+
+  function savedMcpSelection(id) {
+    try {
+      const value = JSON.parse(localStorage.getItem(mcpSelectionKey(id)))
+      return Array.isArray(value) && value.every(item => typeof item === 'string') ? value : null
+    } catch {
+      return null
+    }
+  }
 
   // Старый результат оценки не может заменить оценку нового черновика/модели.
   let previewController, previewTimer, revision = 0
@@ -75,7 +93,11 @@ export function useAgentChat() {
     conversation.value = await api.getConversation(agentId.value, id)
     if (agent.value?.capabilities?.includes('mcp_tools')) {
       const lastUser = [...conversation.value.messages].reverse().find(item => item.role === 'user' && Array.isArray(item.mcp_server_ids))
-      mcpServerIds.value = [...(lastUser?.mcp_server_ids ?? conversation.value.mcp_server_ids ?? [])]
+      mcpServerIds.value = [...(savedMcpSelection(id) ?? lastUser?.mcp_server_ids ?? conversation.value.mcp_server_ids ?? [])]
+      if (mcpServers.value.length) {
+        const available = new Set(mcpServers.value.map(server => server.id))
+        mcpServerIds.value = mcpServerIds.value.filter(serverId => available.has(serverId))
+      }
     }
     warning.value = ''
     outputLimit.value = conversation.value.max_output_tokens ?? null
@@ -108,6 +130,7 @@ export function useAgentChat() {
       mcpServers.value = (Array.isArray(response) ? response : response.servers || []).filter(item => item.chat_enabled)
       const available = new Set(mcpServers.value.map(item => item.id))
       mcpServerIds.value = mcpServerIds.value.filter(id => available.has(id))
+      if (conversation.value) localStorage.setItem(mcpSelectionKey(conversation.value.id), JSON.stringify(mcpServerIds.value))
     } catch (cause) { mcpError.value = cause.message || 'Не удалось загрузить MCP-серверы' }
     finally { mcpLoading.value = false }
   }
@@ -121,7 +144,9 @@ export function useAgentChat() {
       defaultModelId.value = catalog.default_model_id
       modelId.value = defaultModelId.value
       agents.value = data.agents || []
-      if (agents.value[0]) await loadAgent(agents.value[0].id)
+      const savedAgent = localStorage.getItem(selectedAgentKey)
+      const initialAgent = agents.value.find(item => item.id === savedAgent) || agents.value[0]
+      if (initialAgent) await loadAgent(initialAgent.id)
     } catch (cause) {
       error.value = cause.message
     } finally {
@@ -135,6 +160,7 @@ export function useAgentChat() {
     error.value = ''
     try {
       await loadAgent(id)
+      localStorage.setItem(selectedAgentKey, id)
     } catch (cause) {
       error.value = cause.message
     } finally {
@@ -164,7 +190,7 @@ export function useAgentChat() {
       const created = await api.createConversation(agentId.value, title, settings, problem, profileId, mcpServerIds)
       conversations.value.unshift(created)
       conversation.value = { ...created, messages: [], tool_events: [] }
-      if (agent.value?.capabilities?.includes('mcp_tools')) mcpServerIds.value = [...(created.mcp_server_ids || [])]
+      if (agent.value?.capabilities?.includes('mcp_tools')) changeMcpServers(created.mcp_server_ids || [])
       contextSettings.value = { ...created.context_settings }
       localStorage.setItem(selectedKey(agentId.value), created.id)
       draft.value = ''
@@ -182,6 +208,7 @@ export function useAgentChat() {
     error.value = ''
     try {
       await api.deleteConversation(agentId.value, id)
+      localStorage.removeItem(mcpSelectionKey(id))
       conversations.value = conversations.value.filter((item) => item.id !== id)
       if (conversation.value?.id === id) {
         conversation.value = null
@@ -244,7 +271,7 @@ export function useAgentChat() {
     models, modelId, selectedModel, runs, estimate, estimating, previewError, changeModel,
     contextSettings, forkChat, createCheckpoint, createBranches,
     outputLimit, outputLimitValid, warning,
-    mcpServers, mcpServerIds, mcpLoading, mcpError, refreshMcpServers,
+    mcpServers, mcpServerIds, mcpLoading, mcpError, refreshMcpServers, changeMcpServers,
   }
 
   async function forkChat() {

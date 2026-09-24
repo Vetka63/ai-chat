@@ -77,6 +77,82 @@ describe('Day 10 client', () => {
     await flushPromises()
     expect(JSON.parse(fetch.mock.calls.find(([url]) => url.includes('/runs'))[1].body).mcp_server_ids).toEqual(['java-games-mock'])
     expect(wrapper.text()).toContain('MCP: java-games-mock')
+    await wrapper.get('.mcp-trigger').trigger('click')
+    await wrapper.findAll('.mcp-menu-option input')[1].setValue(false)
+    await wrapper.get('textarea').setValue('А теперь без каталога')
+    await wrapper.get('form.composer').trigger('submit')
+    await flushPromises()
+    const runCalls = fetch.mock.calls.filter(([url]) => url.includes('/runs'))
+    expect(JSON.parse(runCalls[1][1].body).mcp_server_ids).toEqual([])
+  })
+
+  it('connects an MCP server after creating a chat without one', async () => {
+    const mcpAgent = { id: 'mcp_games', name: 'Игровой агент', capabilities: ['mcp_tools'] }
+    const servers = [{ id: 'games-mock', name: 'Python MCP', chat_enabled: true }]
+    let created = null
+    fetch.mockImplementation((url, options = {}) => {
+      if (url.endsWith('/models')) return response({ models: [{ id: 'flash', title: 'Flash', available: true, pricing: {} }], default_model_id: 'flash' })
+      if (url.endsWith('/agents')) return response({ agents: [mcpAgent] })
+      if (url.endsWith('/mcp/servers')) return response(servers)
+      if (url.endsWith('/conversations') && options.method === 'POST') {
+        const body = JSON.parse(options.body)
+        created = { ...summary, agent_id: 'mcp_games', mcp_server_ids: body.mcp_server_ids, context_settings: body.context_settings }
+        return response(created, true, 201)
+      }
+      if (url.endsWith('/conversations')) return response(created ? [created] : [])
+      if (url.includes('/runs')) return response({ reply: 'Игра найдена', model: 'flash', source: 'llm' })
+      throw new Error(`Unexpected request: ${url}`)
+    })
+    const wrapper = mount(App)
+    await flushPromises()
+    await wrapper.get('.new-chat').trigger('click')
+    await flushPromises()
+    await wrapper.get('.new-chat-dialog .mcp-server-option input').setValue(false)
+    await wrapper.get('.new-chat-dialog form').trigger('submit')
+    await flushPromises()
+    expect(created.mcp_server_ids).toEqual([])
+    expect(wrapper.get('.mcp-trigger').text()).toContain('MCP выкл.')
+    await wrapper.get('.mcp-trigger').trigger('click')
+    await wrapper.get('.mcp-menu-option input').setValue(true)
+    await wrapper.get('textarea').setValue('Найди игру')
+    await wrapper.get('form.composer').trigger('submit')
+    await flushPromises()
+    const runCall = fetch.mock.calls.find(([url]) => url.includes('/runs'))
+    expect(JSON.parse(runCall[1].body).mcp_server_ids).toEqual(['games-mock'])
+    expect(wrapper.get('.mcp-context-copy').text()).toContain('Python MCP')
+  })
+
+  it('keeps a different MCP selection for each chat before sending a message', async () => {
+    const mcpAgent = { id: 'mcp_games', name: 'Игровой агент', capabilities: ['mcp_tools'] }
+    const chatA = { ...summary, id: 'chat-a', title: 'Первый чат', agent_id: 'mcp_games', mcp_server_ids: [] }
+    const chatB = { ...summary, id: 'chat-b', title: 'Второй чат', agent_id: 'mcp_games', mcp_server_ids: [] }
+    fetch.mockImplementation((url) => {
+      if (url.endsWith('/models')) return response({ models: [{ id: 'flash', title: 'Flash', available: true, pricing: {} }], default_model_id: 'flash' })
+      if (url.endsWith('/agents')) return response({ agents: [mcpAgent] })
+      if (url.endsWith('/mcp/servers')) return response([{ id: 'games-mock', name: 'Python MCP', chat_enabled: true }])
+      if (url.endsWith('/conversations')) return response([chatA, chatB])
+      if (url.endsWith('/conversations/chat-a')) return response({ ...chatA, messages: [] })
+      if (url.endsWith('/conversations/chat-b')) return response({ ...chatB, messages: [] })
+      throw new Error(`Unexpected request: ${url}`)
+    })
+
+    const wrapper = mount(App)
+    await flushPromises()
+    await wrapper.get('.mcp-trigger').trigger('click')
+    await wrapper.get('.mcp-menu-option input').setValue(true)
+    expect(wrapper.get('.mcp-trigger').text()).toContain('MCP · 1')
+    await wrapper.findAll('.conversation-title')[1].trigger('click')
+    await flushPromises()
+    expect(wrapper.get('.mcp-trigger').text()).toContain('MCP выкл.')
+    await wrapper.findAll('.conversation-title')[0].trigger('click')
+    await flushPromises()
+    expect(wrapper.get('.mcp-trigger').text()).toContain('MCP · 1')
+    expect(JSON.parse(localStorage.getItem('agents:mcp-selection:chat-a'))).toEqual(['games-mock'])
+
+    wrapper.unmount()
+    const restored = mount(App)
+    await flushPromises()
+    expect(restored.get('.mcp-trigger').text()).toContain('MCP · 1')
   })
 
   it('separates chats from settings and keeps the model beside the composer', async () => {
@@ -87,13 +163,52 @@ describe('Day 10 client', () => {
     expect(wrapper.find('.composer .model-picker').exists()).toBe(true)
     expect(wrapper.find('.settings-sidebar .agent-card').exists()).toBe(true)
     expect(wrapper.get('.theme-section').attributes('open')).toBeUndefined()
-    await wrapper.get('textarea').setValue('Не потерять черновик')
+    await createConfiguredChat(wrapper)
+    await wrapper.get('form.composer textarea').setValue('Не потерять черновик')
     await wrapper.get('.settings-toggle').trigger('click')
     expect(wrapper.get('.settings-toggle').attributes('aria-expanded')).toBe('true')
+    expect(wrapper.get('#inspector-pane-agent').isVisible()).toBe(true)
+    await wrapper.get('#inspector-tab-context').trigger('click')
+    expect(wrapper.get('#inspector-tab-context').attributes('aria-selected')).toBe('true')
+    expect(wrapper.get('#inspector-tab-agent').attributes('aria-selected')).toBe('false')
+    await wrapper.get('#inspector-tab-metrics').trigger('click')
+    expect(wrapper.get('#inspector-pane-metrics').isVisible()).toBe(true)
     await wrapper.get('[aria-label="Скрыть настройки"]').trigger('click')
     expect(wrapper.get('.settings-toggle').attributes('aria-expanded')).toBe('false')
-    expect(wrapper.get('textarea').element.value).toBe('Не потерять черновик')
+    expect(wrapper.get('form.composer textarea').element.value).toBe('Не потерять черновик')
     wrapper.unmount()
+  })
+
+  it('shows chats inside their agent and restores the selected agent', async () => {
+    const gameAgent = { id: 'mcp_games', name: 'Игровой агент', description: 'Каталог игр', capabilities: ['mcp_tools'] }
+    const dialogueChat = { ...summary, id: 'dialogue-chat', title: 'Обычный разговор' }
+    const gamesChat = { ...summary, id: 'games-chat', agent_id: 'mcp_games', title: 'Поиск игр', mcp_server_ids: [] }
+    fetch.mockImplementation((url) => {
+      if (url.endsWith('/models')) return response({ models: [{ id: 'flash', title: 'Flash', available: true, pricing: {} }], default_model_id: 'flash' })
+      if (url.endsWith('/agents')) return response({ agents: [agent, gameAgent] })
+      if (url.endsWith('/mcp/servers')) return response([])
+      if (url.endsWith('/agents/dialogue/conversations')) return response([dialogueChat])
+      if (url.endsWith('/agents/mcp_games/conversations')) return response([gamesChat])
+      if (url.endsWith('/agents/dialogue/conversations/dialogue-chat')) return response({ ...dialogueChat, messages: [] })
+      if (url.endsWith('/agents/mcp_games/conversations/games-chat')) return response({ ...gamesChat, messages: [] })
+      throw new Error(`Unexpected request: ${url}`)
+    })
+
+    const wrapper = mount(App)
+    await flushPromises()
+    expect(wrapper.findAll('.agent-folder')).toHaveLength(2)
+    expect(wrapper.get('.conversation-title strong').text()).toBe('Обычный разговор')
+    await wrapper.findAll('.agent-folder')[1].trigger('click')
+    await flushPromises()
+    expect(wrapper.get('.conversation-title strong').text()).toBe('Поиск игр')
+    expect(wrapper.get('.chat-heading strong').text()).toBe('Поиск игр')
+    expect(localStorage.getItem('agents:selected-agent')).toBe('mcp_games')
+
+    wrapper.unmount()
+    const restored = mount(App)
+    await flushPromises()
+    expect(restored.get('.agent-folder[aria-expanded="true"]').text()).toContain('Игровой агент')
+    expect(restored.get('.conversation-title strong').text()).toBe('Поиск игр')
   })
 
   it('opens the separate MCP section and returns to the chat', async () => {
@@ -104,6 +219,11 @@ describe('Day 10 client', () => {
     expect(wrapper.get('.mcp-hero h1').text()).toBe('Подключение к инструментам')
     expect(wrapper.find('form.composer').exists()).toBe(false)
     expect(wrapper.get('.mcp-nav').attributes('aria-current')).toBe('page')
+    await wrapper.get('.mcp-nav').trigger('click')
+    expect(wrapper.find('.mcp-hero').exists()).toBe(false)
+    expect(wrapper.find('form.composer').exists()).toBe(true)
+    expect(wrapper.get('.mcp-nav').attributes('aria-current')).toBeUndefined()
+    await wrapper.get('.mcp-nav').trigger('click')
     await wrapper.get('.new-chat').trigger('click')
     expect(wrapper.find('.mcp-hero').exists()).toBe(false)
     expect(wrapper.find('form.composer').exists()).toBe(true)
@@ -125,7 +245,8 @@ describe('Day 10 client', () => {
   it('expands the chat without losing the draft and restores the side panels', async () => {
     const wrapper = mount(App)
     await flushPromises()
-    await wrapper.get('textarea').setValue('Черновик сообщения')
+    await createConfiguredChat(wrapper)
+    await wrapper.get('form.composer textarea').setValue('Черновик сообщения')
     await wrapper.get('.focus-toggle').trigger('click')
     expect(wrapper.get('.app-shell').classes()).toContain('focus-mode')
     expect(wrapper.get('.focus-toggle').attributes('aria-pressed')).toBe('true')
@@ -136,7 +257,7 @@ describe('Day 10 client', () => {
     expect(wrapper.get('.app-shell').classes()).not.toContain('focus-mode')
     expect(wrapper.get('.chat-sidebar').attributes('style') || '').not.toContain('display: none')
     expect(wrapper.get('.chat-sidebar').attributes('aria-hidden')).toBeUndefined()
-    expect(wrapper.get('textarea').element.value).toBe('Черновик сообщения')
+    expect(wrapper.get('form.composer textarea').element.value).toBe('Черновик сообщения')
   })
 
   it('opens mobile drawers one at a time and restores focus on Escape', async () => {

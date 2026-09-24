@@ -53,7 +53,7 @@ onMounted(loadServers)
 <template>
   <header class="chat-header mcp-header">
     <button ref="menuButton" class="menu-button icon-button" aria-label="Открыть навигацию" @click="$emit('open-chats')">☰</button>
-    <div><strong>MCP · День 16</strong><span><i></i> Отдельный флоу подключения</span></div>
+    <div><strong>Каталог MCP</strong><span><i></i> Подключение и доступные инструменты</span></div>
   </header>
   <div class="mcp-scroll">
     <div class="mcp-content">
@@ -72,7 +72,7 @@ onMounted(loadServers)
       <section class="mcp-card" aria-labelledby="mcp-server-title">
         <div class="mcp-card-heading">
           <div><small>ИСТОЧНИК ИНСТРУМЕНТОВ</small><h2 id="mcp-server-title">MCP-сервер</h2></div>
-          <span class="mcp-transport">stdio · локально</span>
+          <span class="mcp-transport">{{ selected?.transport === 'stdio' ? 'stdio · локально' : selected?.transport === 'streamable_http' ? 'HTTP · отдельный сервис' : selected?.transport || 'MCP' }}</span>
         </div>
         <p v-if="loading" role="status">Загружаем каталог серверов…</p>
         <p v-else-if="!servers.length" class="muted">Доступных MCP-серверов нет.</p>
@@ -85,7 +85,7 @@ onMounted(loadServers)
           </button>
         </div>
         <div class="mcp-card-actions">
-          <span v-if="selected" class="muted">Команда запуска задаётся только на бэкенде.</span>
+          <span v-if="selected" class="muted">Параметры подключения задаются на бэкенде.</span>
           <button class="mcp-connect" type="button" :disabled="loading || connecting || !selectedId" @click="connect">
             {{ connecting ? 'Подключаемся…' : result ? 'Проверить ещё раз' : 'Подключиться и получить инструменты' }}
           </button>
@@ -111,7 +111,7 @@ onMounted(loadServers)
           </div>
         </div>
       </section>
-      <p class="mcp-footnote">Этот раздел только обнаруживает инструменты. Он не вызывает их и не передаёт список в LLM.</p>
+      <p class="mcp-footnote">Это справочник серверов. Чтобы дать модели доступ к инструменту, откройте чат игрового MCP-агента и выберите сервер рядом с полем сообщения.</p>
     </div>
   </div>
 </template>

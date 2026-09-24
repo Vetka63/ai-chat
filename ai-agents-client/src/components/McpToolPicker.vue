@@ -44,7 +44,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', outside))
     </button>
     <div v-if="open" class="mcp-menu" role="dialog" aria-label="MCP для следующего сообщения">
       <div class="mcp-menu-heading"><strong>Инструменты этого сообщения</strong><button type="button" aria-label="Закрыть выбор MCP" @click="close(true)">×</button></div>
-      <p>Отметьте серверы, к которым модель сможет обратиться. Следующее сообщение можно отправить без MCP.</p>
+      <p>Отмеченные серверы будут доступны агенту для следующего сообщения. Выбор останется в этом чате, пока вы его не измените. Агент может проверить каталог, если модели не хватает сведений о конкретной игре.</p>
       <p v-if="error" role="alert" class="mcp-menu-error">{{ error }}</p>
       <p v-if="loading">Загружаем список…</p>
       <fieldset v-else :disabled="busy">
@@ -65,10 +65,10 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', outside))
 
 <style scoped>
 .mcp-picker { position: relative; min-width: 0; }
-.mcp-trigger { display: flex; align-items: center; gap: 7px; min-height: 36px; padding: 7px 10px; border: 0; border-radius: 10px; background: transparent; color: var(--muted); cursor: pointer; font-size: 12px; white-space: nowrap; }
+.mcp-trigger { display: flex; align-items: center; gap: 7px; min-height: 36px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--text); cursor: pointer; font-size: 12px; white-space: nowrap; }
 .mcp-trigger:hover, .mcp-trigger.active { background: var(--accent-soft); color: var(--text); }
 .mcp-trigger:disabled { opacity: .5; cursor: default; }
-.mcp-menu { position: absolute; bottom: calc(100% + 12px); left: 0; width: min(350px, calc(100vw - 40px)); max-height: min(460px, 60dvh); overflow-y: auto; padding: 13px; border: 1px solid var(--line); border-radius: 16px; background: var(--page); color: var(--text); box-shadow: 0 12px 40px #0003; font-size: 12px; }
+.mcp-menu { position: absolute; bottom: calc(100% + 12px); right: 0; width: min(350px, calc(100vw - 40px)); max-height: min(460px, 60dvh); overflow-y: auto; padding: 13px; border: 1px solid var(--line); border-radius: 16px; background: var(--page); color: var(--text); box-shadow: 0 12px 40px #0003; font-size: 12px; }
 .mcp-menu-heading, .mcp-menu-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .mcp-menu-heading > button { border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 20px; }
 .mcp-menu p { margin: 8px 0; color: var(--muted); line-height: 1.5; }

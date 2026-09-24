@@ -30,7 +30,7 @@ const lastMemoryContext = computed(() => [...chat.runs.value].reverse().find(r =
 const sidebarOpen = ref(false)
 const compact = ref(window.innerWidth <= 1180)
 const mobile = ref(window.innerWidth <= 760)
-const settingsOpen = ref(!compact.value)
+const settingsOpen = ref(false)
 const focusMode = ref(localStorage.getItem('agents:focus-mode') === 'true')
 const theme = ref('light')
 const settingsButton = ref(null)
@@ -41,13 +41,17 @@ const newChatOpen = ref(false)
 const mcpMode = ref(false)
 const mcpExplorer = ref(null)
 const busy = computed(() => chat.loading.value || chat.sending.value || memory.busy.value || profiles.busy.value || workflow.busy.value || invariants.busy.value)
+const mcpEnabled = computed(() => chat.agent.value?.capabilities?.includes('mcp_tools'))
+const selectedMcpNames = computed(() => chat.mcpServers.value
+  .filter(server => chat.mcpServerIds.value.includes(server.id))
+  .map(server => server.name).join(', '))
 const overlay = computed(() => focusMode.value ? null : mobile.value && sidebarOpen.value ? 'chats' : !mcpMode.value && compact.value && settingsOpen.value ? 'settings' : null)
 watch(theme, value => { document.documentElement.dataset.theme = value }, { immediate: true })
 watch(focusMode, value => { localStorage.setItem('agents:focus-mode', String(value)) })
 
 function resize() {
   const nextCompact = window.innerWidth <= 1180
-  if (nextCompact !== compact.value) settingsOpen.value = !nextCompact
+  if (nextCompact !== compact.value) settingsOpen.value = false
   compact.value = nextCompact
   mobile.value = window.innerWidth <= 760
   sidebarOpen.value = false
@@ -106,12 +110,17 @@ function chooseConversation(id) {
   chat.selectConversation(id)
   if (mobile.value) closePanels()
 }
+function chooseAgent(id) {
+  mcpMode.value = false
+  chat.selectAgent(id)
+  if (mobile.value) closePanels()
+}
 function newChat() {
   mcpMode.value = false
   newChatOpen.value = true
 }
 function openMcp() {
-  mcpMode.value = true
+  mcpMode.value = !mcpMode.value
   focusMode.value = false
   settingsOpen.value = false
   sidebarOpen.value = false
@@ -141,15 +150,16 @@ async function saveProblem(problem) {
       :inert="newChatOpen || focusMode || (mobile && !sidebarOpen) || overlay === 'settings'"
       :aria-hidden="newChatOpen || focusMode || (mobile && !sidebarOpen) || overlay === 'settings' ? true : undefined"
       :role="overlay === 'chats' ? 'dialog' : undefined" :aria-modal="overlay === 'chats' ? true : undefined"
+      :agents="chat.agents.value" :selected-agent="chat.agentId.value"
       :conversations="chat.conversations.value" :selected-conversation="chat.conversation.value?.id"
-      :agent-name="chat.agent.value?.name" :busy="busy" :mcp-active="mcpMode"
-      @new="newChat" @select="chooseConversation" @delete="removeConversation" @close="closePanels" @open-mcp="openMcp" />
+      :busy="busy" :mcp-active="mcpMode"
+      @new="newChat" @select="chooseConversation" @select-agent="chooseAgent" @delete="removeConversation" @close="closePanels" @open-mcp="openMcp" />
     <main class="main-panel" :inert="Boolean(overlay) || newChatOpen" :aria-hidden="overlay || newChatOpen ? true : undefined">
       <McpExplorer v-if="mcpMode" ref="mcpExplorer" @open-chats="toggleChats" />
       <template v-else>
       <header class="chat-header">
         <button ref="chatsButton" class="menu-button icon-button" aria-label="Открыть список чатов" aria-controls="chats-panel" :aria-expanded="sidebarOpen" @click="toggleChats">☰</button>
-        <div><strong>{{ chat.conversation.value?.title || chat.agent.value?.name || 'AI Agents' }}</strong><span><i></i>{{ chat.loading.value ? 'Загрузка истории…' : chat.agent.value?.capabilities?.includes('mcp_tools') ? 'Следующее сообщение: ' + (chat.mcpServerIds.value.length ? `MCP · ${chat.mcpServerIds.value.length}` : 'без MCP') : memory.workspace.value?.profile ? memory.workspace.value.profile.name + ' · память сохранена' : 'Контекст сохранён' }}</span></div>
+        <div class="chat-heading"><span class="chat-agent-name">{{ chat.agent.value?.name || 'AI Agents' }}</span><strong>{{ chat.conversation.value?.title || 'Новый чат' }}</strong></div>
         <button class="focus-toggle icon-button" :aria-label="focusMode ? 'Вернуть боковые панели' : 'Развернуть чат'" :aria-pressed="focusMode" @click="toggleFocus"><span aria-hidden="true">{{ focusMode ? '◧' : '⛶' }}</span><span class="focus-label">{{ focusMode ? 'Обычный вид' : 'Развернуть чат' }}</span></button>
         <button ref="settingsButton" class="settings-toggle icon-button" aria-label="Настройки агента" aria-controls="settings-panel" :aria-expanded="settingsOpen && !focusMode" @click="toggleSettings"><span aria-hidden="true">☷</span><span class="settings-label">Настройки</span></button>
       </header>
@@ -165,9 +175,14 @@ async function saveProblem(problem) {
         @save="invariants.save" @refresh="invariants.refresh" />
       <ChatThread :messages="chat.messages.value" :runs="chat.runs.value" :tool-events="chat.conversation.value?.tool_events || []" :agent-name="chat.agent.value?.name" :sending="chat.sending.value" :memory-layers="memory.enabled.value" :mcp-tools="chat.agent.value?.capabilities?.includes('mcp_tools')" />
       <MessageComposer v-model="chat.draft.value" :disabled="busy || !chat.agentId.value || !chat.conversation.value || !chat.outputLimitValid.value || (workflow.enabled.value && (!workflow.workspace.value || workflow.workspace.value.state.status === 'paused' || workflow.workspace.value.state.phase === 'done'))" :sending="chat.sending.value" @send="chat.send">
-        <McpToolPicker v-if="chat.agent.value?.capabilities?.includes('mcp_tools')" :servers="chat.mcpServers.value"
-          :selected-ids="chat.mcpServerIds.value" :busy="busy" :loading="chat.mcpLoading.value" :error="chat.mcpError.value"
-          @change="chat.mcpServerIds.value = $event" @refresh="chat.refreshMcpServers" />
+        <template v-if="mcpEnabled" #context>
+          <div class="mcp-composer-context">
+            <McpToolPicker :servers="chat.mcpServers.value" :selected-ids="chat.mcpServerIds.value"
+              :busy="busy || !chat.conversation.value" :loading="chat.mcpLoading.value" :error="chat.mcpError.value"
+              @change="chat.changeMcpServers" @refresh="chat.refreshMcpServers" />
+            <span v-if="selectedMcpNames" class="mcp-context-copy" :title="selectedMcpNames">{{ selectedMcpNames }}</span>
+          </div>
+        </template>
         <ModelPicker :models="chat.models.value" :model-id="chat.modelId.value" :busy="busy" @model="chat.changeModel" />
       </MessageComposer>
       </template>
@@ -175,26 +190,42 @@ async function saveProblem(problem) {
     <AgentSidebar ref="settingsPanel" id="settings-panel" v-show="settingsOpen && !focusMode && !mcpMode" :inert="focusMode || mcpMode || overlay === 'chats' || newChatOpen"
       :aria-hidden="focusMode || overlay === 'chats' || newChatOpen ? true : undefined"
       :role="overlay === 'settings' ? 'dialog' : undefined" :aria-modal="overlay === 'settings' ? true : undefined"
-      :agents="chat.agents.value" :selected-agent="chat.agentId.value" :theme="theme" :busy="busy"
-      @select-agent="chat.selectAgent" @theme="theme = $event" @close="closePanels">
-      <ProfilePanel v-if="profiles.enabled.value" :profiles="profiles.profiles.value" :profile="memory.workspace.value?.profile"
-        :busy="busy" :loading="profiles.loading.value" :error="profiles.error.value" :notice="profiles.notice.value" :preferred-id="profiles.preferredId.value"
-        @save="profiles.save" @refresh="profiles.refresh" />
-      <OutputSettings :limit="chat.outputLimit.value" :model="chat.selectedModel.value" :busy="busy" :memory-layers="memory.enabled.value" @change="chat.outputLimit.value = $event" />
-      <MemoryPanel v-if="memory.enabled.value" :workspace="memory.workspace.value" :busy="busy"
-        :loading="memory.loading.value" :error="memory.error.value" :last-context="lastMemoryContext"
-        @refresh="memory.refresh" @problem="saveProblem" @save="memory.saveEntry"
-        @delete="memory.deleteEntry" @propose="memory.propose" @resolve="memory.resolve" />
-      <ContextPanel v-if="chat.agent.value?.capabilities?.includes('context_memory')" :settings="chat.contextSettings.value" :summary="chat.conversation.value?.summary"
-        :facts="chat.conversation.value?.facts" :conversation="chat.conversation.value" :conversations="chat.conversations.value"
-        :estimate="chat.estimate.value" :busy="busy" :has-conversation="Boolean(chat.conversation.value)"
-        @fork="chat.forkChat" @checkpoint="chat.createCheckpoint"
-        @branches="({ checkpointId, names }) => chat.createBranches(checkpointId, names)" @select-branch="chat.selectConversation" />
-      <TokenPanel :models="chat.models.value" :model-id="chat.modelId.value" :runs="chat.runs.value" :conversation="chat.conversation.value" :memory-workspace="memory.workspace.value"
-        :estimate="chat.estimate.value" :estimating="chat.estimating.value" :preview-error="chat.previewError.value" :busy="busy" :title="chat.conversation.value?.title" />
+      :agent="chat.agent.value" :theme="theme" :busy="busy" :mcp-tools="mcpEnabled"
+      @theme="theme = $event" @close="closePanels">
+      <template #agent>
+        <OutputSettings :limit="chat.outputLimit.value" :model="chat.selectedModel.value" :busy="busy" :memory-layers="memory.enabled.value" @change="chat.outputLimit.value = $event" />
+      </template>
+      <template #context>
+        <div v-if="mcpEnabled" class="inspector-mcp-overview">
+          <div class="inspector-feature-heading"><span class="inspector-feature-icon" aria-hidden="true">⌘</span><div><strong>Инструменты MCP</strong><small>Агент проверяет каталог, когда это полезно</small></div></div>
+          <p>Выбранные серверы доступны агенту. Если модель признаёт, что не знает конкретную игру, агент проверит доступный каталог перед ответом. Список можно изменить над полем ввода.</p>
+          <div v-for="server in chat.mcpServers.value" :key="server.id" class="inspector-server" :class="{ selected: chat.mcpServerIds.value.includes(server.id) }">
+            <span aria-hidden="true">{{ chat.mcpServerIds.value.includes(server.id) ? '●' : '○' }}</span><div><strong>{{ server.name }}</strong><small>{{ chat.mcpServerIds.value.includes(server.id) ? 'Доступен следующему сообщению' : 'Не выбран' }}</small></div>
+          </div>
+          <p v-if="!chat.mcpServers.value.length" class="muted">Доступные MCP-серверы не найдены.</p>
+          <button type="button" class="inspector-link-button" @click="openMcp">Открыть каталог MCP <span aria-hidden="true">↗</span></button>
+        </div>
+        <ProfilePanel v-if="profiles.enabled.value" :profiles="profiles.profiles.value" :profile="memory.workspace.value?.profile"
+          :busy="busy" :loading="profiles.loading.value" :error="profiles.error.value" :notice="profiles.notice.value" :preferred-id="profiles.preferredId.value"
+          @save="profiles.save" @refresh="profiles.refresh" />
+        <MemoryPanel v-if="memory.enabled.value" :workspace="memory.workspace.value" :busy="busy"
+          :loading="memory.loading.value" :error="memory.error.value" :last-context="lastMemoryContext"
+          @refresh="memory.refresh" @problem="saveProblem" @save="memory.saveEntry"
+          @delete="memory.deleteEntry" @propose="memory.propose" @resolve="memory.resolve" />
+        <ContextPanel v-if="chat.agent.value?.capabilities?.includes('context_memory')" :settings="chat.contextSettings.value" :summary="chat.conversation.value?.summary"
+          :facts="chat.conversation.value?.facts" :conversation="chat.conversation.value" :conversations="chat.conversations.value"
+          :estimate="chat.estimate.value" :busy="busy" :has-conversation="Boolean(chat.conversation.value)"
+          @fork="chat.forkChat" @checkpoint="chat.createCheckpoint"
+          @branches="({ checkpointId, names }) => chat.createBranches(checkpointId, names)" @select-branch="chat.selectConversation" />
+        <p v-if="!mcpEnabled && !memory.enabled.value && !chat.agent.value?.capabilities?.includes('context_memory')" class="inspector-empty">У этого агента нет дополнительных настроек контекста.</p>
+      </template>
+      <template #metrics>
+        <TokenPanel :models="chat.models.value" :model-id="chat.modelId.value" :runs="chat.runs.value" :conversation="chat.conversation.value" :memory-workspace="memory.workspace.value"
+          :estimate="chat.estimate.value" :estimating="chat.estimating.value" :preview-error="chat.previewError.value" :busy="busy" :title="chat.conversation.value?.title" />
+      </template>
     </AgentSidebar>
     <NewChatDialog :open="newChatOpen" :busy="busy" :memory-layers="memory.enabled.value" :mcp-tools="chat.agent.value?.capabilities?.includes('mcp_tools')"
-      :personalization="profiles.enabled.value" :profiles="profiles.profiles.value"
+      :agent-name="chat.agent.value?.name" :personalization="profiles.enabled.value" :profiles="profiles.profiles.value"
       :default-profile-id="profiles.preferredId.value || memory.workspace.value?.profile.id || 'local'"
       @cancel="newChatOpen = false" @create="createNewChat" />
   </div>

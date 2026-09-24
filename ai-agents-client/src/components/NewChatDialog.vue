@@ -2,7 +2,7 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { listMcpServers } from '../features/mcp/api'
 
-const props = defineProps({ open: Boolean, busy: Boolean, memoryLayers: Boolean, personalization: Boolean, mcpTools: Boolean, profiles: Array, defaultProfileId: String })
+const props = defineProps({ open: Boolean, busy: Boolean, memoryLayers: Boolean, personalization: Boolean, mcpTools: Boolean, profiles: Array, defaultProfileId: String, agentName: String })
 const emit = defineEmits(['cancel', 'create'])
 const dialog = ref(null)
 const title = ref('Новый чат')
@@ -61,13 +61,13 @@ function keyboard(event) {
 <template>
   <div v-if="open" class="dialog-backdrop" @click.self="emit('cancel')">
     <section ref="dialog" class="new-chat-dialog" role="dialog" aria-modal="true" aria-labelledby="new-chat-title" @keydown="keyboard">
-      <header><div><small>{{ mcpTools ? 'MCP-инструменты' : memoryLayers ? 'Алгоритмический наставник' : 'Новый независимый диалог' }}</small><h2 id="new-chat-title">{{ mcpTools ? 'Подключения нового чата' : memoryLayers ? 'Новая задача' : 'Настройте память чата' }}</h2></div><button type="button" aria-label="Закрыть создание чата" @click="emit('cancel')">×</button></header>
+      <header><div><small>{{ agentName || 'Текущий агент' }}</small><h2 id="new-chat-title">{{ mcpTools ? 'Подключения нового чата' : memoryLayers ? 'Новая задача' : 'Настройте память чата' }}</h2></div><button type="button" aria-label="Закрыть создание чата" @click="emit('cancel')">×</button></header>
       <form @submit.prevent="submit">
         <label class="dialog-title">Название<input v-model="title" maxlength="120" required autofocus></label>
         <fieldset :disabled="busy">
           <legend>{{ mcpTools ? 'Доступные MCP-серверы' : memoryLayers ? 'Три слоя памяти' : 'Стратегия контекста' }}</legend>
           <template v-if="mcpTools">
-            <p class="muted">Это начальный выбор для сообщений. Перед отправкой его можно поменять или отключить MCP полностью.</p>
+            <p class="muted">Это начальный набор инструментов, доступных модели. Она сама решает, когда их вызвать. Можно создать чат без MCP и подключить серверы позже.</p>
             <p v-if="mcpError" role="alert">{{ mcpError }}</p>
             <label v-for="server in mcpServers" :key="server.id" class="mcp-server-option">
               <input v-model="selectedServers" type="checkbox" :value="server.id">

@@ -22,6 +22,9 @@ async def test_search_games_declares_schema_and_returns_mock_api_data():
             tools = (await client.list_tools()).tools
             assert [tool.name for tool in tools] == ["search_games"]
             assert "query" in tools[0].input_schema["properties"]
+            assert "нет надёжных сведений" in tools[0].description
+            assert "не требуй слова «каталог»" in tools[0].description
+            assert "Не используй для общих вопросов" in tools[0].description
             result = await client.call_tool("search_games", {"query": "космос"})
 
     assert seen == ["http://mock.test/games?query=%D0%BA%D0%BE%D1%81%D0%BC%D0%BE%D1%81"]

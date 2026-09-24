@@ -1,5 +1,6 @@
 package com.example.javamcpgames.catalog;
 
+import org.springframework.ai.mcp.annotation.McpTool;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
@@ -7,11 +8,20 @@ import org.springframework.web.client.RestClient;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 /** Контракт Java-адаптера к общему mock API без запуска Docker. */
 class GamesCatalogClientTest {
+
+    @Test
+    void toolDescriptionAllowsUnknownGameLookup() throws NoSuchMethodException {
+        McpTool tool = GamesTools.class.getMethod("searchGames", String.class).getAnnotation(McpTool.class);
+        assertTrue(tool.description().contains("нет надёжных сведений"));
+        assertTrue(tool.description().contains("не требуй слова «каталог»"));
+        assertTrue(tool.description().contains("Не используй для общих вопросов"));
+    }
 
     @Test
     void searchesMockApiAndMapsSameResultAsPythonServer() {

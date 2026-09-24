@@ -101,7 +101,7 @@ class RunRecord(BaseModel):
     provider_status: int | None = None
     purpose: Literal["dialogue", "summary", "facts", "memory_proposals",
                      "invariant_input", "invariant_output", "invariant_artifact",
-                     "mcp_selection", "mcp_answer"] = "dialogue"
+                     "mcp_selection", "mcp_selection_retry", "mcp_answer"] = "dialogue"
     memory_context: dict | None = None
     compression: CompressionDetails | None = None
 
