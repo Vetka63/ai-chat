@@ -61,4 +61,15 @@ describe('new chat configuration', () => {
     await wrapper.get('form').trigger('submit')
     expect(wrapper.emitted('create')[0][0].mcpServerIds).toEqual(['java-games-mock'])
   })
+
+  it('creates a day 18 digest chat without dialogue-only settings', async () => {
+    const wrapper = mount(NewChatDialog, { props: { open: true, scheduledReports: true, agentName: 'Игровые сводки' } })
+    expect(wrapper.text()).toContain('Новый чат сводок')
+    expect(wrapper.find('fieldset').exists()).toBe(false)
+    await wrapper.get('form').trigger('submit')
+    expect(wrapper.emitted('create')[0][0]).toEqual({
+      title: 'Новый чат',
+      contextSettings: { mode: 'full', keep_last: 10, summarize_every: 10 },
+    })
+  })
 })

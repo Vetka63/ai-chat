@@ -14,7 +14,7 @@ function submit(event) {
   <div class="composer-wrap">
     <form class="composer" @submit.prevent="$emit('send')">
       <textarea v-model="model" rows="1" aria-label="Сообщение агенту" placeholder="Напишите сообщение агенту…" :disabled="disabled" @keydown.enter="submit"></textarea>
-      <div class="composer-toolbar"><div class="composer-options"><slot /></div>
+      <div class="composer-toolbar"><div class="composer-options"><slot name="context" /><slot /></div>
       <button class="send-button" type="submit" aria-label="Отправить" :disabled="disabled || !model.trim()">{{ sending ? '•••' : '↑' }}</button>
       </div>
     </form>

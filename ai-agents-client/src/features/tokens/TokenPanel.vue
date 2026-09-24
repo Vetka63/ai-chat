@@ -87,7 +87,7 @@ const savingsStatus = computed(() => {
     <details class="token-details" :open="runs?.length > 0">
       <summary>Расход диалога · {{ runs?.length || 0 }} вызовов LLM</summary>
       <small v-if="memoryWorkspace" class="muted">{{ (runs || []).filter(r => r.purpose === 'dialogue').length }} основных вызовов + {{ (runs || []).filter(r => r.purpose === 'memory_proposals').length }} анализов памяти по кнопке. Ошибочные попытки тоже учитываются.</small>
-      <small v-else-if="conversation?.agent_id === 'mcp_games'" class="muted">{{ (runs || []).filter(r => r.purpose === 'mcp_selection').length }} вызовов выбора инструмента + {{ (runs || []).filter(r => r.purpose === 'mcp_answer').length }} итоговых ответов модели. Вызов MCP-инструмента не расходует LLM-токены.</small>
+      <small v-else-if="conversation?.agent_id === 'mcp_games'" class="muted">{{ (runs || []).filter(r => r.purpose === 'mcp_selection' || r.purpose === 'mcp_selection_retry').length }} вызовов выбора инструмента + {{ (runs || []).filter(r => r.purpose === 'mcp_answer').length }} итоговых ответов модели. Вызов MCP-инструмента не расходует LLM-токены.</small>
       <small v-else class="muted">{{ (runs || []).filter(r => !r.purpose || r.purpose === 'dialogue').length }} ответов + {{ (runs || []).filter(r => r.purpose === 'summary').length }} summary + {{ (runs || []).filter(r => r.purpose === 'facts').length }} facts. Один запрос может вызвать два LLM-вызова; ошибки тоже учитываются.</small>
       <dl class="token-grid">
         <dt>API total, сумма</dt><dd>{{ summary.known ? count(summary.tokens) : '—' }}</dd>

@@ -23,6 +23,7 @@ describe('MCP explorer', () => {
     const wrapper = mount(McpExplorer)
     await flushPromises()
     expect(wrapper.text()).toContain(server.name)
+    expect(wrapper.get('.mcp-transport').text()).toBe('stdio · локально')
     expect(wrapper.text()).not.toContain('add_numbers')
 
     await wrapper.get('.mcp-connect').trigger('click')
@@ -32,6 +33,16 @@ describe('MCP explorer', () => {
     expect(wrapper.text()).toContain('add_numbers')
     expect(wrapper.text()).toContain('2026-07-28')
     expect(wrapper.text()).toContain('соединение закрыто')
+  })
+
+  it('labels a remote MCP server as HTTP instead of local stdio', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: true, json: async () => [
+      { ...server, id: 'games-mock', transport: 'streamable_http' },
+    ] })))
+    const wrapper = mount(McpExplorer)
+    await flushPromises()
+    expect(wrapper.get('.mcp-transport').text()).toBe('HTTP · отдельный сервис')
+    expect(wrapper.text()).toContain('Параметры подключения задаются на бэкенде')
   })
 
   it('shows a connection error without claiming success', async () => {

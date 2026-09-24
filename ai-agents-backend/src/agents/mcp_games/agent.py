@@ -2,14 +2,18 @@
 
 import asyncio
 import json
+import logging
 import re
 from time import perf_counter
 
 from agent_core.models import AgentCommand, AgentError, AgentInfo, AgentResult, Message, now, new_id
+from agents.mcp_games.lookup_policy import GameCatalogLookupPolicy
 from agents.mcp_games.prompts import SYSTEM_PROMPT
 from capabilities.mcp_discovery.models import McpToolEvent
 from capabilities.mcp_discovery.service import McpDiscoveryError
 from capabilities.token_accounting.models import ContextEstimate, RunRecord
+
+logger = logging.getLogger(__name__)
 
 
 class McpGamesAgent:
@@ -21,12 +25,13 @@ class McpGamesAgent:
         self.llm, self.store, self.catalog = llm, store, catalog
         self.accounting, self.gateway, self.events = accounting, gateway, events
         self.default_model = default_model
+        self.lookup_policy = GameCatalogLookupPolicy()
         self._locks: dict[str, asyncio.Lock] = {}
 
     @property
     def info(self) -> AgentInfo:
         return AgentInfo(id=self.ID, name="Игровой MCP-агент",
-                         description="Отвечает по отдельному каталогу игр через MCP-инструмент",
+                         description="Общается об играх и при необходимости обращается к учебному каталогу через MCP",
                          capabilities=["persistent_history", "mcp_tools"])
 
     async def create_conversation_with_tools(self, body):
@@ -139,10 +144,7 @@ class McpGamesAgent:
             await self.store.configure_output(self.ID, conversation.id, max_tokens)
             await self.store.append_message(self.ID, conversation.id, "user", text, mcp_server_ids=selected_ids)
             tools, mapping = await self._tools(selected_ids)
-            system_prompt = SYSTEM_PROMPT if tools else (SYSTEM_PROMPT +
-                "\nДля текущего сообщения MCP-инструменты отключены. Не утверждай, что проверил каталог; "
-                "если нужны данные каталога, попроси включить MCP.")
-            messages = [{"role": "system", "content": system_prompt}]
+            messages = [{"role": "system", "content": SYSTEM_PROMPT}]
             messages.extend({"role": item.role, "content": item.content} for item in conversation.messages)
             messages.append({"role": "user", "content": text})
             user_index = len(conversation.messages)
@@ -152,15 +154,37 @@ class McpGamesAgent:
                                                     "auto" if tools else "none")
             events = []
             final, final_run = first, first_run
-            if first.tool_calls:
-                if len(first.tool_calls) > 3:
+            selection = first
+            additional_runs: list[RunRecord] = []
+            if tools and not first.tool_calls:
+                retry = self.lookup_policy.retry(text, first.content, tools, mapping)
+                if retry:
+                    logger.info("mcp_lookup_retry conversation_id=%s reason=%s tools=%s",
+                                conversation.id, retry.reason, len(retry.tools))
+                    forced, forced_run = await self._complete(
+                        messages, retry.tools, conversation.messages, text, spec, max_tokens,
+                        conversation.id, user_index, "mcp_selection_retry", "required",
+                    )
+                    if forced.tool_calls:
+                        selection = forced
+                        additional_runs = [first_run, forced_run]
+                    else:
+                        logger.warning("mcp_lookup_retry_without_call conversation_id=%s reason=%s",
+                                       conversation.id, retry.reason)
+                        if retry.reason == "explicit_catalog_request":
+                            raise AgentError("mcp_tool_not_selected", "Модель не смогла выбрать поиск по каталогу", 502)
+                        additional_runs = [forced_run]
+            if selection.tool_calls:
+                if not additional_runs:
+                    additional_runs = [first_run]
+                if len(selection.tool_calls) > 3:
                     raise AgentError("mcp_too_many_calls", "Модель запросила слишком много инструментов", 502)
-                messages.append({"role": "assistant", "content": first.content or None, "tool_calls": [
+                messages.append({"role": "assistant", "content": selection.content or None, "tool_calls": [
                     {"id": call.id, "type": "function", "function": {
                         "name": call.name, "arguments": json.dumps(call.arguments, ensure_ascii=False),
-                    }} for call in first.tool_calls
+                    }} for call in selection.tool_calls
                 ]})
-                for call in first.tool_calls:
+                for call in selection.tool_calls:
                     target = mapping.get(call.name)
                     if target is None:
                         raise AgentError("mcp_tool_not_allowed", "Модель запросила недоступный инструмент", 502)
@@ -190,5 +214,5 @@ class McpGamesAgent:
             final_run.assistant_index = user_index + 1
             await self.accounting.record(final_run)
             return AgentResult(agent_id=self.ID, reply=reply, model=final.model, source=final.source,
-                               run=final_run, additional_runs=[first_run] if first_run is not final_run else [],
+                               run=final_run, additional_runs=additional_runs,
                                tool_events=events)

@@ -85,20 +85,55 @@ class ChatCompletionsToolClient:
 class DemoToolClient:
     """Детерминированный учебный цикл без внешних LLM-запросов."""
 
+    @staticmethod
+    def _game_title(text: str) -> str | None:
+        """Извлекает простое название только для демонстрационного сценария."""
+
+        quoted = re.search(r"[«\"]([^»\"]+)[»\"]", text)
+        if quoted:
+            return quoted.group(1).strip()
+        match = re.search(r"\bигр(?:у|е|а)\s+([^?!.]+)", text, re.IGNORECASE)
+        return match.group(1).strip() if match else None
+
+    @staticmethod
+    def _catalog_requested(text: str) -> bool:
+        """В деморежиме имитирует выбор инструмента только для явного запроса каталога."""
+
+        lower = text.casefold()
+        asks_to_search = any(word in lower for word in
+                             ("найд", "ищ", "поиск", "проверь", "провер", "покажи", "какие", "есть ли", "описан"))
+        names_catalog = bool(re.search(r"\bкаталог\w*|\bу нас\b", lower))
+        return asks_to_search and names_catalog
+
+    @staticmethod
+    def _general_reply(text: str) -> str:
+        """Даёт простой честный ответ без инструмента, не изображая полноценную LLM."""
+
+        lower = text.strip().casefold()
+        if lower in {"привет", "привет!", "здравствуй"}:
+            return "Привет! Чем могу помочь?"
+        if "rpg" in lower or "рпг" in lower:
+            return "RPG — ролевая игра, в которой игрок управляет персонажем и развивает его по ходу истории."
+        if "diablo" in lower:
+            return "Diablo II — известная action-RPG от Blizzard."
+        if DemoToolClient._game_title(text):
+            return "В демонстрационном режиме у меня нет надёжных сведений об этой конкретной игре."
+        return "Это демонстрационный режим без LLM, поэтому я не могу дать содержательный ответ на открытый вопрос."
+
     async def complete_with_tools(self, messages, tools, *, model, temperature, max_tokens, tool_choice):
-        if not tools:
-            if not any(message["role"] == "tool" for message in messages):
-                return ToolCompletion(content="MCP отключён для этого сообщения. Включите каталог, чтобы я мог проверить игры.",
-                                      model=f"demo/{model}", source="demo", finish_reason="stop")
+        if messages[-1]["role"] == "tool":
             payload = json.loads(messages[-1]["content"])
             games = payload.get("games", [])
             reply = "Найденные игры: " + "; ".join(f"{item['title']} — {item['description']}" for item in games) if games else "В учебном каталоге таких игр не найдено."
             return ToolCompletion(content=reply, model=f"demo/{model}", source="demo", finish_reason="stop")
         text = next(message["content"] for message in reversed(messages) if message["role"] == "user")
-        if text.strip().casefold() in {"привет", "привет!", "здравствуй"}:
-            return ToolCompletion(content="Привет! Спроси меня о вымышленных играх.", model=f"demo/{model}", source="demo", finish_reason="stop")
-        quoted = re.search(r"[«\"]([^»\"]+)[»\"]", text)
-        query = quoted.group(1) if quoted else "космос" if "космос" in text.casefold() else text.strip()
+        if tool_choice != "required" and not self._catalog_requested(text):
+            return ToolCompletion(content=self._general_reply(text), model=f"demo/{model}",
+                                  source="demo", finish_reason="stop")
+        if not tools:
+            return ToolCompletion(content="Сейчас не могу проверить учебный каталог и не буду угадывать его содержимое.",
+                                  model=f"demo/{model}", source="demo", finish_reason="stop")
+        query = "космос" if "космос" in text.casefold() else self._game_title(text) or text.strip()
         return ToolCompletion(content="", model=f"demo/{model}", source="demo", finish_reason="tool_calls",
                               tool_calls=[ToolCall(id="demo-call-1", name=tools[0]["function"]["name"],
                                                    arguments={"query": query})])
