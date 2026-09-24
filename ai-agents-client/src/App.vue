@@ -20,6 +20,7 @@ import { useWorkflow } from './features/workflow/useWorkflow'
 import InvariantPanel from './features/invariants/InvariantPanel.vue'
 import { useInvariants } from './features/invariants/useInvariants'
 import McpExplorer from './features/mcp/McpExplorer.vue'
+import GameDigestPanel from './features/gameDigest/GameDigestPanel.vue'
 
 const chat = useAgentChat()
 const memory = useMemoryLayers(chat)
@@ -149,7 +150,7 @@ async function saveProblem(problem) {
       <template v-else>
       <header class="chat-header">
         <button ref="chatsButton" class="menu-button icon-button" aria-label="Открыть список чатов" aria-controls="chats-panel" :aria-expanded="sidebarOpen" @click="toggleChats">☰</button>
-        <div><strong>{{ chat.conversation.value?.title || chat.agent.value?.name || 'AI Agents' }}</strong><span><i></i>{{ chat.loading.value ? 'Загрузка истории…' : chat.agent.value?.capabilities?.includes('mcp_tools') ? 'Следующее сообщение: ' + (chat.mcpServerIds.value.length ? `MCP · ${chat.mcpServerIds.value.length}` : 'без MCP') : memory.workspace.value?.profile ? memory.workspace.value.profile.name + ' · память сохранена' : 'Контекст сохранён' }}</span></div>
+        <div><strong>{{ chat.conversation.value?.title || chat.agent.value?.name || 'AI Agents' }}</strong><span><i></i>{{ chat.loading.value ? 'Загрузка истории…' : chat.agent.value?.capabilities?.includes('scheduled_reports') ? 'Фоновые сводки · MCP' : chat.agent.value?.capabilities?.includes('mcp_tools') ? 'Следующее сообщение: ' + (chat.mcpServerIds.value.length ? `MCP · ${chat.mcpServerIds.value.length}` : 'без MCP') : memory.workspace.value?.profile ? memory.workspace.value.profile.name + ' · память сохранена' : 'Контекст сохранён' }}</span></div>
         <button class="focus-toggle icon-button" :aria-label="focusMode ? 'Вернуть боковые панели' : 'Развернуть чат'" :aria-pressed="focusMode" @click="toggleFocus"><span aria-hidden="true">{{ focusMode ? '◧' : '⛶' }}</span><span class="focus-label">{{ focusMode ? 'Обычный вид' : 'Развернуть чат' }}</span></button>
         <button ref="settingsButton" class="settings-toggle icon-button" aria-label="Настройки агента" aria-controls="settings-panel" :aria-expanded="settingsOpen && !focusMode" @click="toggleSettings"><span aria-hidden="true">☷</span><span class="settings-label">Настройки</span></button>
       </header>
@@ -163,8 +164,9 @@ async function saveProblem(problem) {
         :busy="invariants.busy.value || workflow.busy.value || chat.loading.value"
         :sending="chat.sending.value" :error="invariants.error.value"
         @save="invariants.save" @refresh="invariants.refresh" />
-      <ChatThread :messages="chat.messages.value" :runs="chat.runs.value" :tool-events="chat.conversation.value?.tool_events || []" :agent-name="chat.agent.value?.name" :sending="chat.sending.value" :memory-layers="memory.enabled.value" :mcp-tools="chat.agent.value?.capabilities?.includes('mcp_tools')" />
-      <MessageComposer v-model="chat.draft.value" :disabled="busy || !chat.agentId.value || !chat.conversation.value || !chat.outputLimitValid.value || (workflow.enabled.value && (!workflow.workspace.value || workflow.workspace.value.state.status === 'paused' || workflow.workspace.value.state.phase === 'done'))" :sending="chat.sending.value" @send="chat.send">
+      <GameDigestPanel v-if="chat.agent.value?.capabilities?.includes('scheduled_reports')" :conversation-id="chat.conversation.value?.id" />
+      <ChatThread v-else :messages="chat.messages.value" :runs="chat.runs.value" :tool-events="chat.conversation.value?.tool_events || []" :agent-name="chat.agent.value?.name" :sending="chat.sending.value" :memory-layers="memory.enabled.value" :mcp-tools="chat.agent.value?.capabilities?.includes('mcp_tools')" />
+      <MessageComposer v-if="!chat.agent.value?.capabilities?.includes('scheduled_reports')" v-model="chat.draft.value" :disabled="busy || !chat.agentId.value || !chat.conversation.value || !chat.outputLimitValid.value || (workflow.enabled.value && (!workflow.workspace.value || workflow.workspace.value.state.status === 'paused' || workflow.workspace.value.state.phase === 'done'))" :sending="chat.sending.value" @send="chat.send">
         <McpToolPicker v-if="chat.agent.value?.capabilities?.includes('mcp_tools')" :servers="chat.mcpServers.value"
           :selected-ids="chat.mcpServerIds.value" :busy="busy" :loading="chat.mcpLoading.value" :error="chat.mcpError.value"
           @change="chat.mcpServerIds.value = $event" @refresh="chat.refreshMcpServers" />
@@ -180,7 +182,7 @@ async function saveProblem(problem) {
       <ProfilePanel v-if="profiles.enabled.value" :profiles="profiles.profiles.value" :profile="memory.workspace.value?.profile"
         :busy="busy" :loading="profiles.loading.value" :error="profiles.error.value" :notice="profiles.notice.value" :preferred-id="profiles.preferredId.value"
         @save="profiles.save" @refresh="profiles.refresh" />
-      <OutputSettings :limit="chat.outputLimit.value" :model="chat.selectedModel.value" :busy="busy" :memory-layers="memory.enabled.value" @change="chat.outputLimit.value = $event" />
+      <OutputSettings v-if="!chat.agent.value?.capabilities?.includes('scheduled_reports')" :limit="chat.outputLimit.value" :model="chat.selectedModel.value" :busy="busy" :memory-layers="memory.enabled.value" @change="chat.outputLimit.value = $event" />
       <MemoryPanel v-if="memory.enabled.value" :workspace="memory.workspace.value" :busy="busy"
         :loading="memory.loading.value" :error="memory.error.value" :last-context="lastMemoryContext"
         @refresh="memory.refresh" @problem="saveProblem" @save="memory.saveEntry"
@@ -190,10 +192,10 @@ async function saveProblem(problem) {
         :estimate="chat.estimate.value" :busy="busy" :has-conversation="Boolean(chat.conversation.value)"
         @fork="chat.forkChat" @checkpoint="chat.createCheckpoint"
         @branches="({ checkpointId, names }) => chat.createBranches(checkpointId, names)" @select-branch="chat.selectConversation" />
-      <TokenPanel :models="chat.models.value" :model-id="chat.modelId.value" :runs="chat.runs.value" :conversation="chat.conversation.value" :memory-workspace="memory.workspace.value"
+      <TokenPanel v-if="!chat.agent.value?.capabilities?.includes('scheduled_reports')" :models="chat.models.value" :model-id="chat.modelId.value" :runs="chat.runs.value" :conversation="chat.conversation.value" :memory-workspace="memory.workspace.value"
         :estimate="chat.estimate.value" :estimating="chat.estimating.value" :preview-error="chat.previewError.value" :busy="busy" :title="chat.conversation.value?.title" />
     </AgentSidebar>
-    <NewChatDialog :open="newChatOpen" :busy="busy" :memory-layers="memory.enabled.value" :mcp-tools="chat.agent.value?.capabilities?.includes('mcp_tools')"
+    <NewChatDialog :open="newChatOpen" :busy="busy" :memory-layers="memory.enabled.value" :mcp-tools="chat.agent.value?.capabilities?.includes('mcp_tools')" :scheduled-reports="chat.agent.value?.capabilities?.includes('scheduled_reports')"
       :personalization="profiles.enabled.value" :profiles="profiles.profiles.value"
       :default-profile-id="profiles.preferredId.value || memory.workspace.value?.profile.id || 'local'"
       @cancel="newChatOpen = false" @create="createNewChat" />

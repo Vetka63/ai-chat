@@ -1,4 +1,8 @@
-# Python Agents — День 17
+# Python Agents — День 18
+
+Новый [агент игровых сводок](src/agents/game_digest/README.md) управляет
+отдельным [MCP-сервисом](../python-mcp-game-feed/README.md): подписка по
+расписанию, генерация игр и три последние сводки. IGDB пока не подключён.
 
 Новый «Игровой MCP-агент» вызывает MCP-инструмент поиска через отдельный
 [Python HTTP MCP-сервис](../python-mcp-games/README.md) по

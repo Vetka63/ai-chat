@@ -50,7 +50,8 @@ class McpServerDefinition:
 
 
 def default_servers(python_mcp_url: str | None = None,
-                    java_mcp_url: str | None = None) -> tuple[McpServerDefinition, ...]:
+                    java_mcp_url: str | None = None,
+                    game_feed_mcp_url: str | None = None) -> tuple[McpServerDefinition, ...]:
     """Формирует каталог разрешённых серверов для заданий Дней 16 и 17.
 
     Учебный сервер Дня 16 доступен для обнаружения; каталог игр Дня 17 можно
@@ -94,6 +95,15 @@ def default_servers(python_mcp_url: str | None = None,
             ),
             url=java_mcp_url,
         ))
+    if game_feed_mcp_url:
+        servers.append(McpServerDefinition(
+            summary=McpServerSummary(
+                id="game-feed", name="Игровые сводки · Python",
+                description="Периодические сборы и три последние сводки; управляются отдельным агентом.",
+                transport="streamable_http", chat_enabled=False,
+            ),
+            url=game_feed_mcp_url,
+        ))
     return tuple(servers)
 
 
@@ -105,7 +115,8 @@ class McpDiscoveryService:
     """
 
     def __init__(self, servers: tuple[McpServerDefinition, ...] | None = None, timeout_seconds: float = 10,
-                 python_mcp_url: str | None = None, java_mcp_url: str | None = None):
+                 python_mcp_url: str | None = None, java_mcp_url: str | None = None,
+                 game_feed_mcp_url: str | None = None):
         """Подготавливает разрешённые серверы и общий таймаут MCP-обмена.
 
         Args:
@@ -114,7 +125,7 @@ class McpDiscoveryService:
             timeout_seconds: Максимальное время на подключение и все страницы
                 ``tools/list`` вместе, а не таймаут каждой страницы отдельно.
         """
-        definitions = default_servers(python_mcp_url, java_mcp_url) if servers is None else servers
+        definitions = default_servers(python_mcp_url, java_mcp_url, game_feed_mcp_url) if servers is None else servers
         self._servers = {server.summary.id: server for server in definitions}
         self._timeout_seconds = timeout_seconds
 

@@ -2,7 +2,7 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { listMcpServers } from '../features/mcp/api'
 
-const props = defineProps({ open: Boolean, busy: Boolean, memoryLayers: Boolean, personalization: Boolean, mcpTools: Boolean, profiles: Array, defaultProfileId: String })
+const props = defineProps({ open: Boolean, busy: Boolean, memoryLayers: Boolean, personalization: Boolean, mcpTools: Boolean, scheduledReports: Boolean, profiles: Array, defaultProfileId: String })
 const emit = defineEmits(['cancel', 'create'])
 const dialog = ref(null)
 const title = ref('Новый чат')
@@ -61,10 +61,10 @@ function keyboard(event) {
 <template>
   <div v-if="open" class="dialog-backdrop" @click.self="emit('cancel')">
     <section ref="dialog" class="new-chat-dialog" role="dialog" aria-modal="true" aria-labelledby="new-chat-title" @keydown="keyboard">
-      <header><div><small>{{ mcpTools ? 'MCP-инструменты' : memoryLayers ? 'Алгоритмический наставник' : 'Новый независимый диалог' }}</small><h2 id="new-chat-title">{{ mcpTools ? 'Подключения нового чата' : memoryLayers ? 'Новая задача' : 'Настройте память чата' }}</h2></div><button type="button" aria-label="Закрыть создание чата" @click="emit('cancel')">×</button></header>
+      <header><div><small>{{ scheduledReports ? 'Фоновый MCP-агент' : mcpTools ? 'MCP-инструменты' : memoryLayers ? 'Алгоритмический наставник' : 'Новый независимый диалог' }}</small><h2 id="new-chat-title">{{ scheduledReports ? 'Новый чат сводок' : mcpTools ? 'Подключения нового чата' : memoryLayers ? 'Новая задача' : 'Настройте память чата' }}</h2></div><button type="button" aria-label="Закрыть создание чата" @click="emit('cancel')">×</button></header>
       <form @submit.prevent="submit">
         <label class="dialog-title">Название<input v-model="title" maxlength="120" required autofocus></label>
-        <fieldset :disabled="busy">
+        <fieldset v-if="!scheduledReports" :disabled="busy">
           <legend>{{ mcpTools ? 'Доступные MCP-серверы' : memoryLayers ? 'Три слоя памяти' : 'Стратегия контекста' }}</legend>
           <template v-if="mcpTools">
             <p class="muted">Это начальный выбор для сообщений. Перед отправкой его можно поменять или отключить MCP полностью.</p>
@@ -94,7 +94,7 @@ function keyboard(event) {
             <label v-if="settings.mode === 'summary'">Обновлять summary порциями по<input v-model.number="settings.summarize_every" type="number" min="2" max="100" step="2" required></label>
           </div>
         </fieldset>
-        <p class="immutable-note">{{ mcpTools ? 'Чат хранится в SQLite. Выбранные здесь серверы можно изменить для каждого сообщения в поле ввода.' : memoryLayers ? 'Условие сохранится в рабочую память. Новые сведения из переписки нужно сохранять явно в панели памяти. Размер хвоста фиксируется при создании.' : 'Стратегия фиксируется после создания. Для другого способа управления контекстом создайте новый чат.' }}</p>
+        <p class="immutable-note">{{ scheduledReports ? 'После создания задайте расписание в чате. Worker будет добавлять игры через MCP и сохранять три последние сводки.' : mcpTools ? 'Чат хранится в SQLite. Выбранные здесь серверы можно изменить для каждого сообщения в поле ввода.' : memoryLayers ? 'Условие сохранится в рабочую память. Новые сведения из переписки нужно сохранять явно в панели памяти. Размер хвоста фиксируется при создании.' : 'Стратегия фиксируется после создания. Для другого способа управления контекстом создайте новый чат.' }}</p>
         <footer><button type="button" class="secondary-button" :disabled="busy" @click="emit('cancel')">Отмена</button><button class="report-button" :disabled="busy || !title.trim() || (personalization && !profiles?.some(p => p.id === profileId))" type="submit">Создать чат</button></footer>
       </form>
     </section>

@@ -50,12 +50,15 @@ services:
       PY_AGENT_MISTRAL_TOKENIZER_PATH: /app/tokenizers/ministral-3b/tekken.json
       PY_AGENT_PYTHON_MCP_URL: http://python-mcp-games:8080/mcp
       PY_AGENT_JAVA_MCP_URL: http://java-mcp-games:8080/mcp
+      PY_AGENT_GAME_FEED_MCP_URL: http://python-mcp-game-feed:8080/mcp
     depends_on:
       games-mock-api:
         condition: service_healthy
       python-mcp-games:
         condition: service_healthy
       java-mcp-games:
+        condition: service_healthy
+      python-mcp-game-feed:
         condition: service_healthy
     volumes:
       - agents-data:/app/data
@@ -123,5 +126,38 @@ services:
       retries: 12
       start_period: 15s
 
+  python-mcp-game-feed:
+    build:
+      context: ./python-mcp-game-feed
+    restart: unless-stopped
+    environment:
+      GAME_FEED_DB: /app/data/game-feed.sqlite3
+    volumes:
+      - game-feed-data:/app/data
+    ports:
+      - "127.0.0.1:8087:8080"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.create_connection(('127.0.0.1', 8080), timeout=2); s.close()"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  game-feed-worker:
+    build:
+      context: ./python-mcp-game-feed
+    command: ["python", "-m", "game_feed.worker"]
+    environment:
+      GAME_FEED_DB: /app/data/game-feed.sqlite3
+      GAME_FEED_MCP_URL: http://python-mcp-game-feed:8080/mcp
+      GAME_FEED_POLL_SECONDS: "5"
+    volumes:
+      - game-feed-data:/app/data
+    depends_on:
+      python-mcp-game-feed:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   agents-data:
+  game-feed-data:

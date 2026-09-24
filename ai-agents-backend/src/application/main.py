@@ -33,6 +33,7 @@ from application.routes.workflow import router as workflow_router
 from infrastructure.sqlite_invariants import SqliteInvariantRepository
 from application.routes.invariants import router as invariants_router
 from application.routes.mcp import router as mcp_router
+from application.routes.game_digest import router as game_digest_router
 from capabilities.mcp_discovery.service import McpDiscoveryError, McpDiscoveryService
 from infrastructure.sqlite_mcp_events import SqliteMcpEventRepository
 
@@ -73,6 +74,7 @@ def create_app(
         app.state.mcp_discovery = McpDiscoveryService(
             python_mcp_url=resolved.python_mcp_url,
             java_mcp_url=resolved.java_mcp_url,
+            game_feed_mcp_url=resolved.game_feed_mcp_url,
         )
         app.state.catalog = ModelCatalog.load(Path(__file__).with_name("models.json"), {
             "deepseek": resolved.mode == "demo" or bool(resolved.api_key.get_secret_value()),
@@ -94,12 +96,13 @@ def create_app(
             )
             yield
 
-    app = FastAPI(title="AI Agents · День 17", version="0.12.0", lifespan=lifespan)
+    app = FastAPI(title="AI Agents · День 18", version="0.13.0", lifespan=lifespan)
     app.include_router(memory_router)
     app.include_router(profile_router)
     app.include_router(workflow_router)
     app.include_router(invariants_router)
     app.include_router(mcp_router)
+    app.include_router(game_digest_router)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=resolved.origins,
@@ -125,7 +128,7 @@ def create_app(
 
     @app.get("/health")
     async def health():
-        return {"status": "ok", "mode": resolved.mode, "day": 17}
+        return {"status": "ok", "mode": resolved.mode, "day": 18}
 
     @app.get("/api/v1/models")
     async def models(request: Request):
@@ -239,7 +242,10 @@ def create_app(
         status_code=204,
     )
     async def delete_conversation(agent_id: str, conversation_id: str, request: Request):
-        request.app.state.registry.get(agent_id)
+        agent = request.app.state.registry.get(agent_id)
+        cleanup = getattr(agent, "delete_conversation", None)
+        if cleanup is not None:
+            await cleanup(conversation_id)
         await request.app.state.store.delete(agent_id, conversation_id)
         return Response(status_code=204)
 
