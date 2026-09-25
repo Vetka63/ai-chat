@@ -24,7 +24,9 @@ async def test_local_mcp_connection_returns_real_tools():
 @pytest.mark.asyncio
 async def test_server_command_cannot_be_supplied_by_client():
     service = McpDiscoveryService()
-    assert service.list_servers()[0].model_dump().keys() == {"id", "name", "description", "transport", "chat_enabled"}
+    assert service.list_servers()[0].model_dump().keys() == {
+        "id", "name", "description", "transport", "chat_enabled", "agent_ids",
+    }
 
     with pytest.raises(McpDiscoveryError) as error:
         await service.discover("not-allowed")

@@ -42,4 +42,26 @@ describe('ChatThread', () => {
     expect(wrapper.text()).toContain('games-mock / search_games')
     expect(wrapper.text()).toContain('Результат получен')
   })
+
+  it('shows the three report stages and a Markdown download action', () => {
+    const wrapper = mount(ChatThread, { props: {
+      mcpPipeline: true,
+      messages: [{ role: 'user', content: 'Создай отчёт' }, { role: 'assistant', content: 'Готово' }],
+      toolEvents: [
+        { id: 'search-1', user_index: 0, server_id: 'game-reports', tool_name: 'search_games',
+          status: 'success', arguments: { query: 'космос' }, result: { query: 'космос', games: [] } },
+        { id: 'summary-1', user_index: 0, server_id: 'game-reports', tool_name: 'summarize_games',
+          status: 'success', arguments: { search_result: { query: 'космос', games: [] } },
+          result: { query: 'космос', game_count: 0, markdown: '# Космос' } },
+        { id: 'save-1', user_index: 0, server_id: 'game-reports', tool_name: 'save_report',
+          status: 'success', arguments: { summary_result: { query: 'космос', game_count: 0, markdown: '# Космос' } },
+          result: { file_name: 'report-1.md', game_count: 0, report_markdown: '# Космос' } },
+      ],
+    } })
+    expect(wrapper.findAll('article.tool-event')).toHaveLength(3)
+    expect(wrapper.text()).toContain('Поиск')
+    expect(wrapper.text()).toContain('Обработка')
+    expect(wrapper.text()).toContain('Сохранение')
+    expect(wrapper.get('button.report-button').text()).toContain('Скачать')
+  })
 })

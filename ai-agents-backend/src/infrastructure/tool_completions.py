@@ -123,10 +123,25 @@ class DemoToolClient:
     async def complete_with_tools(self, messages, tools, *, model, temperature, max_tokens, tool_choice):
         if messages[-1]["role"] == "tool":
             payload = json.loads(messages[-1]["content"])
+            if payload.get("status") == "saved" and payload.get("report_id"):
+                return ToolCompletion(
+                    content=f"Отчёт сохранён: {payload['file_name']}. Найдено игр: {payload['game_count']}. "
+                            f"ID: {payload['report_id']}.",
+                    model=f"demo/{model}", source="demo", finish_reason="stop",
+                )
             games = payload.get("games", [])
             reply = "Найденные игры: " + "; ".join(f"{item['title']} — {item['description']}" for item in games) if games else "В учебном каталоге таких игр не найдено."
             return ToolCompletion(content=reply, model=f"demo/{model}", source="demo", finish_reason="stop")
         text = next(message["content"] for message in reversed(messages) if message["role"] == "user")
+        report_tool = next((tool for tool in tools
+                            if tool["function"]["name"] == "game_reports__search_games"), None)
+        if report_tool and tool_choice == "required":
+            query = "космос" if "космос" in text.casefold() else self._game_title(text) or text.strip()
+            return ToolCompletion(
+                content="", model=f"demo/{model}", source="demo", finish_reason="tool_calls",
+                tool_calls=[ToolCall(id="demo-report-1", name=report_tool["function"]["name"],
+                                     arguments={"query": query})],
+            )
         if tool_choice != "required" and not self._catalog_requested(text):
             return ToolCompletion(content=self._general_reply(text), model=f"demo/{model}",
                                   source="demo", finish_reason="stop")

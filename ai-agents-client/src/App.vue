@@ -175,7 +175,7 @@ async function saveProblem(problem) {
         :sending="chat.sending.value" :error="invariants.error.value"
         @save="invariants.save" @refresh="invariants.refresh" />
       <GameDigestPanel v-if="chat.agent.value?.capabilities?.includes('scheduled_reports')" :conversation-id="chat.conversation.value?.id" />
-      <ChatThread v-else :messages="chat.messages.value" :runs="chat.runs.value" :tool-events="chat.conversation.value?.tool_events || []" :agent-name="chat.agent.value?.name" :sending="chat.sending.value" :memory-layers="memory.enabled.value" :mcp-tools="chat.agent.value?.capabilities?.includes('mcp_tools')" />
+      <ChatThread v-else :messages="chat.messages.value" :runs="chat.runs.value" :tool-events="chat.conversation.value?.tool_events || []" :agent-name="chat.agent.value?.name" :sending="chat.sending.value" :memory-layers="memory.enabled.value" :mcp-tools="chat.agent.value?.capabilities?.includes('mcp_tools')" :mcp-pipeline="chat.agent.value?.capabilities?.includes('mcp_pipeline')" />
       <MessageComposer v-if="!chat.agent.value?.capabilities?.includes('scheduled_reports')" v-model="chat.draft.value" :disabled="busy || !chat.agentId.value || !chat.conversation.value || !chat.outputLimitValid.value || (workflow.enabled.value && (!workflow.workspace.value || workflow.workspace.value.state.status === 'paused' || workflow.workspace.value.state.phase === 'done'))" :sending="chat.sending.value" @send="chat.send">
         <template v-if="mcpEnabled" #context>
           <div class="mcp-composer-context">
@@ -199,8 +199,8 @@ async function saveProblem(problem) {
       </template>
       <template #context>
         <div v-if="mcpEnabled" class="inspector-mcp-overview">
-          <div class="inspector-feature-heading"><span class="inspector-feature-icon" aria-hidden="true">⌘</span><div><strong>Инструменты MCP</strong><small>Агент проверяет каталог, когда это полезно</small></div></div>
-          <p>Выбранные серверы доступны агенту. Если модель признаёт, что не знает конкретную игру, агент проверит доступный каталог перед ответом. Список можно изменить над полем ввода.</p>
+          <div class="inspector-feature-heading"><span class="inspector-feature-icon" aria-hidden="true">⌘</span><div><strong>Инструменты MCP</strong><small>{{ chat.agent.value?.capabilities?.includes('mcp_pipeline') ? 'Поиск → сводка → файл' : 'Поиск в игровом каталоге' }}</small></div></div>
+          <p>{{ chat.agent.value?.capabilities?.includes('mcp_pipeline') ? 'Попросите создать и сохранить отчёт. Агент по очереди вызовет три инструмента одного MCP-сервера и покажет каждый шаг. Без такой просьбы файл не создаётся.' : 'Выбранные серверы доступны агенту. Если модель признаёт, что не знает конкретную игру, агент проверит доступный каталог перед ответом.' }} Список можно изменить над полем ввода.</p>
           <div v-for="server in chat.mcpServers.value" :key="server.id" class="inspector-server" :class="{ selected: chat.mcpServerIds.value.includes(server.id) }">
             <span aria-hidden="true">{{ chat.mcpServerIds.value.includes(server.id) ? '●' : '○' }}</span><div><strong>{{ server.name }}</strong><small>{{ chat.mcpServerIds.value.includes(server.id) ? 'Доступен следующему сообщению' : 'Не выбран' }}</small></div>
           </div>
@@ -230,7 +230,7 @@ async function saveProblem(problem) {
     </AgentSidebar>
     <NewChatDialog :open="newChatOpen" :busy="busy" :memory-layers="memory.enabled.value" :mcp-tools="chat.agent.value?.capabilities?.includes('mcp_tools')"
       :scheduled-reports="chat.agent.value?.capabilities?.includes('scheduled_reports')"
-      :agent-name="chat.agent.value?.name" :personalization="profiles.enabled.value" :profiles="profiles.profiles.value"
+      :agent-name="chat.agent.value?.name" :agent-id="chat.agentId.value" :personalization="profiles.enabled.value" :profiles="profiles.profiles.value"
       :default-profile-id="profiles.preferredId.value || memory.workspace.value?.profile.id || 'local'"
       @cancel="newChatOpen = false" @create="createNewChat" />
   </div>

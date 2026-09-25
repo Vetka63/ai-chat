@@ -44,7 +44,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', outside))
     </button>
     <div v-if="open" class="mcp-menu" role="dialog" aria-label="MCP для следующего сообщения">
       <div class="mcp-menu-heading"><strong>Инструменты этого сообщения</strong><button type="button" aria-label="Закрыть выбор MCP" @click="close(true)">×</button></div>
-      <p>Отмеченные серверы будут доступны агенту для следующего сообщения. Выбор останется в этом чате, пока вы его не измените. Агент может проверить каталог, если модели не хватает сведений о конкретной игре.</p>
+      <p>Отмеченные серверы будут доступны агенту для следующего сообщения. Выбор останется в этом чате, пока вы его не измените. Инструмент вызывается только когда подходит к запросу.</p>
       <p v-if="error" role="alert" class="mcp-menu-error">{{ error }}</p>
       <p v-if="loading">Загружаем список…</p>
       <fieldset v-else :disabled="busy">

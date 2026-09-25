@@ -11,6 +11,7 @@ class McpServerSummary(BaseModel):
     description: str
     transport: Literal["stdio", "streamable_http"] = "stdio"
     chat_enabled: bool = False
+    agent_ids: list[str] = Field(default_factory=list)
 
 
 class McpToolSummary(BaseModel):

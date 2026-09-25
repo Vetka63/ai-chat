@@ -19,6 +19,7 @@ from capabilities.context_memory.facts import LlmFactsExtractor
 from agents.algorithm_coach.factory import build_algorithm_coach
 from agents.mcp_games.agent import McpGamesAgent
 from agents.game_digest.agent import GameDigestAgent, GameFeedGateway, GameCatalogGateway
+from agents.game_reports.agent import GameReportsAgent
 from infrastructure.tool_completions import ChatCompletionsToolClient, DemoToolClient, ToolProviderRouter
 
 
@@ -70,7 +71,11 @@ def build_registry(
             "mistral": DemoToolClient() if settings.mode == "demo" else ChatCompletionsToolClient(
                 http, settings.mistral_api_key.get_secret_value(), "mistral", settings.mistral_base_url),
         })
-        agents.append(McpGamesAgent(tool_llm, store, catalog, accounting, mcp_gateway, mcp_events, settings.model))
+        agents.append(McpGamesAgent(tool_llm, store, catalog, accounting, mcp_gateway, mcp_events,
+                                    settings.model, allowed_server_ids={"games-mock", "java-games-mock"}))
+        if settings.game_report_mcp_url:
+            agents.append(GameReportsAgent(tool_llm, store, catalog, accounting,
+                                           mcp_gateway, mcp_events, settings.model))
     if settings.game_feed_mcp_url and settings.java_mcp_url:
         agents.append(GameDigestAgent(store, GameFeedGateway(settings.game_feed_mcp_url),
                                       GameCatalogGateway(settings.java_mcp_url)))

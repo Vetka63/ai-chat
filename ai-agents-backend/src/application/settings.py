@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     python_mcp_url: str = ""
     java_mcp_url: str = ""
     game_feed_mcp_url: str = ""
+    game_report_mcp_url: str = ""
 
     @property
     def origins(self) -> list[str]:

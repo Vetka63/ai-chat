@@ -2,7 +2,7 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { listMcpServers } from '../features/mcp/api'
 
-const props = defineProps({ open: Boolean, busy: Boolean, memoryLayers: Boolean, personalization: Boolean, mcpTools: Boolean, scheduledReports: Boolean, profiles: Array, defaultProfileId: String, agentName: String })
+const props = defineProps({ open: Boolean, busy: Boolean, memoryLayers: Boolean, personalization: Boolean, mcpTools: Boolean, scheduledReports: Boolean, profiles: Array, defaultProfileId: String, agentName: String, agentId: String })
 const emit = defineEmits(['cancel', 'create'])
 const dialog = ref(null)
 const title = ref('Новый чат')
@@ -33,7 +33,9 @@ watch(() => props.open, async value => {
     try {
       const response = await listMcpServers()
       if (!props.open) return
-      mcpServers.value = (Array.isArray(response) ? response : response.servers || []).filter(server => server.chat_enabled)
+      mcpServers.value = (Array.isArray(response) ? response : response.servers || []).filter(
+        server => server.chat_enabled && (!server.agent_ids?.length || server.agent_ids.includes(props.agentId)),
+      )
       selectedServers.value = mcpServers.value.length ? [mcpServers.value[0].id] : []
       if (!mcpServers.value.length) mcpError.value = 'Нет MCP-серверов, доступных для чата'
     } catch (cause) { mcpError.value = cause.message }
@@ -67,7 +69,7 @@ function keyboard(event) {
         <fieldset v-if="!scheduledReports" :disabled="busy">
           <legend>{{ mcpTools ? 'Доступные MCP-серверы' : memoryLayers ? 'Три слоя памяти' : 'Стратегия контекста' }}</legend>
           <template v-if="mcpTools">
-            <p class="muted">Это начальный набор инструментов, доступных модели. Она сама решает, когда их вызвать. Можно создать чат без MCP и подключить серверы позже.</p>
+            <p class="muted">Это начальный набор инструментов агента. Можно создать чат без MCP и подключить сервер позже. Отчёт создаётся только по явной просьбе.</p>
             <p v-if="mcpError" role="alert">{{ mcpError }}</p>
             <label v-for="server in mcpServers" :key="server.id" class="mcp-server-option">
               <input v-model="selectedServers" type="checkbox" :value="server.id">

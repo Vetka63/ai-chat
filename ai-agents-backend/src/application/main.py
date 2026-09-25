@@ -75,6 +75,7 @@ def create_app(
             python_mcp_url=resolved.python_mcp_url,
             java_mcp_url=resolved.java_mcp_url,
             game_feed_mcp_url=resolved.game_feed_mcp_url,
+            game_report_mcp_url=resolved.game_report_mcp_url,
         )
         app.state.catalog = ModelCatalog.load(Path(__file__).with_name("models.json"), {
             "deepseek": resolved.mode == "demo" or bool(resolved.api_key.get_secret_value()),
@@ -96,7 +97,7 @@ def create_app(
             )
             yield
 
-    app = FastAPI(title="AI Agents · День 18", version="0.13.0", lifespan=lifespan)
+    app = FastAPI(title="AI Agents · День 19", version="0.14.0", lifespan=lifespan)
     app.include_router(memory_router)
     app.include_router(profile_router)
     app.include_router(workflow_router)
@@ -128,7 +129,7 @@ def create_app(
 
     @app.get("/health")
     async def health():
-        return {"status": "ok", "mode": resolved.mode, "day": 18}
+        return {"status": "ok", "mode": resolved.mode, "day": 19}
 
     @app.get("/api/v1/models")
     async def models(request: Request):

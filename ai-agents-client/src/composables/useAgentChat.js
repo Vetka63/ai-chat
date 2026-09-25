@@ -127,7 +127,9 @@ export function useAgentChat() {
     mcpError.value = ''
     try {
       const response = await listMcpServers()
-      mcpServers.value = (Array.isArray(response) ? response : response.servers || []).filter(item => item.chat_enabled)
+      mcpServers.value = (Array.isArray(response) ? response : response.servers || []).filter(
+        item => item.chat_enabled && (!item.agent_ids?.length || item.agent_ids.includes(agentId.value)),
+      )
       const available = new Set(mcpServers.value.map(item => item.id))
       mcpServerIds.value = mcpServerIds.value.filter(id => available.has(id))
       if (conversation.value) localStorage.setItem(mcpSelectionKey(conversation.value.id), JSON.stringify(mcpServerIds.value))

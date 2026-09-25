@@ -5,8 +5,12 @@ import NewChatDialog from './NewChatDialog.vue'
 
 vi.mock('../features/mcp/api', () => ({ listMcpServers: vi.fn(async () => [
   { id: 'local-demo', name: 'Демо', chat_enabled: false },
-  { id: 'games-mock', name: 'Каталог игр', description: 'Mock API', chat_enabled: true },
-  { id: 'java-games-mock', name: 'Каталог игр · Java / Spring Boot', description: 'HTTP MCP', chat_enabled: true },
+  { id: 'games-mock', name: 'Каталог игр', description: 'Mock API',
+    chat_enabled: true, agent_ids: ['mcp_games'] },
+  { id: 'java-games-mock', name: 'Каталог игр · Java / Spring Boot', description: 'HTTP MCP',
+    chat_enabled: true, agent_ids: ['mcp_games'] },
+  { id: 'game-reports', name: 'Отчёты об играх', description: 'Pipeline',
+    chat_enabled: true, agent_ids: ['game_reports'] },
 ]) }))
 
 describe('new chat configuration', () => {
@@ -36,7 +40,7 @@ describe('new chat configuration', () => {
   })
 
   it('sets editable initial MCP servers for a new chat', async () => {
-    const wrapper = mount(NewChatDialog, { props: { open: true, mcpTools: true } })
+    const wrapper = mount(NewChatDialog, { props: { open: true, mcpTools: true, agentId: 'mcp_games' } })
     await flushPromises()
     expect(wrapper.text()).toContain('Каталог игр')
     expect(wrapper.text()).toContain('Java / Spring Boot')
@@ -51,7 +55,7 @@ describe('new chat configuration', () => {
   })
 
   it('allows choosing only the Java MCP server for comparison', async () => {
-    const wrapper = mount(NewChatDialog, { props: { open: true, mcpTools: true } })
+    const wrapper = mount(NewChatDialog, { props: { open: true, mcpTools: true, agentId: 'mcp_games' } })
     await flushPromises()
     const [python, java] = wrapper.findAll('.mcp-server-option input')
     expect(python.element.checked).toBe(true)
@@ -71,5 +75,16 @@ describe('new chat configuration', () => {
       title: 'Новый чат',
       contextSettings: { mode: 'full', keep_last: 10, summarize_every: 10 },
     })
+  })
+
+  it('offers only the report pipeline when creating a day 19 chat', async () => {
+    const wrapper = mount(NewChatDialog, {
+      props: { open: true, mcpTools: true, agentId: 'game_reports', agentName: 'Отчёты по играм' },
+    })
+    await flushPromises()
+    expect(wrapper.text()).toContain('Отчёты об играх')
+    expect(wrapper.text()).not.toContain('Каталог игр')
+    await wrapper.get('form').trigger('submit')
+    expect(wrapper.emitted('create')[0][0].mcpServerIds).toEqual(['game-reports'])
   })
 })
