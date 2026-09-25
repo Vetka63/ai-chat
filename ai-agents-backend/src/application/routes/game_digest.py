@@ -1,13 +1,15 @@
 """HTTP-управление отдельным чатом периодических сводок."""
 
 from fastapi import APIRouter, Request
-from pydantic import BaseModel, Field
+from typing import Literal
+
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/v1/agents/game_digest/conversations", tags=["game-digest"])
 
 
 class ScheduleRequest(BaseModel):
-    interval_seconds: int = Field(ge=60, le=86400)
+    interval_seconds: Literal[1800] = 1800
 
 
 def agent(request: Request):

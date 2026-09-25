@@ -15,7 +15,7 @@ it('starts a schedule and renders stored reports in the dedicated chat', async (
     if (url.endsWith('/schedule')) return { ok: true, status: 200, json: async () => ({ watch: active ? { status: 'active', next_run_at: '2026-09-24T12:00:00Z' } : null }) }
     if (url.endsWith('/reports')) return { ok: true, status: 200, json: async () => ({ reports: active ? [{
       id: 'r1', created_at: '2026-09-24T12:00:00Z', text: 'Новая игра: Лунный сад',
-      stats: { source: 'generated', total_games: 1, runs: 1 },
+      stats: { source: 'java-mock', new_games: 1, runs: 1 },
     }] : [] }) }
     throw new Error(url)
   }))
@@ -25,6 +25,8 @@ it('starts a schedule and renders stored reports in the dedicated chat', async (
   await wrapper.get('form').trigger('submit')
   await flushPromises()
   expect(fetch).toHaveBeenCalledWith('/api/v1/agents/game_digest/conversations/chat-1/schedule', expect.objectContaining({ method: 'PUT' }))
+  expect(JSON.parse(fetch.mock.calls.find(([url, options]) => url.endsWith('/schedule') && options.method === 'PUT')[1].body).interval_seconds).toBe(1800)
   expect(wrapper.text()).toContain('Сбор включён')
   expect(wrapper.text()).toContain('Новая игра: Лунный сад')
+  expect(wrapper.text()).toContain('Новых игр в сводке: 1 / 10')
 })

@@ -34,4 +34,26 @@ public class GamesCatalogClient {
             throw new IllegalStateException("Каталог игр временно недоступен", ex);
         }
     }
+
+    /** Получает только последние десять игр новее подтверждённого курсора. */
+    public RecentGamesResult newGames(long afterId, int limit) {
+        if (afterId < 0 || limit < 1 || limit > 10) {
+            throw new IllegalArgumentException("Курсор должен быть неотрицательным, лимит — от 1 до 10");
+        }
+        try {
+            RecentGamesResult result = restClient.get()
+                    .uri(uri -> uri.path("/games/latest")
+                            .queryParam("after_id", afterId)
+                            .queryParam("limit", limit)
+                            .build())
+                    .retrieve()
+                    .body(RecentGamesResult.class);
+            if (result == null || result.games() == null) {
+                throw new IllegalStateException("Каталог игр вернул некорректный ответ");
+            }
+            return result;
+        } catch (RestClientException ex) {
+            throw new IllegalStateException("Каталог игр временно недоступен", ex);
+        }
+    }
 }

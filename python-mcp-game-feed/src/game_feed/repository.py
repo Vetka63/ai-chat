@@ -1,4 +1,4 @@
-"""SQLite-хранилище подписок, игр, запусков и последних трёх сводок."""
+"""SQLite-хранилище подписок, курсоров и сводок; игры принадлежат Java mock-сервису."""
 
 import json
 import sqlite3
@@ -6,9 +6,6 @@ from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
-
-from game_feed.source import GameSource
-
 
 def now() -> datetime:
     return datetime.now(UTC)
@@ -43,11 +40,6 @@ class FeedRepository:
                     interval_seconds INTEGER NOT NULL, next_run_at TEXT NOT NULL,
                     status TEXT NOT NULL, created_at TEXT NOT NULL
                 );
-                CREATE TABLE IF NOT EXISTS games (
-                    source TEXT NOT NULL, external_id TEXT NOT NULL, title TEXT NOT NULL,
-                    genre TEXT NOT NULL, description TEXT NOT NULL, added_at TEXT NOT NULL,
-                    PRIMARY KEY (source, external_id)
-                );
                 CREATE TABLE IF NOT EXISTS runs (
                     id TEXT PRIMARY KEY, watch_id TEXT NOT NULL, scheduled_for TEXT NOT NULL,
                     created_at TEXT NOT NULL, added_game_id TEXT, error TEXT,
@@ -59,6 +51,9 @@ class FeedRepository:
                 );
                 CREATE INDEX IF NOT EXISTS reports_watch ON reports(watch_id, created_at DESC);
             """)
+            columns = {row["name"] for row in db.execute("PRAGMA table_info(watches)")}
+            if "last_game_id" not in columns:
+                db.execute("ALTER TABLE watches ADD COLUMN last_game_id INTEGER NOT NULL DEFAULT 0")
 
     def get_watch(self, conversation_id: str):
         with self.connection() as db:
@@ -68,15 +63,17 @@ class FeedRepository:
     def create_watch(self, conversation_id: str, interval_seconds: int):
         if not 60 <= interval_seconds <= 86400:
             raise ValueError("Интервал должен быть от 60 секунд до 24 часов")
-        timestamp = now().isoformat()
+        current = now()
+        timestamp = current.isoformat()
+        first_run = (current + timedelta(seconds=interval_seconds)).isoformat()
         with self.connection() as db:
             previous = db.execute("SELECT id FROM watches WHERE conversation_id=?", (conversation_id,)).fetchone()
             if previous:
                 db.execute("UPDATE watches SET interval_seconds=?, status='active', next_run_at=? WHERE id=?",
-                           (interval_seconds, timestamp, previous["id"]))
+                           (interval_seconds, first_run, previous["id"]))
             else:
-                db.execute("INSERT INTO watches VALUES (?, ?, ?, ?, 'active', ?)",
-                           (str(uuid4()), conversation_id, interval_seconds, timestamp, timestamp))
+                db.execute("INSERT INTO watches (id, conversation_id, interval_seconds, next_run_at, status, created_at) VALUES (?, ?, ?, ?, 'active', ?)",
+                           (str(uuid4()), conversation_id, interval_seconds, first_run, timestamp))
         return self.get_watch(conversation_id)
 
     def cancel_watch(self, conversation_id: str):
@@ -122,8 +119,11 @@ class FeedRepository:
                 db.execute("UPDATE watches SET next_run_at=? WHERE id=? AND status='active'",
                            (scheduled_for, watch_id))
 
-    def collect(self, watch_id: str, scheduled_for: str, source: GameSource):
-        """Идемпотентно создаёт запись запуска и агрегированную сводку."""
+    def save_digest(self, watch_id: str, scheduled_for: str, latest_id: int,
+                    games: list[dict], text: str):
+        """Идемпотентно сохраняет сводку агента и продвигает курсор после успеха."""
+        if latest_id < 0 or len(games) > 10 or not text.strip() or len(text) > 12000:
+            raise ValueError("Некорректная сводка")
         with self.connection() as db:
             db.execute("BEGIN IMMEDIATE")
             watch = db.execute("SELECT * FROM watches WHERE id=?", (watch_id,)).fetchone()
@@ -134,26 +134,23 @@ class FeedRepository:
             if previous:
                 row = db.execute("SELECT * FROM reports WHERE watch_id=? AND created_at=?",
                                  (watch_id, previous["created_at"])).fetchone()
-                return dict(row) if row else {"status": "already_processed"}
-            known = {row["external_id"] for row in db.execute("SELECT external_id FROM games WHERE source=?", (source.name,))}
-            game = source.fetch(known)
+                return {**dict(row), "stats": json.loads(row["stats_json"])} if row else {"status": "already_processed"}
+            if latest_id < watch["last_game_id"]:
+                raise ValueError("Курсор сводки не может уменьшаться")
             created = now().isoformat()
-            if game:
-                db.execute("INSERT OR IGNORE INTO games VALUES (?, ?, ?, ?, ?, ?)",
-                           (source.name, game.external_id, game.title, game.genre, game.description, created))
             db.execute("INSERT INTO runs VALUES (?, ?, ?, ?, ?, NULL)",
-                       (str(uuid4()), watch_id, scheduled_for, created, game.external_id if game else None))
-            total = db.execute("SELECT COUNT(*) AS n FROM games").fetchone()["n"]
+                       (str(uuid4()), watch_id, scheduled_for, created, None))
+            db.execute("UPDATE watches SET last_game_id=? WHERE id=?", (latest_id, watch_id))
             runs = db.execute("SELECT COUNT(*) AS n FROM runs WHERE watch_id=?", (watch_id,)).fetchone()["n"]
-            stats = {"total_games": total, "runs": runs, "new_games": int(game is not None), "source": source.name}
-            text = (f"Новая игра: {game.title} ({game.genre}). {game.description} " if game else "Новых игр в генераторе пока нет. ")
-            text += f"Всего в каталоге: {total}. Запусков подписки: {runs}."
+            stats = {"runs": runs, "new_games": len(games), "source": "java-mock",
+                     "last_game_id": latest_id, "games": games}
             report_id = str(uuid4())
             db.execute("INSERT INTO reports VALUES (?, ?, ?, ?, ?)",
-                       (report_id, watch_id, created, text, json.dumps(stats, ensure_ascii=False)))
+                       (report_id, watch_id, created, text.strip(), json.dumps(stats, ensure_ascii=False)))
             db.execute("DELETE FROM reports WHERE watch_id=? AND id NOT IN (SELECT id FROM reports WHERE watch_id=? ORDER BY created_at DESC, rowid DESC LIMIT 3)",
                        (watch_id, watch_id))
-            return {"id": report_id, "watch_id": watch_id, "created_at": created, "text": text, "stats": stats}
+            return {"id": report_id, "watch_id": watch_id, "created_at": created,
+                    "text": text.strip(), "stats": stats}
 
     def list_reports(self, conversation_id: str):
         watch = self.get_watch(conversation_id)

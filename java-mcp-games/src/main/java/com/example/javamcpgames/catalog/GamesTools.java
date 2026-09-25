@@ -27,4 +27,14 @@ public class GamesTools {
                                    String query) {
         return catalog.search(query);
     }
+
+    /** Инструмент агента дня 18: не обрезает SQL-каталог, а ограничивает одну сводку. */
+    @McpTool(name = "get_new_games", description = "Получить до десяти самых новых игр, созданных после afterId. "
+            + "Игры хранятся в Java mock-сервисе; если за период их больше десяти, в сводку попадают последние десять.",
+            generateOutputSchema = true)
+    public RecentGamesResult getNewGames(
+            @McpToolParam(description = "ID последней игры предыдущей успешной сводки", required = true) long afterId,
+            @McpToolParam(description = "Максимум игр в новой сводке, от 1 до 10", required = true) int limit) {
+        return catalog.newGames(afterId, limit);
+    }
 }

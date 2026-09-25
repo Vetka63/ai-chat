@@ -58,4 +58,21 @@ class GamesCatalogClientTest {
         assertEquals(0, result.games().size());
         server.verify();
     }
+
+    @Test
+    void getsTenNewestGamesAfterPreviousDigestCursor() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        server.expect(requestTo("http://games.test/games/latest?after_id=12&limit=10"))
+                .andRespond(withSuccess("""
+                    {"latest_id":22,"count":1,"games":[{"id":22,"title":"Новая игра",
+                    "genre":"Стратегия","description":"Описание","created_at":"2026-09-25T10:00:00Z"}]}
+                    """, MediaType.APPLICATION_JSON));
+        RecentGamesResult result = new GamesCatalogClient(builder, "http://games.test").newGames(12, 10);
+        assertEquals(22, result.latest_id());
+        assertEquals(22, result.games().getFirst().id());
+        assertThrows(IllegalArgumentException.class,
+                () -> new GamesCatalogClient(builder, "http://games.test").newGames(0, 11));
+        server.verify();
+    }
 }

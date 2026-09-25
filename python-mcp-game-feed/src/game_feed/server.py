@@ -1,4 +1,4 @@
-"""HTTP MCP-сервер: управление подписками и выполнение одного сбора."""
+"""HTTP MCP-сервер: подписки и сохранение результатов, но не каталог игр."""
 
 import os
 from typing import Any
@@ -7,12 +7,10 @@ from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
 from game_feed.repository import FeedRepository
-from game_feed.source import GeneratedGameSource, GameSource
 
 
-def create_server(repository: FeedRepository, source: GameSource | None = None) -> MCPServer:
+def create_server(repository: FeedRepository) -> MCPServer:
     mcp = MCPServer("Game Feed")
-    game_source = source or GeneratedGameSource()
 
     @mcp.tool()
     async def create_watch(conversation_id: str, interval_seconds: int) -> dict[str, Any]:
@@ -20,7 +18,7 @@ def create_server(repository: FeedRepository, source: GameSource | None = None) 
 
         Args:
             conversation_id: ID чата агента игровых сводок.
-            interval_seconds: Интервал от 60 до 86400 секунд.
+            interval_seconds: Интервал сводки в секундах; UI задаёт 1800.
         """
         if not conversation_id or len(conversation_id) > 64:
             raise ToolError("Некорректный идентификатор чата")
@@ -50,15 +48,24 @@ def create_server(repository: FeedRepository, source: GameSource | None = None) 
         return repository.delete_watch(conversation_id)
 
     @mcp.tool()
-    async def collect_games(watch_id: str, scheduled_for: str) -> dict[str, Any]:
-        """Выполнить один зарезервированный запуск; инструмент вызывает worker.
+    async def claim_due(limit: int = 10) -> dict[str, Any]:
+        """Выдать агентному планировщику наступившие подписки."""
+        if not 1 <= limit <= 100:
+            raise ToolError("Лимит должен быть от 1 до 100")
+        return {"watches": repository.claim_due(limit)}
 
-        Args:
-            watch_id: ID подписки, созданной инструментом create_watch.
-            scheduled_for: UTC-время зарезервированного запуска в формате ISO 8601.
-        """
+    @mcp.tool()
+    async def release_failed(watch_id: str, scheduled_for: str) -> dict[str, Any]:
+        """Вернуть неудавшийся запуск в очередь для безопасного повтора."""
+        repository.release_failed(watch_id, scheduled_for)
+        return {"released": True}
+
+    @mcp.tool()
+    async def save_digest(watch_id: str, scheduled_for: str, latest_id: int,
+                          games: list[dict[str, Any]], text: str) -> dict[str, Any]:
+        """Сохранить сводку агента из максимум десяти новых игр в SQLite."""
         try:
-            return {"report": repository.collect(watch_id, scheduled_for, game_source)}
+            return {"report": repository.save_digest(watch_id, scheduled_for, latest_id, games, text)}
         except ValueError as exc:
             raise ToolError(str(exc)) from exc
 

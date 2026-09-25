@@ -1,0 +1,13 @@
+server:
+  port: 8080
+spring:
+  datasource:
+    url: ${GAMES_DB_URL:jdbc:h2:file:/app/data/games;DB_CLOSE_ON_EXIT=FALSE}
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+games:
+  generation:
+    enabled: ${GAMES_GENERATION_ENABLED:true}
+    interval-ms: ${GAMES_GENERATION_INTERVAL_MS:120000}
+    initial-delay-ms: ${GAMES_GENERATION_INITIAL_DELAY_MS:0}

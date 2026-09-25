@@ -82,11 +82,16 @@ services:
 
   games-mock-api:
     build:
-      context: ./ai-games-mock-api
+      context: ./mock-games-server
+    environment:
+      GAMES_DB_URL: jdbc:h2:file:/app/data/games;DB_CLOSE_ON_EXIT=FALSE
+      GAMES_GENERATION_INTERVAL_MS: "120000"
+    volumes:
+      - mock-games-data:/app/data
     ports:
       - "8084:8080"
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/8080'"]
       interval: 10s
       timeout: 3s
       retries: 10
@@ -145,19 +150,21 @@ services:
 
   game-feed-worker:
     build:
-      context: ./python-mcp-game-feed
-    command: ["python", "-m", "game_feed.worker"]
+      context: ./ai-agents-backend
+    command: ["python", "-m", "agents.game_digest.scheduler"]
     environment:
-      GAME_FEED_DB: /app/data/game-feed.sqlite3
-      GAME_FEED_MCP_URL: http://python-mcp-game-feed:8080/mcp
-      GAME_FEED_POLL_SECONDS: "5"
+      PY_AGENT_DATABASE_PATH: /app/data/agents.sqlite3
+      PY_AGENT_GAME_FEED_MCP_URL: http://python-mcp-game-feed:8080/mcp
+      PY_AGENT_JAVA_MCP_URL: http://java-mcp-games:8080/mcp
+      GAME_DIGEST_POLL_SECONDS: "5"
     volumes:
-      - game-feed-data:/app/data
+      - agents-data:/app/data
     depends_on:
-      python-mcp-game-feed:
+      agents-backend:
         condition: service_healthy
     restart: unless-stopped
 
 volumes:
   agents-data:
   game-feed-data:
+  mock-games-data:

@@ -5,7 +5,6 @@ import { getDigestReports, getDigestStatus, startDigest, stopDigest } from './ap
 const props = defineProps({ conversationId: String })
 const watchState = ref(null)
 const reports = ref([])
-const minutes = ref(1)
 const busy = ref(false)
 const error = ref('')
 let timer
@@ -44,7 +43,7 @@ async function start() {
   if (!id || busy.value) return
   busy.value = true
   try {
-    await startDigest(id, Number(minutes.value) * 60)
+    await startDigest(id, 1800)
     await refresh()
   } catch (cause) { error.value = cause.message }
   finally { busy.value = false }
@@ -70,16 +69,16 @@ const date = value => value ? new Date(value).toLocaleString('ru-RU') : '—'
       <div class="digest-heading">
         <span class="digest-symbol" aria-hidden="true">✦</span>
         <div><p class="digest-kicker">ДЕНЬ 18 · MCP И ФОНОВЫЕ ЗАДАЧИ</p><h1>Игровые сводки</h1>
-          <p>Генератор добавляет вымышленные игры в каталог по расписанию. Worker вызывает MCP-инструмент; здесь появляются три последние сводки.</p></div>
+          <p>Java mock-сервис добавляет игру каждые 2 минуты. Раз в 30 минут планировщик запускает агента: он получает через MCP до 10 новейших игр и сохраняет сводку.</p></div>
       </div>
       <div v-if="!conversationId" class="digest-card">Создайте чат «Игровые сводки», чтобы настроить расписание.</div>
       <template v-else>
         <form class="digest-card digest-controls" @submit.prevent="start">
           <div><strong>{{ watchState?.status === 'active' ? 'Сбор включён' : 'Сбор остановлен' }}</strong>
             <p v-if="watchState?.status === 'active'">Следующий запуск: {{ date(watchState.next_run_at) }}. Отчёты обновляются автоматически каждые 10 секунд.</p>
-            <p v-else>Задайте интервал и запустите подписку. Первый сбор произойдёт почти сразу.</p></div>
-          <div class="digest-actions"><label>Интервал, минут <input v-model.number="minutes" type="number" min="1" max="1440" required></label>
-            <button class="digest-primary" type="submit" :disabled="busy || !minutes || minutes < 1 || minutes > 1440">{{ watchState?.status === 'active' ? 'Обновить интервал' : 'Запустить' }}</button>
+            <p v-else>Включите сводку. Первый сбор произойдёт через 30 минут; каталог продолжит пополняться независимо от чата.</p></div>
+          <div class="digest-actions">
+            <button class="digest-primary" type="submit" :disabled="busy">{{ watchState?.status === 'active' ? 'Перезапустить расписание' : 'Запустить каждые 30 минут' }}</button>
             <button v-if="watchState?.status === 'active'" type="button" :disabled="busy" @click="stop">Остановить</button></div>
         </form>
         <p v-if="error" class="digest-error" role="alert">{{ error }} <button @click="refresh">Повторить</button></p>
@@ -87,9 +86,9 @@ const date = value => value ? new Date(value).toLocaleString('ru-RU') : '—'
           <h2>Последние сводки <span>{{ reports.length }}/3</span></h2>
           <p v-if="!reports.length" class="digest-empty">Пока нет сводок. После запуска worker здесь появится первый результат.</p>
           <article v-for="report in reports" :key="report.id" class="digest-card digest-report">
-            <div class="digest-meta"><span>СВОДКА · {{ date(report.created_at) }}</span><span>{{ report.stats?.source === 'generated' ? 'Генератор' : report.stats?.source }}</span></div>
+            <div class="digest-meta"><span>СВОДКА · {{ date(report.created_at) }}</span><span>Java SQL-каталог</span></div>
             <p>{{ report.text }}</p>
-            <small>Игр в каталоге: {{ report.stats?.total_games }} · Запусков: {{ report.stats?.runs }}</small>
+            <small>Новых игр в сводке: {{ report.stats?.new_games }} / 10 · Запусков: {{ report.stats?.runs }}</small>
           </article>
         </div>
       </template>

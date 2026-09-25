@@ -1,19 +1,21 @@
 # AI Chat
 
-## День 18: игровые сводки по расписанию
+## День 18-v2: игровые сводки по расписанию
 
-В ветке `ai-challenge-day-18` добавлен отдельный
-[MCP-сервис игровых сводок](python-mcp-game-feed/README.md) и worker. Генератор
-создаёт вымышленные игры, worker вызывает MCP-инструмент, SQLite хранит данные,
-а новый агент «Игровые сводки» показывает три последние сводки в отдельном чате.
-IGDB в эту итерацию не входит.
+В ветке ai-challenge-day-18-v2 отдельный
+[Java mock-сервис](mock-games-server/README.md) хранит *все* игры в SQL
+и добавляет новую каждые две минуты. Планировщик каждые 30 минут будит
+[агента игровых сводок](ai-agents-backend/src/agents/game_digest/README.md):
+тот получает через Java MCP максимум десять новых игр и сохраняет отчёт через
+[Feed MCP](python-mcp-game-feed/README.md). Три последних выпуска видны в UI.
+Лимит десять применяется к одной сводке, **не** к базе игр.
+[Архитектура и проверка](ai-agents-backend/docs/day18-v2-guide.md).
 
 ```powershell
-docker compose up -d --build python-mcp-game-feed game-feed-worker agents-backend agents-client
+docker compose -p ai-chat-day-18-v2 up -d --build agents-client game-feed-worker
 ```
 
-Откройте <http://localhost:8083>, выберите агента «Игровые сводки» и создайте чат.
-День 17 с игровым поиском сохранён без изменений.
+Клиент: <http://localhost:8083>. IGDB в эту итерацию не входит.
 
 ## День 17: два игровых MCP-сервера
 
@@ -68,7 +70,7 @@ docker compose -p ai-chat-day-8 up -d --build agents-backend agents-client
 - **ai-chat-client** — Vue 3 + Vite интерфейс;
 - **ai-agents-backend** — FastAPI backend с изолированным агентом Дней 6–7;
 - **ai-agents-client** — отдельный Vue 3 интерфейс для Python-агентов;
-- **ai-games-mock-api** — общий HTTP-каталог вымышленных игр;
+- **mock-games-server** — Java HTTP-каталог вымышленных игр с SQL-хранилищем и генератором;
 - **python-mcp-games** — самостоятельный Python MCP-сервер по HTTP;
 - **java-mcp-games** — независимый Spring Boot MCP-сервер для сравнения с Python-версией;
 - API-ключ и системные промпты не передаются в браузер;
