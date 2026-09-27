@@ -21,6 +21,7 @@ it('starts a schedule and renders stored reports in the dedicated chat', async (
   }))
   const wrapper = mount(GameDigestPanel, { props: { conversationId: 'chat-1' } })
   await flushPromises()
+  expect(wrapper.text()).toContain('каждые 20 секунд')
   expect(wrapper.text()).toContain('Сбор остановлен')
   await wrapper.get('form').trigger('submit')
   await flushPromises()

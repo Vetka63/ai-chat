@@ -6,7 +6,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-/** Каждые 30 секунд пополняет SQL-базу одной новой вымышленной игрой. */
+/** Каждые 20 секунд пополняет SQL-базу одной новой вымышленной игрой. */
 @Component
 public class GameGenerator {
     private static final String[] PLACES = {"Лунный", "Лесной", "Океанский", "Облачный", "Пиксельный"};
@@ -20,7 +20,7 @@ public class GameGenerator {
         this.enabled = enabled;
     }
 
-    @Scheduled(fixedDelayString = "${games.generation.interval-ms:30000}",
+    @Scheduled(fixedDelayString = "${games.generation.interval-ms:20000}",
                initialDelayString = "${games.generation.initial-delay-ms:0}")
     public void generate() {
         if (!enabled) return;

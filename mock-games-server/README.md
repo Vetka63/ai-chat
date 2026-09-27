@@ -7,7 +7,7 @@ generated_games хранит **все** автоматически создан�
 старых записей.
 
 GameGenerator создаёт одну вымышленную игру при старте и затем каждые
-30 секунд. Интервал задаётся GAMES_GENERATION_INTERVAL_MS. REST API:
+20 секунд. Интервал задаётся GAMES_GENERATION_INTERVAL_MS. REST API:
 
 - GET /games?query=космос — поиск по каталогу, совместимый с днём 17;
 - GET /games/latest?after_id=0&limit=10 — не более десяти *новых после
@@ -25,5 +25,5 @@ GameGenerator создаёт одну вымышленную игру при с�
 
 Проверка: docker compose -p ai-chat-day-18-v2 up -d --build agents-client
 game-feed-worker, затем откройте http://localhost:8084/games/latest?after_id=0.
-Через 30 секунд latest_id увеличится, при этом старые игры останутся в базе.
+Через 20 секунд latest_id увеличится, при этом старые игры останутся в базе.
 В Docker сборка проекта выполняет тесты.

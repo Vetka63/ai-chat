@@ -69,7 +69,7 @@ const date = value => value ? new Date(value).toLocaleString('ru-RU') : '—'
       <div class="digest-heading">
         <span class="digest-symbol" aria-hidden="true">✦</span>
         <div><p class="digest-kicker">ДЕНЬ 18 · MCP И ФОНОВЫЕ ЗАДАЧИ</p><h1>Игровые сводки</h1>
-          <p>Java mock-сервис добавляет игру каждые 30 секунд. Раз в 5 минут планировщик запускает агента: он получает через MCP до 10 новейших игр и сохраняет сводку.</p></div>
+          <p>Java mock-сервис добавляет игру каждые 20 секунд. Раз в 5 минут планировщик запускает агента: он получает через MCP до 10 новейших игр и сохраняет сводку.</p></div>
       </div>
       <div v-if="!conversationId" class="digest-card">Создайте чат «Игровые сводки», чтобы настроить расписание.</div>
       <template v-else>

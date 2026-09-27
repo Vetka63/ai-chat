@@ -9,5 +9,5 @@ spring:
 games:
   generation:
     enabled: ${GAMES_GENERATION_ENABLED:true}
-    interval-ms: ${GAMES_GENERATION_INTERVAL_MS:30000}
+    interval-ms: ${GAMES_GENERATION_INTERVAL_MS:20000}
     initial-delay-ms: ${GAMES_GENERATION_INITIAL_DELAY_MS:0}
