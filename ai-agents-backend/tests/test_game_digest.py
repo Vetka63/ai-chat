@@ -27,12 +27,12 @@ def test_digest_chat_schedule_reports_and_cleanup(tmp_path, monkeypatch):
         assert created.status_code == 201, created.text
         conversation_id = created.json()["id"]
         base = f"/api/v1/agents/game_digest/conversations/{conversation_id}"
-        assert api.put(base + "/schedule", json={"interval_seconds": 30}).status_code == 422
-        assert api.put(base + "/schedule", json={"interval_seconds": 1800}).status_code == 200
+        assert api.put(base + "/schedule", json={"interval_seconds": 1800}).status_code == 422
+        assert api.put(base + "/schedule", json={"interval_seconds": 300}).status_code == 200
         assert api.get(base + "/reports").json()["reports"][0]["text"] == "Новая игра"
         assert api.post("/api/v1/agents/game_digest/runs", json={"conversation_id": conversation_id, "message": "Привет"}).status_code == 422
         assert api.delete(base).status_code == 204
-    assert calls[0] == ("create_watch", {"conversation_id": conversation_id, "interval_seconds": 1800})
+    assert calls[0] == ("create_watch", {"conversation_id": conversation_id, "interval_seconds": 300})
     assert calls[-1] == ("delete_watch", {"conversation_id": conversation_id})
 
 

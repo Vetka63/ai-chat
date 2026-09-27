@@ -246,7 +246,7 @@ describe('Day 10 client', () => {
     await wrapper.get('.digest-panel form').trigger('submit')
     await flushPromises()
     const scheduled = fetch.mock.calls.find(([url, options = {}]) => url.endsWith('/digest-1/schedule') && options.method === 'PUT')
-    expect(JSON.parse(scheduled[1].body)).toEqual({ interval_seconds: 1800 })
+    expect(JSON.parse(scheduled[1].body)).toEqual({ interval_seconds: 300 })
   })
 
   it('opens the separate MCP section and returns to the chat', async () => {

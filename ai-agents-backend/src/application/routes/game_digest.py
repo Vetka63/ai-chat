@@ -9,7 +9,7 @@ router = APIRouter(prefix="/api/v1/agents/game_digest/conversations", tags=["gam
 
 
 class ScheduleRequest(BaseModel):
-    interval_seconds: Literal[1800] = 1800
+    interval_seconds: Literal[300] = 300
 
 
 def agent(request: Request):

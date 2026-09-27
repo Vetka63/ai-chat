@@ -54,6 +54,15 @@ class FeedRepository:
             columns = {row["name"] for row in db.execute("PRAGMA table_info(watches)")}
             if "last_game_id" not in columns:
                 db.execute("ALTER TABLE watches ADD COLUMN last_game_id INTEGER NOT NULL DEFAULT 0")
+            # Действующие подписки прежней версии не должны ждать 30 минут
+            # после перехода на пятиминутный выпуск. Более ранний запуск сохраняем.
+            next_five_minute_run = (now() + timedelta(seconds=300)).isoformat()
+            db.execute("""
+                UPDATE watches
+                SET interval_seconds=300,
+                    next_run_at=CASE WHEN next_run_at > ? THEN ? ELSE next_run_at END
+                WHERE status='active' AND interval_seconds=1800
+            """, (next_five_minute_run, next_five_minute_run))
 
     def get_watch(self, conversation_id: str):
         with self.connection() as db:

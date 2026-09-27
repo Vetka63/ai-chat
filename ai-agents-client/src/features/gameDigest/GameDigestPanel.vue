@@ -43,7 +43,7 @@ async function start() {
   if (!id || busy.value) return
   busy.value = true
   try {
-    await startDigest(id, 1800)
+    await startDigest(id, 300)
     await refresh()
   } catch (cause) { error.value = cause.message }
   finally { busy.value = false }
@@ -69,16 +69,16 @@ const date = value => value ? new Date(value).toLocaleString('ru-RU') : '—'
       <div class="digest-heading">
         <span class="digest-symbol" aria-hidden="true">✦</span>
         <div><p class="digest-kicker">ДЕНЬ 18 · MCP И ФОНОВЫЕ ЗАДАЧИ</p><h1>Игровые сводки</h1>
-          <p>Java mock-сервис добавляет игру каждые 2 минуты. Раз в 30 минут планировщик запускает агента: он получает через MCP до 10 новейших игр и сохраняет сводку.</p></div>
+          <p>Java mock-сервис добавляет игру каждые 30 секунд. Раз в 5 минут планировщик запускает агента: он получает через MCP до 10 новейших игр и сохраняет сводку.</p></div>
       </div>
       <div v-if="!conversationId" class="digest-card">Создайте чат «Игровые сводки», чтобы настроить расписание.</div>
       <template v-else>
         <form class="digest-card digest-controls" @submit.prevent="start">
           <div><strong>{{ watchState?.status === 'active' ? 'Сбор включён' : 'Сбор остановлен' }}</strong>
             <p v-if="watchState?.status === 'active'">Следующий запуск: {{ date(watchState.next_run_at) }}. Отчёты обновляются автоматически каждые 10 секунд.</p>
-            <p v-else>Включите сводку. Первый сбор произойдёт через 30 минут; каталог продолжит пополняться независимо от чата.</p></div>
+            <p v-else>Включите сводку. Первый сбор произойдёт через 5 минут; каталог продолжит пополняться независимо от чата.</p></div>
           <div class="digest-actions">
-            <button class="digest-primary" type="submit" :disabled="busy">{{ watchState?.status === 'active' ? 'Перезапустить расписание' : 'Запустить каждые 30 минут' }}</button>
+            <button class="digest-primary" type="submit" :disabled="busy">{{ watchState?.status === 'active' ? 'Перезапустить расписание' : 'Запустить каждые 5 минут' }}</button>
             <button v-if="watchState?.status === 'active'" type="button" :disabled="busy" @click="stop">Остановить</button></div>
         </form>
         <p v-if="error" class="digest-error" role="alert">{{ error }} <button @click="refresh">Повторить</button></p>
