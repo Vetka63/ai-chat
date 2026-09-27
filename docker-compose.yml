@@ -52,6 +52,7 @@ services:
       PY_AGENT_JAVA_MCP_URL: http://java-mcp-games:8080/mcp
       PY_AGENT_GAME_FEED_MCP_URL: http://python-mcp-game-feed:8080/mcp
       PY_AGENT_GAME_REPORT_MCP_URL: http://python-mcp-game-reports:8080/mcp
+      PY_AGENT_GO_REPORT_MCP_URL: http://go-mcp-report-store:8080/mcp
     depends_on:
       games-mock-api:
         condition: service_healthy
@@ -62,6 +63,8 @@ services:
       python-mcp-game-feed:
         condition: service_healthy
       python-mcp-game-reports:
+        condition: service_healthy
+      go-mcp-report-store:
         condition: service_healthy
     volumes:
       - agents-data:/app/data
@@ -187,8 +190,25 @@ services:
       retries: 12
       start_period: 10s
 
+  go-mcp-report-store:
+    build:
+      context: ./go-mcp-report-store
+    environment:
+      REPORT_DIR: /app/data/reports
+    volumes:
+      - go-report-data:/app/data
+    ports:
+      - "127.0.0.1:${GO_REPORT_MCP_PORT:-8089}:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
 volumes:
   agents-data:
   game-feed-data:
   mock-games-data:
   game-report-data:
+  go-report-data:

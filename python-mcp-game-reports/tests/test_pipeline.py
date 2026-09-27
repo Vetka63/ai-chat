@@ -1,4 +1,4 @@
-"""Три самостоятельных MCP-tools и точная передача результата между ними."""
+"""Четыре MCP-tools и точная передача результатов между ними."""
 
 from uuid import uuid4
 
@@ -19,17 +19,18 @@ def catalog_response(request):
 
 
 @pytest.mark.asyncio
-async def test_three_registered_tools_pass_exact_results_and_save_once(tmp_path):
+async def test_registered_tools_pass_exact_results_and_save_once(tmp_path):
     async with httpx.AsyncClient(base_url="http://mock.test",
                                  transport=httpx.MockTransport(catalog_response)) as http:
         async with Client(create_server("http://mock.test", tmp_path, http)) as client:
             tools = (await client.list_tools()).tools
             assert {tool.name for tool in tools} == {
-                "search_games", "summarize_games", "save_report",
+                "search_games", "summarize_games", "compose_report", "save_report",
             }
             assert "query" in next(tool for tool in tools if tool.name == "search_games").input_schema["properties"]
             assert "search_result" in next(tool for tool in tools if tool.name == "summarize_games").input_schema["properties"]
             assert "summary_result" in next(tool for tool in tools if tool.name == "save_report").input_schema["properties"]
+            assert "summaries" in next(tool for tool in tools if tool.name == "compose_report").input_schema["properties"]
 
             search = await client.call_tool("search_games", {"query": "космос"})
             assert not search.is_error
@@ -51,6 +52,24 @@ async def test_three_registered_tools_pass_exact_results_and_save_once(tmp_path)
     assert result["report_markdown"] == summary.structured_content["markdown"]
     assert (tmp_path / result["file_name"]).read_text(encoding="utf-8") == result["report_markdown"]
     assert len(list(tmp_path.glob("*.md"))) == 1
+
+
+@pytest.mark.asyncio
+async def test_compose_report_uses_only_selected_summaries(tmp_path):
+    async with Client(create_server("http://mock.test", tmp_path)) as client:
+        result = await client.call_tool("compose_report", {
+            "title": "Космос и сад",
+            "summaries": [
+                {"id": "space", "title": "Космос", "markdown": "Звёздные тропы"},
+                {"id": "garden", "title": "Сад", "markdown": "Сад ветров"},
+            ],
+        })
+    assert not result.is_error
+    draft = result.structured_content
+    assert draft["source_summary_ids"] == ["space", "garden"]
+    assert "Звёздные тропы" in draft["markdown"]
+    assert "Сад ветров" in draft["markdown"]
+    assert "Городской вираж" not in draft["markdown"]
 
 
 @pytest.mark.asyncio

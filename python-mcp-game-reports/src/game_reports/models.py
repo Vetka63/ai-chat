@@ -21,6 +21,18 @@ class SummaryResult(BaseModel):
     markdown: str
 
 
+class SummarySource(BaseModel):
+    id: str = Field(min_length=1)
+    title: str = Field(min_length=1)
+    markdown: str = Field(min_length=1)
+
+
+class ReportDraft(BaseModel):
+    title: str = Field(min_length=1)
+    markdown: str = Field(min_length=1)
+    source_summary_ids: list[str] = Field(min_length=1)
+
+
 class ReportResult(BaseModel):
     status: Literal["saved"] = "saved"
     report_id: str

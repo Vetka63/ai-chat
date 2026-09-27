@@ -191,7 +191,7 @@ export function useAgentChat() {
     try {
       const created = await api.createConversation(agentId.value, title, settings, problem, profileId, mcpServerIds)
       conversations.value.unshift(created)
-      conversation.value = { ...created, messages: [], tool_events: [] }
+      conversation.value = { ...created, messages: [], tool_events: [], artifacts: [] }
       if (agent.value?.capabilities?.includes('mcp_tools')) changeMcpServers(created.mcp_server_ids || [])
       contextSettings.value = { ...created.context_settings }
       localStorage.setItem(selectedKey(agentId.value), created.id)
@@ -242,6 +242,7 @@ export function useAgentChat() {
       target.messages.push({ role: 'assistant', content: result.reply, model: result.model, source: result.source })
       target.runs = [...(target.runs || []), ...(result.additional_runs || []), ...(result.run ? [result.run] : [])]
       target.tool_events = [...(target.tool_events || []), ...(result.tool_events || [])]
+      if (result.artifacts) target.artifacts = result.artifacts
       target.summary = result.summary || null
       target.facts = result.facts || null
       target.token_savings = result.token_savings || null

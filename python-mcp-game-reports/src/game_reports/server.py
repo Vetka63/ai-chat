@@ -8,8 +8,8 @@ import httpx
 from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
-from game_reports.models import ReportResult, SearchResult, SummaryResult
-from game_reports.pipeline import FileReportStore, GameCatalog, PipelineError, summarize_games as summarize_search_result
+from game_reports.models import ReportResult, SearchResult, SummaryResult, SummarySource
+from game_reports.pipeline import FileReportStore, GameCatalog, PipelineError, compose_report as compose_summaries, summarize_games as summarize_search_result
 
 
 def create_server(api_url: str, report_dir: Path, http: httpx.AsyncClient | None = None) -> MCPServer:
@@ -40,6 +40,19 @@ def create_server(api_url: str, report_dir: Path, http: httpx.AsyncClient | None
             search_result: Структурированный результат предыдущего MCP-вызова.
         """
         return summarize_search_result(search_result).model_dump()
+
+    @mcp.tool()
+    async def compose_report(title: str, summaries: list[SummarySource]) -> dict[str, Any]:
+        """Объединить выбранные сохранённые сводки в один отчёт.
+
+        Args:
+            title: Название итогового отчёта.
+            summaries: Проверенные сводки, которые нужно включить; не все найденные игры.
+        """
+        try:
+            return compose_summaries(title, summaries).model_dump()
+        except PipelineError as exc:
+            raise ToolError(str(exc)) from exc
 
     @mcp.tool()
     async def save_report(summary_result: SummaryResult, operation_id: str) -> dict[str, Any]:

@@ -36,6 +36,7 @@ from application.routes.mcp import router as mcp_router
 from application.routes.game_digest import router as game_digest_router
 from capabilities.mcp_discovery.service import McpDiscoveryError, McpDiscoveryService
 from infrastructure.sqlite_mcp_events import SqliteMcpEventRepository
+from infrastructure.sqlite_mcp_artifacts import SqliteMcpArtifactRepository
 
 logger = logging.getLogger(__name__)
 
@@ -71,11 +72,14 @@ def create_app(
         app.state.profiles = SqliteProfileRepository(active_store)
         app.state.mcp_events = SqliteMcpEventRepository(active_store)
         await app.state.mcp_events.initialize()
+        app.state.mcp_artifacts = SqliteMcpArtifactRepository(active_store)
+        await app.state.mcp_artifacts.initialize()
         app.state.mcp_discovery = McpDiscoveryService(
             python_mcp_url=resolved.python_mcp_url,
             java_mcp_url=resolved.java_mcp_url,
             game_feed_mcp_url=resolved.game_feed_mcp_url,
             game_report_mcp_url=resolved.game_report_mcp_url,
+            go_report_mcp_url=resolved.go_report_mcp_url,
         )
         app.state.catalog = ModelCatalog.load(Path(__file__).with_name("models.json"), {
             "deepseek": resolved.mode == "demo" or bool(resolved.api_key.get_secret_value()),
@@ -93,11 +97,11 @@ def create_app(
                 resolved, http, active_store, app.state.catalog, app.state.usage,
                 app.state.summaries, app.state.facts, app.state.branches,
                 app.state.memory_layers, app.state.workflow, app.state.invariants,
-                app.state.mcp_discovery, app.state.mcp_events,
+                app.state.mcp_discovery, app.state.mcp_events, app.state.mcp_artifacts,
             )
             yield
 
-    app = FastAPI(title="AI Agents · День 19", version="0.14.0", lifespan=lifespan)
+    app = FastAPI(title="AI Agents · День 20", version="0.15.0", lifespan=lifespan)
     app.include_router(memory_router)
     app.include_router(profile_router)
     app.include_router(workflow_router)
@@ -129,7 +133,7 @@ def create_app(
 
     @app.get("/health")
     async def health():
-        return {"status": "ok", "mode": resolved.mode, "day": 19}
+        return {"status": "ok", "mode": resolved.mode, "day": 20}
 
     @app.get("/api/v1/models")
     async def models(request: Request):
@@ -179,6 +183,7 @@ def create_app(
         result.checkpoints = await request.app.state.branches.list_checkpoints(agent_id, conversation_id)
         result.token_savings = calculate_token_savings(result.runs)
         result.tool_events = await request.app.state.mcp_events.list(agent_id, conversation_id)
+        result.artifacts = await request.app.state.mcp_artifacts.list(agent_id, conversation_id)
         return result
 
     @app.patch("/api/v1/agents/{agent_id}/conversations/{conversation_id}/context")

@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from capabilities.token_accounting.models import RunRecord, TokenSavings, TokenUsage
 from capabilities.context_memory.models import Checkpoint, ContextSettings, FactsState, SummaryState
 from capabilities.mcp_discovery.models import McpToolEvent
+from capabilities.mcp_orchestration.models import Artifact
 
 
 class StrictModel(BaseModel):
@@ -92,6 +93,7 @@ class AgentResult(StrictModel):
     memory_warnings: list[str] = Field(default_factory=list)
     token_savings: TokenSavings | None = None
     tool_events: list[McpToolEvent] = Field(default_factory=list)
+    artifacts: list[Artifact] = Field(default_factory=list)
 
 
 class AgentInfo(StrictModel):
@@ -131,6 +133,7 @@ class Conversation(ConversationSummary):
     checkpoints: list[Checkpoint] = Field(default_factory=list)
     token_savings: TokenSavings | None = None
     tool_events: list[McpToolEvent] = Field(default_factory=list)
+    artifacts: list[Artifact] = Field(default_factory=list)
 
 
 class AgentError(Exception):

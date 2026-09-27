@@ -47,13 +47,13 @@ def test_both_games_servers_are_separate_http_options():
     assert next(item for item in servers if item.summary.id == "java-games-mock").command is None
 
 
-def test_game_report_server_description_matches_three_tools():
+def test_game_report_server_available_to_both_agents():
     servers = default_servers(game_report_mcp_url="http://python-mcp-game-reports:8080/mcp")
     report = next(item.summary for item in servers if item.summary.id == "game-reports")
 
     assert report.chat_enabled
-    assert report.agent_ids == ["game_reports"]
-    assert report.description == "Три инструмента одного MCP-сервера: поиск → сводка → сохранение Markdown."
+    assert report.agent_ids == ["game_reports", "game_orchestrator"]
+    assert "композиция" in report.description
 
 
 @pytest.mark.asyncio

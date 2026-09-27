@@ -9,7 +9,7 @@ from uuid import UUID, uuid4
 import httpx
 from pydantic import ValidationError
 
-from game_reports.models import SearchResult, SummaryResult
+from game_reports.models import ReportDraft, SearchResult, SummaryResult, SummarySource
 
 
 class PipelineError(Exception):
@@ -62,6 +62,20 @@ def summarize_games(search: SearchResult) -> SummaryResult:
         lines.extend([f"## {title}", "", description, ""])
     return SummaryResult(query=search.query, game_count=len(search.games),
                          markdown="\n".join(lines).rstrip() + "\n")
+
+
+def compose_report(title: str, summaries: list[SummarySource]) -> ReportDraft:
+    """Собирает отчёт только из явно переданных сводок, сохраняя их источники."""
+    if not title.strip() or not 1 <= len(summaries) <= 20:
+        raise PipelineError("Укажите название и от одной до двадцати сводок")
+    ids = [item.id for item in summaries]
+    if len(ids) != len(set(ids)):
+        raise PipelineError("Сводки не должны повторяться")
+    lines = [f"# {title.strip()}", "", f"Использовано сводок: {len(summaries)}.", ""]
+    for item in summaries:
+        lines.extend([f"## {item.title}", "", item.markdown.strip(), ""])
+    return ReportDraft(title=title.strip(), markdown="\n".join(lines).rstrip() + "\n",
+                       source_summary_ids=ids)
 
 
 class FileReportStore:
