@@ -111,7 +111,7 @@ def default_servers(python_mcp_url: str | None = None,
         servers.append(McpServerDefinition(
             summary=McpServerSummary(
                 id="game-reports", name="Отчёты об играх · Python",
-                description="Один MCP-инструмент: поиск → сводка → сохранение Markdown.",
+                description="Три инструмента одного MCP-сервера: поиск → сводка → сохранение Markdown.",
                 transport="streamable_http", chat_enabled=True,
                 agent_ids=["game_reports"],
             ),
