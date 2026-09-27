@@ -18,7 +18,7 @@ async def test_mcp_schedule_save_restart_and_keep_three(tmp_path):
         names = {tool.name for tool in (await client.list_tools()).tools}
         assert names == {"create_watch", "get_watch", "cancel_watch", "list_reports",
                          "delete_watch", "claim_due", "release_failed", "save_digest"}
-        created = await client.call_tool("create_watch", {"conversation_id": "chat-1", "interval_seconds": 1800})
+        created = await client.call_tool("create_watch", {"conversation_id": "chat-1", "interval_seconds": 300})
         assert created.structured_content["watch"]["status"] == "active"
         assert datetime.fromisoformat(created.structured_content["watch"]["next_run_at"]) > datetime.now(UTC)
         for i in range(5):
@@ -50,7 +50,7 @@ async def test_mcp_schedule_save_restart_and_keep_three(tmp_path):
 
 def test_due_claim_and_failure_retry(tmp_path):
     repository = FeedRepository(tmp_path / "feed.sqlite3")
-    repository.create_watch("chat-2", 1800)
+    repository.create_watch("chat-2", 300)
     assert repository.claim_due() == []
     with repository.connection() as db:
         db.execute("UPDATE watches SET next_run_at=? WHERE conversation_id=?",
@@ -60,3 +60,24 @@ def test_due_claim_and_failure_retry(tmp_path):
     assert repository.claim_due() == []
     repository.release_failed(claimed[0]["id"], claimed[0]["scheduled_for"])
     assert len(repository.claim_due()) == 1
+
+
+def test_existing_active_half_hour_watch_moves_to_five_minutes(tmp_path):
+    db_path = tmp_path / "feed.sqlite3"
+    repository = FeedRepository(db_path)
+    previous = repository.create_watch("chat-old", 1800)
+    due = repository.create_watch("chat-due", 1800)
+    overdue_at = (datetime.now(UTC) - timedelta(seconds=1)).isoformat()
+    with repository.connection() as db:
+        db.execute("UPDATE watches SET next_run_at=? WHERE id=?", (overdue_at, due["id"]))
+    before_restart = datetime.now(UTC)
+
+    restarted = FeedRepository(db_path)
+    migrated = restarted.get_watch("chat-old")
+
+    assert migrated["id"] == previous["id"]
+    assert migrated["interval_seconds"] == 300
+    assert before_restart < datetime.fromisoformat(migrated["next_run_at"])
+    assert datetime.fromisoformat(migrated["next_run_at"]) <= datetime.now(UTC) + timedelta(seconds=300)
+    assert restarted.get_watch("chat-due")["next_run_at"] == overdue_at
+    assert restarted.get_watch("chat-due")["interval_seconds"] == 300

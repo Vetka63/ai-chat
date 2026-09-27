@@ -18,7 +18,7 @@ def create_server(repository: FeedRepository) -> MCPServer:
 
         Args:
             conversation_id: ID чата агента игровых сводок.
-            interval_seconds: Интервал сводки в секундах; UI задаёт 1800.
+            interval_seconds: Интервал сводки в секундах; UI задаёт 300.
         """
         if not conversation_id or len(conversation_id) > 64:
             raise ToolError("Некорректный идентификатор чата")

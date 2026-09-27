@@ -62,7 +62,7 @@ class GameDigestAgent:
     @property
     def info(self) -> AgentInfo:
         return AgentInfo(id=self.ID, name="Игровые сводки",
-                         description="Раз в 30 минут показывает до 10 новых игр из SQL-каталога",
+                         description="Раз в 5 минут показывает до 10 новых игр из SQL-каталога",
                          capabilities=["persistent_history", "scheduled_reports"])
 
     async def create_conversation(self, title, context_settings=None, problem=None, profile_id=None):

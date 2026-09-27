@@ -88,7 +88,7 @@ services:
       context: ./mock-games-server
     environment:
       GAMES_DB_URL: jdbc:h2:file:/app/data/games;DB_CLOSE_ON_EXIT=FALSE
-      GAMES_GENERATION_INTERVAL_MS: "120000"
+      GAMES_GENERATION_INTERVAL_MS: "30000"
     volumes:
       - mock-games-data:/app/data
     ports:

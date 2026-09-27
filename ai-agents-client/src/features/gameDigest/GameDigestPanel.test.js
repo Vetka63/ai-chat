@@ -25,7 +25,7 @@ it('starts a schedule and renders stored reports in the dedicated chat', async (
   await wrapper.get('form').trigger('submit')
   await flushPromises()
   expect(fetch).toHaveBeenCalledWith('/api/v1/agents/game_digest/conversations/chat-1/schedule', expect.objectContaining({ method: 'PUT' }))
-  expect(JSON.parse(fetch.mock.calls.find(([url, options]) => url.endsWith('/schedule') && options.method === 'PUT')[1].body).interval_seconds).toBe(1800)
+  expect(JSON.parse(fetch.mock.calls.find(([url, options]) => url.endsWith('/schedule') && options.method === 'PUT')[1].body).interval_seconds).toBe(300)
   expect(wrapper.text()).toContain('Сбор включён')
   expect(wrapper.text()).toContain('Новая игра: Лунный сад')
   expect(wrapper.text()).toContain('Новых игр в сводке: 1 / 10')
