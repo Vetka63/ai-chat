@@ -18,13 +18,19 @@ import java.time.Duration
 class OllamaEmbeddingProvider(private val properties: RagProperties, private val mapper: ObjectMapper) : EmbeddingProvider {
     private val client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build()
     override fun identity(): EmbeddingIdentity {
+        val digest = currentDigest()
+        val probe = embed(listOf("Проверка размерности векторов русской Pro Git."))
+        if (currentDigest() != digest) throw LabException("embedding_space_mismatch", "Embedding-модель изменилась во время проверки размерности. Повторите с неизменной моделью.")
+        return EmbeddingIdentity(properties.embeddingModel, digest, probe.vectors.first().size)
+    }
+    /** Digest проверяется по обе стороны dimension probe: mutable tag не считается стабильным ID. */
+    private fun currentDigest(): String {
         val tags = request("/api/tags", null)
         val models = tags.path("models")
         val tag = models.firstOrNull { it.path("name").asText() == properties.embeddingModel || it.path("model").asText() == properties.embeddingModel }
             ?: throw LabException("model_missing", "Модель ${properties.embeddingModel} не загружена. Выполните ollama pull.", HttpStatus.SERVICE_UNAVAILABLE)
         if (tag.path("digest").asText().isBlank()) throw LabException("embedding_identity", "Ollama не вернула digest модели.", HttpStatus.BAD_GATEWAY)
-        val probe = embed(listOf("Проверка размерности векторов русской Pro Git."))
-        return EmbeddingIdentity(properties.embeddingModel, tag.path("digest").asText(), probe.vectors.first().size)
+        return tag.path("digest").asText()
     }
     override fun embed(texts: List<String>): EmbeddingBatch {
         require(texts.isNotEmpty())
