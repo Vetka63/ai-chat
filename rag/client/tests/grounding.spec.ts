@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { writeFile } from 'node:fs/promises'
 
 const source = { chunkId: 'evidence-1', documentId: 'doc', source: 'chapter/stash.asc', title: 'Stash', section: 'Untracked' }
 const quote = 'Чтобы сохранить untracked-файлы, используйте git stash -u.'
@@ -101,7 +102,9 @@ test('live grounded quote opens correct immutable document @live', async ({ page
   const responsePromise = page.waitForResponse(r => new URL(r.url()).pathname.endsWith('/grounded-answers') && r.request().method() === 'POST', { timeout: 840_000 })
   await page.getByRole('button', { name: /^Ответить с цитатами/ }).click()
   const response = await responsePromise, trace = await response.json()
-  await testInfo.attach(`day24-live-response-${Date.now()}.json`, { body: JSON.stringify(trace, null, 2), contentType: 'application/json' })
+  const tracePath = testInfo.outputPath(`day24-live-response-${Date.now()}.json`)
+  await writeFile(tracePath, JSON.stringify(trace, null, 2), 'utf8')
+  await testInfo.attach('day24-live-response', { path: tracePath, contentType: 'application/json' })
   console.log(`Day24 live: HTTP ${response.status()}, status=${trace.status}, llmStagesAttempted=${trace.llmStagesAttempted ?? 'unknown'}, repair=${!!trace.repair}`)
   await expect(page.locator('.grounded-result')).toHaveAttribute('data-status', 'ANSWERED', { timeout: 840_000 })
   await expect(page.locator('.grounded-result')).toContainText(/-u|include-untracked/)
