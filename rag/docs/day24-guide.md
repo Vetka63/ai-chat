@@ -40,8 +40,8 @@ Legacy `{chunk_id, span_index}` и `{chunk_id, quote}` поддерживают�
 
 ## Модели и расход
 
-- DEEPSEEK_GROUNDING_MODEL: Pro по умолчанию, thinking disabled, timeout 180 секунд. DEEPSEEK_GROUNDING_THINKING_ENABLED=true включает независимый reasoning-профиль (DEEPSEEK_GROUNDING_REASONING_EFFORT=high). Пользовательский max_tokens по умолчанию не задан; при включённом thinking он ограничивает вместе reasoning и финальный JSON.
-- DEEPSEEK_SUPPORT_MODEL: Pro, технический cap 16384, timeout 180 секунд. Thinking по умолчанию disabled; DEEPSEEK_SUPPORT_THINKING_ENABLED=true включает отдельный reasoning effort high.
+- DEEPSEEK_GROUNDING_MODEL: Pro по умолчанию, thinking enabled, timeout 180 секунд. DEEPSEEK_GROUNDING_THINKING_ENABLED=false отключает независимый reasoning-профиль (DEEPSEEK_GROUNDING_REASONING_EFFORT=high). Пользовательский max_tokens по умолчанию не задан; при включённом thinking он ограничивает вместе reasoning и финальный JSON.
+- DEEPSEEK_SUPPORT_MODEL: Pro, технический cap 16384, timeout 180 секунд. Thinking по умолчанию enabled с отдельным reasoning effort high; DEEPSEEK_SUPPORT_THINKING_ENABLED=false отключает его.
 - Сравнение дней 22–23 не переключается на эти профили. /answer-settings описывает прежний профиль сравнения; фактическая модель grounded-вызова есть в его trace.
 - Без rewrite: один вызов генерации + по одному на каждый из 1–8 пунктов. Максимум 18 вызовов с единственной правкой полного ответа и новыми проверками; с rewrite максимум 19. Нет HTTP retry или скрытого перебора до успеха.
 - В supportCheck.generation хранится первая проверка, в additionalGenerations — остальные. Порядок совпадает с пунктами, даже при параллельном выполнении. Все отправленные проверки дожидаются завершения и учитываются при отказе одной из них.
