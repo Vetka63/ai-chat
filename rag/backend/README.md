@@ -8,6 +8,7 @@ JDK 21, Kotlin, Spring Boot MVC. Boot создаёт компоненты чер
 | `indexing` | Две стратегии, метрики, jobs, atomic publish индекса |
 | `embeddings` | Локальный HTTP embedding runtime и проверка векторов |
 | `retrieval` | Вектор вопроса и exact cosine ranking |
+| `answering` | Два режима генерации, сборка контекста, DeepSeek и измерения ответа |
 | `config` | Пути, runtime URL, модель, batch size, timeout |
 | `common` | Общий формат ошибки и hashing |
 
@@ -17,4 +18,4 @@ JDK 21, Kotlin, Spring Boot MVC. Boot создаёт компоненты чер
 
 API contract: `../api/openapi.json`, копируется при сборке в `static/api-spec`. Изменение DTO требует синхронного обновления OpenAPI, генерации frontend типов и contract/UI checks. API не принимает произвольный путь/URL документа, размерность вектора или секрет от клиента.
 
-Полный алгоритм: `../docs/application-guide.md`. Пределы и будущие домены: `../docs/architecture.md`.
+Алгоритм индексации: `../docs/application-guide.md`. Генерация дня 22 по классам: `src/main/kotlin/dev/aichallenge/rag/answering/README.md` и `../docs/day22-guide.md`. Пределы и будущие домены: `../docs/architecture.md`.

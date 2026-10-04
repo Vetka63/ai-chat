@@ -4,10 +4,11 @@ import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import dev.aichallenge.rag.config.RagProperties
+import dev.aichallenge.rag.config.DeepSeekProperties
 
-/** Запускает отдельную лабораторию индексации дня 21, не затрагивая прежних агентов. */
+/** Запускает отдельную RAG-лабораторию, не затрагивая прежних агентов. */
 @SpringBootApplication
-@EnableConfigurationProperties(RagProperties::class)
+@EnableConfigurationProperties(RagProperties::class, DeepSeekProperties::class)
 class RagApplication
 
 /** Точка входа JVM-приложения. */

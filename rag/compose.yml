@@ -13,6 +13,10 @@ services:
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-qwen3-embedding:0.6b}
       EMBEDDING_BATCH_SIZE: ${EMBEDDING_BATCH_SIZE:-8}
       EMBED_TIMEOUT_SECONDS: ${EMBED_TIMEOUT_SECONDS:-180}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-${LLM_API_KEY:-}}
+      DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-flash}
+      DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      DEEPSEEK_TIMEOUT_SECONDS: ${DEEPSEEK_TIMEOUT_SECONDS:-120}
     volumes: ["rag-data:/app/data"]
     depends_on: [ollama]
     restart: unless-stopped

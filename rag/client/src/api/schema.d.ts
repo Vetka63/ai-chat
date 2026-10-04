@@ -4,6 +4,54 @@
  */
 
 export interface paths {
+    "/api/v1/answer-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getAnswerSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/evaluation/questions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getControlQuestions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/answers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["generateAnswer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/corpus": {
         parameters: {
             query?: never;
@@ -184,6 +232,81 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AnswerRequest: {
+            question: string;
+            /** @enum {string} */
+            mode: "BASELINE" | "RAG";
+            indexId?: string | null;
+            topK: number;
+            contextMaxCharacters: number;
+            maxOutputTokens?: number | null;
+        };
+        LlmMessage: {
+            role: string;
+            content: string;
+        };
+        TokenUsage: {
+            promptTokens: number;
+            completionTokens: number;
+            totalTokens: number;
+            cacheHitTokens: number | null;
+            cacheMissTokens: number | null;
+        };
+        CostEstimate: {
+            minimumUsd: number;
+            maximumUsd: number;
+            source: string;
+            verifiedOn: string;
+            note: string;
+        };
+        AnswerContext: {
+            indexId: string | null;
+            snapshotId: string | null;
+            retrievedCount: number;
+            included: components["schemas"]["SearchHit"][];
+            omittedChunkIds: string[];
+            textCharacters: number;
+            maxCharacters: number;
+            retrievalMilliseconds: number;
+            embeddingInputTokens: number | null;
+        };
+        AnswerResult: {
+            id: string;
+            createdAt: string;
+            question: string;
+            /** @enum {string} */
+            mode: "BASELINE" | "RAG";
+            model: string;
+            temperature: number;
+            thinking: string;
+            answer: string;
+            finishReason: string;
+            truncated: boolean;
+            maxOutputTokens: number | null;
+            totalMilliseconds: number;
+            generationMilliseconds: number;
+            usage: components["schemas"]["TokenUsage"] | null;
+            estimatedCost: components["schemas"]["CostEstimate"] | null;
+            context: components["schemas"]["AnswerContext"];
+            messages: components["schemas"]["LlmMessage"][];
+            warnings: string[];
+        };
+        AnswerSettings: {
+            configured: boolean;
+            model: string;
+            temperature: number;
+            thinking: string;
+            defaultContextMaxCharacters: number;
+            maxOutputTokensDefault: number | null;
+            priceSource: string;
+        };
+        ControlQuestion: {
+            id: string;
+            question: string;
+            expected: string;
+            expectedSourceSuffix: string;
+            evidenceQuote: string;
+        };
         SourceFile: {
             path: string;
             sha256: string;
@@ -343,6 +466,91 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    getAnswerSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Публичные настройки генератора */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnswerSettings"];
+                };
+            };
+        };
+    };
+    getControlQuestions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 10 evaluation cases */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ControlQuestion"][];
+                };
+            };
+        };
+    };
+    generateAnswer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnswerRequest"];
+            };
+        };
+        responses: {
+            /** @description Ответ и переданный контекст */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnswerResult"];
+                };
+            };
+            /** @description Параметры или бюджет некорректны */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ошибка провайдера */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Генератор недоступен */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     getCorpus: {
         parameters: {
             query?: never;

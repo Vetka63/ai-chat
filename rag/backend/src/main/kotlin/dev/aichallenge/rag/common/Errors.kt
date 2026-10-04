@@ -24,7 +24,7 @@ class ErrorHandler {
     @ExceptionHandler(NoResourceFoundException::class)
     fun missing(error: NoResourceFoundException): ResponseEntity<ApiError> = ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiError("route_not_found", "Эндпоинт не найден."))
     @ExceptionHandler(MethodArgumentNotValidException::class, HttpMessageNotReadableException::class, IllegalArgumentException::class)
-    fun invalid(error: Exception): ResponseEntity<ApiError> = ResponseEntity.badRequest().body(ApiError("invalid_request", "Проверьте параметры запроса: размер, перекрытие, стратегию и идентификаторы."))
+    fun invalid(error: Exception): ResponseEntity<ApiError> = ResponseEntity.badRequest().body(ApiError("invalid_request", "Проверьте вопрос, индекс, top-K, бюджет контекста, лимит ответа или параметры разбиения."))
     @ExceptionHandler(Exception::class)
     fun unexpected(error: Exception): ResponseEntity<ApiError> {
         log.error("Unhandled request error", error)

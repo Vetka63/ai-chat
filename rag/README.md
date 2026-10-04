@@ -1,8 +1,8 @@
-# Лаборатория RAG дня 21
+# Лаборатория RAG дней 21 и 22
 
-Отдельный Kotlin backend и Vue client индексируют русский перевод Pro Git. В день 21 приложение строит два локальных индекса, показывает исходники и чанки, сравнивает стратегии и выполняет диагностический поиск. Генеративного чата, DeepSeek-вызовов и памяти диалога пока нет.
+Отдельный Kotlin backend и Vue client индексируют русский перевод Pro Git. День 21 — два локальных индекса, исходники, чанки и диагностический поиск. День 22 — ответы DeepSeek с RAG и без RAG, точный переданный контекст, API usage, сравнение и экспорт. Истории диалога пока нет.
 
-Старые Java/Python приложения остаются рядом и не изменяются. Ветка реализации — `ai-challenge-day-21`. Дни 22–25 будут отдельными последовательными ветками после проверки предыдущего дня; объединение в main и push выполняются по отдельной инструкции.
+Старые Java/Python приложения остаются рядом и не изменяются. Текущая ветка — `ai-challenge-day-22`, от коммита дня 21 `3ee1ace`. Дни 23–25 будут отдельными последовательными ветками; объединение в main и push выполняются по отдельной инструкции.
 
 ## Быстрый запуск
 
@@ -10,11 +10,11 @@
 
 ```powershell
 .\scripts\prepare-corpus.ps1
-docker compose -f compose.yml -f compose.gpu.yml up -d --build
+docker compose --env-file ../.env -f compose.yml -f compose.gpu.yml up -d --build
 docker compose exec ollama ollama pull qwen3-embedding:0.6b
 ```
 
-Если GPU недоступен, используйте только `docker compose up -d --build`: CPU поддерживается, но расчёт будет медленнее. Исходники выбранных глав и manifest уже подготовлены в репозитории; первый шаг проверяет их хеши и ничего не перезаписывает.
+Команда выше использует существующий корневой .env с LLM_API_KEY или DEEPSEEK_API_KEY. При отдельном `rag/.env` не указывайте `--env-file ../.env`. Ключ передаётся только backend, не browser/build. Если GPU недоступен, уберите `-f compose.gpu.yml`: CPU работает медленнее. Подробности — [день 22](docs/day22-guide.md). Скрипт корпуса проверяет хеши и не перезаписывает исходники.
 
 - UI: http://localhost:8383
 - API: http://localhost:8382/api/v1/corpus
@@ -26,11 +26,15 @@ docker compose exec ollama ollama pull qwen3-embedding:0.6b
 
 ## Документация
 
+- [Алгоритм и проверка дня 22](docs/day22-guide.md)
+- [Схема дня 22](docs/diagrams/day22-architecture.html)
 - [Архитектура и границы доменов](docs/architecture.md)
 - [Алгоритм работы по классам](docs/application-guide.md)
 - [Установка и запуск Windows](docs/windows-setup.md)
 - [Проверка задания через UI](docs/day21-testing.md)
 - [Результаты тестов и фактическое сравнение стратегий](docs/test-results.md)
+- [Результаты дня 22 и сравнение 10 пар ответов](docs/day22-test-results.md)
+- [Подтверждение проверки схемы дня 22](docs/diagrams/day22-acceptance.md)
 - [Корпус Pro Git и правила обработки](docs/corpus-progit.md)
 - [Сценарии оценки](docs/evaluation-scenarios.md)
 - [План следующих дней](docs/implementation-plan.md)

@@ -3,9 +3,11 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { api, type Schema } from '../../api/client'
 import { useLabStore } from './store'
 import { comparisonMarkdown, download } from './report'
+import AnswerLab from '../answering/AnswerLab.vue'
 
 const lab = useLabStore()
-const tab = ref<'corpus' | 'chunks' | 'compare' | 'search'>('corpus')
+const tab = ref<'corpus' | 'chunks' | 'compare' | 'search' | 'answers'>('corpus')
+const answersVisited = ref(false)
 const config = ref<Schema<'ChunkConfig'>>({ strategy: 'FIXED', maxCharacters: 3000, overlapCharacters: 300 })
 const busy = ref(false)
 const loading = ref(true)
@@ -104,17 +106,18 @@ onUnmounted(() => { disposed = true; window.removeEventListener('keydown', close
   <div class="shell">
     <aside class="sidebar">
       <a class="brand" href="/" aria-label="Лаборатория RAG"><span class="brand-icon">R</span><span>RAG<span class="brand-caption">Лаборатория знаний</span></span></a>
-      <div class="sidebar-label">НЕДЕЛЯ 5 · ДЕНЬ 21</div>
+      <div class="sidebar-label">НЕДЕЛЯ 5 · ДНИ 21–22</div>
       <nav aria-label="Разделы лаборатории">
         <button :class="{ active: tab === 'corpus' }" @click="tab = 'corpus'">▤ <span>Корпус документов</span></button>
         <button :class="{ active: tab === 'chunks' }" @click="tab = 'chunks'">▦ <span>Разбиение и индексы</span></button>
         <button :class="{ active: tab === 'compare' }" @click="tab = 'compare'">⇄ <span>Сравнение стратегий</span></button>
         <button :class="{ active: tab === 'search' }" @click="tab = 'search'">⌕ <span>Диагностический поиск</span></button>
+        <button :class="{ active: tab === 'answers' }" @click="answersVisited = true; tab = 'answers'">◈ <span>Ответы с RAG / без RAG</span></button>
       </nav>
-      <div class="sidebar-bottom"><span class="status-dot"></span> Только локальные эмбеддинги<p>DeepSeek пока не вызывается.<br>Ответы с RAG появятся в дне 22.</p></div>
+      <div class="sidebar-bottom"><span class="status-dot"></span> Локальная база знаний<p>Эмбеддинги: Ollama.<br>Генерация: DeepSeek API по кнопке.</p></div>
     </aside>
     <main>
-      <header class="page-header"><div><span class="eyebrow">PRO GIT · РУССКОЕ ИЗДАНИЕ</span><h1>{{ tab === 'corpus' ? 'База знаний начинается здесь' : tab === 'chunks' ? 'Как текст становится индексом' : tab === 'compare' ? 'Две стратегии. Один корпус.' : 'Проверим, что находится' }}</h1><p>{{ tab === 'search' ? 'Вопрос превращается в вектор. Здесь показываем найденный текст — без генерации ответа.' : 'Изучайте источники, стройте индексы и наблюдайте каждый шаг обработки.' }}</p></div><span class="day-badge">День 21</span></header>
+      <header class="page-header"><div><span class="eyebrow">PRO GIT · РУССКОЕ ИЗДАНИЕ</span><h1>{{ tab === 'answers' ? 'Что меняет найденный контекст' : tab === 'corpus' ? 'База знаний начинается здесь' : tab === 'chunks' ? 'Как текст становится индексом' : tab === 'compare' ? 'Две стратегии. Один корпус.' : 'Проверим, что находится' }}</h1><p>{{ tab === 'answers' ? 'Сравните знания модели и ответ с материалами книги — на одном вопросе.' : tab === 'search' ? 'Вопрос превращается в вектор. Здесь показываем найденный текст — без генерации ответа.' : 'Изучайте источники, стройте индексы и наблюдайте каждый шаг обработки.' }}</p></div><span class="day-badge">{{ tab === 'answers' ? 'День 22' : 'День 21' }}</span></header>
       <div v-if="error" class="notice error" role="alert"><span>{{ error }}</span><button class="icon-button" @click="error = ''" aria-label="Закрыть ошибку">×</button></div>
       <div v-if="loading" class="empty">Загружаем локальную базу…</div>
       <div v-else-if="!lab.corpus" class="empty"><h2>Корпус пока недоступен</h2><p>Подготовьте snapshot по инструкции Windows и проверьте backend.</p><button @click="load">Повторить</button></div>
@@ -122,6 +125,7 @@ onUnmounted(() => { disposed = true; window.removeEventListener('keydown', close
         <div class="stats-row"><div><strong>{{ lab.corpus.documentCount }}</strong><span>документов</span></div><div><strong>{{ lab.corpus.sectionCount }}</strong><span>разделов</span></div><div><strong>{{ number(lab.corpus.words) }}</strong><span>слов в корпусе</span></div><div><strong>{{ lab.indexes.length }}</strong><span>готовых индексов</span></div></div>
         <div v-if="activeJob" class="job-panel" role="status"><div class="job-title"><strong>Строим {{ strategyLabel(activeJob.config.strategy).toLowerCase() }}</strong><span>{{ activeJob.processed }} / {{ activeJob.total }} чанков</span></div><progress :max="activeJob.total || 1" :value="activeJob.processed"></progress><p>Готовый индекс появится после проверки всех векторов. Страницу можно перезагрузить.</p></div>
 
+        <AnswerLab v-if="answersVisited" v-show="tab === 'answers'" :indexes="lab.indexes" />
         <section v-if="tab === 'corpus'" class="content-panel">
           <div class="section-heading"><div><h2>Книга, которую можно проверить</h2><p>Главы 2, 3, 7 и 10. Текст и примеры команд сохранены; исходники закреплены по commit.</p></div><button @click="tab = 'chunks'">Перейти к разбиению →</button></div>
           <div class="provenance"><span>Версия <code>{{ lab.corpus.manifest.revision.slice(0, 12) }}</code></span><span>{{ lab.corpus.manifest.license }}</span><span>≈ {{ lab.corpus.estimatedPages }} условных страниц</span></div>

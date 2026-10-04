@@ -25,3 +25,4 @@ kotlin {
 tasks.test { useJUnitPlatform() }
 tasks.bootJar { archiveFileName.set("rag-backend.jar") }
 tasks.processResources { from("../api") { into("static/api-spec") } }
+tasks.processResources { from("../evaluation") { include("day22-cases.json"); into("static/evaluation") } }

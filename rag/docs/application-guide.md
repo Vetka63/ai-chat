@@ -2,6 +2,8 @@
 
 Этот гайд помогает пройти от кнопки на UI до записанного embedding-вектора. В день 21 модель не генерирует текстовый ответ: приложение подготавливает базу для будущего RAG.
 
+В текущей ветке дня 22 генерация уже добавлена отдельно от этого процесса. Путь от вопроса до ответа DeepSeek по классам и режимам описан в [day22-guide.md](day22-guide.md). Этот документ остаётся гайдом по индексации.
+
 ## Открытие корпуса
 
 Vue LabView загружается через Router. Pinia store вызывает API client и параллельно получает corpus, documents, indexes и jobs. Kotlin DocumentController делегирует CorpusService.
@@ -52,4 +54,4 @@ IndexingService.compare проверяет corpus snapshot и embedding identity
 
 ## Куда вносить дальнейшие изменения
 
-Новый формат документов — documents/ports и documents/adapters. Другой chunking — реализация ChunkingStrategy и новое значение enum. Иная embedding-модель/runtime — EmbeddingProvider adapter с отдельной identity. Хранилище — IndexRepository adapter. Генеративные ответы — будущий answers домен, не добавление HTTP DeepSeek в контроллер chunking.
+Новый формат документов — documents/ports и documents/adapters. Другой chunking — реализация ChunkingStrategy и новое значение enum. Иная embedding-модель/runtime — EmbeddingProvider adapter с отдельной identity. Хранилище — IndexRepository adapter. Генеративные ответы уже добавлены в отдельном домене answering дня 22, не в контроллере chunking.

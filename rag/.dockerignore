@@ -7,4 +7,5 @@ backend/.gradle
 .env
 .env.*
 scripts
-evaluation
+evaluation/*
+!evaluation/day22-cases.json

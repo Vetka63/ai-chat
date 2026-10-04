@@ -12,6 +12,9 @@ export async function request<T>(path: string, body?: unknown): Promise<T> {
 }
 
 export const api = {
+  answerSettings: () => request<Schema<'AnswerSettings'>>('/answer-settings'),
+  questions: () => request<Schema<'ControlQuestion'>[]>('/evaluation/questions'),
+  answer: (body: Schema<'AnswerRequest'>) => request<Schema<'AnswerResult'>>('/answers', body),
   corpus: () => request<Schema<'CorpusInfo'>>('/corpus'),
   documents: () => request<Schema<'DocumentInfo'>[]>('/documents'),
   document: (id: string) => request<Schema<'Document'>>(`/documents/${encodeURIComponent(id)}`),

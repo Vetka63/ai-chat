@@ -2,6 +2,7 @@ FROM gradle:9.6.1-jdk21 AS build
 WORKDIR /workspace
 COPY backend/ .
 COPY api/ /api/
+COPY evaluation/day22-cases.json /evaluation/day22-cases.json
 RUN gradle --no-daemon bootJar
 
 FROM eclipse-temurin:21-jre

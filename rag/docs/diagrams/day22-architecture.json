@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {"title": "День 22: ответы с RAG и без RAG", "quality_profile": "showcase", "viewBox": [1340,760]},
+  "components": [
+    {"id":"rag-comparison-ui","type":"frontend","label":"Сравнение ответов","sublabel":"Vue · вопрос · контекст · usage","pos":[50,170],"size":[260,110]},
+    {"id":"rag-answer-service","type":"backend","label":"AnswerService","sublabel":"Режимы · бюджет · PromptAssembler","pos":[510,170],"size":[280,110]},
+    {"id":"deepseek-generation","type":"external","label":"DeepSeek API","sublabel":"Общая модель и параметры","pos":[990,170],"size":[280,110]},
+    {"id":"persisted-progit-index","type":"database","label":"SQLite-индекс Pro Git","sublabel":"Snapshot · чанки · векторы","pos":[50,530],"size":[260,110]},
+    {"id":"local-book-retrieval","type":"backend","label":"SearchService","sublabel":"Embedding · cosine · top-K","pos":[510,530],"size":[280,110]},
+    {"id":"local-query-embeddings","type":"backend","label":"Ollama","sublabel":"qwen3-embedding:0.6b · локально","pos":[990,530],"size":[280,110]}
+  ],
+  "connections": [
+    {"id":"submit-answer-request","from":"rag-comparison-ui","to":"rag-answer-service","label":"REST /answers","variant":"emphasis"},
+    {"id":"generate-final-answer","from":"rag-answer-service","to":"deepseek-generation","label":"HTTPS chat/completions"},
+    {"id":"retrieve-only-rag-mode","from":"rag-answer-service","to":"local-book-retrieval","label":"Только режим RAG","labelDy":24},
+    {"id":"read-saved-chunks","from":"local-book-retrieval","to":"persisted-progit-index","label":"JDBC: чанки + векторы"},
+    {"id":"embed-search-question","from":"local-book-retrieval","to":"local-query-embeddings","label":"HTTP /api/embed"}
+  ]
+}

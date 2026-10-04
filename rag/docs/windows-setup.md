@@ -130,4 +130,8 @@ docker compose logs --tail 60 ollama
 
 Из `rag` можно запустить `pwsh -File ./scripts/verify-live.ps1 -BuildIndexes`. Скрипт требует **PowerShell 7**: если готовые 3000/300 индексы есть, использует их; иначе строит оба. Выполняет пять поисковых случаев, проверку метаданных/snapshot substring и негативные HTTP cases. Отчёт — `data/live-verification.json`, он исключён из Git. Без флага -BuildIndexes новые индексы не создаёт.
 
-Браузерные тесты используют установленный Chrome (`npm run test:e2e` в client). `RAG_BROWSER_CHANNEL` позволяет выбрать другой поддерживаемый Playwright channel; `RAG_UI_URL` — адрес живого UI. Не запускайте тесты сравнения до появления двух готовых индексов. Эти проверки локальных embeddings не обращаются к DeepSeek.
+Браузерные тесты используют установленный Chrome (`npm run test:e2e` в client). `RAG_BROWSER_CHANNEL` позволяет выбрать другой поддерживаемый Playwright channel; `RAG_UI_URL` — адрес живого UI. Проверки сравнения индексов требуют двух готовых индексов. Обычные тесты не обращаются к платной генерации; отдельный тест ответов с RAG_LIVE=true делает 2 вызова DeepSeek.
+
+## Запуск генерации дня 22
+
+Индексация дня 21 не требует ключа. Для ответов дня 22 используйте существующий корневой `.env` с LLM_API_KEY либо задайте DEEPSEEK_API_KEY в игнорируемом локальном `.env`. Из `rag` запускайте `docker compose --env-file ../.env -f compose.yml -f compose.gpu.yml up -d --build`. Ключ попадёт только в backend environment, не в frontend. Подробный алгоритм, настройки и сценарий UI — [day22-guide.md](day22-guide.md). Не выводите compose config или env контейнера при записи видео.
