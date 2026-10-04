@@ -1,0 +1,166 @@
+{
+  "repository": "https://github.com/progit/progit2-ru",
+  "selectedChapters": [
+    "02-git-basics",
+    "03-git-branching",
+    "07-git-tools",
+    "10-git-internals"
+  ],
+  "revision": "bef0ce52475e44b8c9d66d7ff8c6a03b37758a03",
+  "attribution": "Pro Git, Second Edition. Scott Chacon and Ben Straub; Russian translation contributors. Source is unchanged; the backend produces a separate normalized representation.",
+  "corpusId": "progit-ru-day21-v1",
+  "files": [
+    {
+      "sha256": "77d25fc79315308264ede1749731e2d01932ac43e62d105cae7996d438b5fe53",
+      "path": "book/02-git-basics/sections/aliases.asc"
+    },
+    {
+      "sha256": "dae3a9aba75cf74d7b93bffecb562a061911fc17c54f857a99e500d6ccdf6a9e",
+      "path": "book/02-git-basics/sections/getting-a-repository.asc"
+    },
+    {
+      "sha256": "dbf6025ff58609ff1ea9965997fa53daab34bf7ee3c922a29053015616bc9c6f",
+      "path": "book/02-git-basics/sections/recording-changes.asc"
+    },
+    {
+      "sha256": "73503fdb4e21b2c356ddafbd5e1c992eb69c674e0209aca2779226456edb19e0",
+      "path": "book/02-git-basics/sections/remotes.asc"
+    },
+    {
+      "sha256": "51046404c820092801d47a2b93d09a5cd23074693875eeea237ea85cd6c1cd2c",
+      "path": "book/02-git-basics/sections/tagging.asc"
+    },
+    {
+      "sha256": "4f34c3b6e2bc253bfd980e17582c4d836e33aa97f7c4f902b9f9f88058e817f5",
+      "path": "book/02-git-basics/sections/undoing.asc"
+    },
+    {
+      "sha256": "5fd3aecda9f82d07ffc87af6bbe4cdd7a7b5d93680f175fb7f3083fedf5abb98",
+      "path": "book/02-git-basics/sections/viewing-history.asc"
+    },
+    {
+      "sha256": "89278506568e5ef1421d14cc4faee9344178af4d6617a2c48a3244e6cc6cbeb8",
+      "path": "book/03-git-branching/sections/basic-branching-and-merging.asc"
+    },
+    {
+      "sha256": "bf67c8d2e0fca4f795aa3ead592a7430fbbd1aa72cf8bed41395964e59f87e5d",
+      "path": "book/03-git-branching/sections/branch-management.asc"
+    },
+    {
+      "sha256": "f8a3356afe46684b1be79a011af785f9fdd07980f510b7298e4a3d371182689c",
+      "path": "book/03-git-branching/sections/nutshell.asc"
+    },
+    {
+      "sha256": "96919c29614a8eb186003a58ecc72655ecc8e0cd8bff58521471fa60d17be7cd",
+      "path": "book/03-git-branching/sections/rebasing.asc"
+    },
+    {
+      "sha256": "fa63d66bb39248ed6b27e19f98a2b56a16e34844a6c9ae33bfd88fb48d7ac68b",
+      "path": "book/03-git-branching/sections/remote-branches.asc"
+    },
+    {
+      "sha256": "34ac59f11e4843d0e9256eb52688b59bc254dad9e65e915ba8606de95d9fe708",
+      "path": "book/03-git-branching/sections/workflows.asc"
+    },
+    {
+      "sha256": "ad16c288ac1e46acc47074d2f3cd94cf5810da4c4a713aff8e53538041368d4a",
+      "path": "book/07-git-tools/sections/advanced-merging.asc"
+    },
+    {
+      "sha256": "01c2d945d28edd2843edc02f4e0ffffb556452e93a52cc6a7d4d66e063882710",
+      "path": "book/07-git-tools/sections/bundling.asc"
+    },
+    {
+      "sha256": "af93f0772c197795516ffa6ba46c03689d874bc82caf7ec981f8c3040213dcfd",
+      "path": "book/07-git-tools/sections/credentials.asc"
+    },
+    {
+      "sha256": "7903141e4d46ed3b0807c3ab8dfdfdc6a1f84dc4984f587ba2d382a4c85c884b",
+      "path": "book/07-git-tools/sections/debugging.asc"
+    },
+    {
+      "sha256": "b985982a40dd150b14cb3c0a9f3991108ee63ebe27c99281b24a99ec8132cc7c",
+      "path": "book/07-git-tools/sections/interactive-staging.asc"
+    },
+    {
+      "sha256": "4d1ba46b12bf425f5d06eab6db396a4f278d27e684df1d6c50a336231b65e301",
+      "path": "book/07-git-tools/sections/replace.asc"
+    },
+    {
+      "sha256": "a85a30a77166158d3781370940c150893df742d81f6f170110ad9d8a1b1f71ba",
+      "path": "book/07-git-tools/sections/rerere.asc"
+    },
+    {
+      "sha256": "64477683ae0a8d52acb8ddf2d5fe324fdc8fbf768f4908a1fc0d6c97d226dfa9",
+      "path": "book/07-git-tools/sections/reset.asc"
+    },
+    {
+      "sha256": "461ceb9506b81e7865797cb2a720ce96e5c4dcf149ecc3ceda978b6879521f4b",
+      "path": "book/07-git-tools/sections/revision-selection.asc"
+    },
+    {
+      "sha256": "531ccf4d0c37a266cf7bf2754c992b6f0517dbb573812d96c4e7da5668aa46d0",
+      "path": "book/07-git-tools/sections/rewriting-history.asc"
+    },
+    {
+      "sha256": "7cf55c74d400d4c3b2fa2eafbfadcc94d54acec8d4d2a499ae49f6ae9b717cb0",
+      "path": "book/07-git-tools/sections/searching.asc"
+    },
+    {
+      "sha256": "107ddee7ed1943bb49c3dcbacbee4450b7b515ec6c4058029e11adaa79c1b03c",
+      "path": "book/07-git-tools/sections/signing.asc"
+    },
+    {
+      "sha256": "709f382e84152cfeb09d5f803c842edea9d223d79aa282b6bcb5a6440c671b97",
+      "path": "book/07-git-tools/sections/stashing-cleaning.asc"
+    },
+    {
+      "sha256": "199b61c4ca54e18dd690f2e37446873be33681c595b5359976e4a356b751681e",
+      "path": "book/07-git-tools/sections/submodules.asc"
+    },
+    {
+      "sha256": "d337d906489a9f17d5ef62f9235588f5b8ab7dfbe28dd3495b42bea95175cd70",
+      "path": "book/07-git-tools/sections/subtree-merges.asc"
+    },
+    {
+      "sha256": "b62be90c59fa71ced4f38a0937cb11b4fce763a05453d56d4677229992ccc53d",
+      "path": "book/10-git-internals/sections/environment.asc"
+    },
+    {
+      "sha256": "b73666e104d084dff2822c5a0bd0a95c550d5e2dd73abcbda85b5a716894c276",
+      "path": "book/10-git-internals/sections/maintenance.asc"
+    },
+    {
+      "sha256": "660c027fbda9b4892c125709f5c36e4d59fdf7a7c5e89765472791eeedca333e",
+      "path": "book/10-git-internals/sections/objects.asc"
+    },
+    {
+      "sha256": "3558f2b8b52597cb8c5a7a3f214f2bd20e6bdddb60fd32fa2396e6a6effe6fab",
+      "path": "book/10-git-internals/sections/packfiles.asc"
+    },
+    {
+      "sha256": "02cf4afd702a49d4f18f0e7a384151edf0b7f840f0d3f60978cad437755862e3",
+      "path": "book/10-git-internals/sections/plumbing-porcelain.asc"
+    },
+    {
+      "sha256": "abbcec449b1299c316cf8d2880a5ecae6bc65b39074864b4f1f1aebdf3dab240",
+      "path": "book/10-git-internals/sections/refs.asc"
+    },
+    {
+      "sha256": "ca2755c366973fffe81ea1f95e97fce352bd17ca20cdfe81f5bb2395562fb749",
+      "path": "book/10-git-internals/sections/refspec.asc"
+    },
+    {
+      "sha256": "104a362334892b7fca8be2b136f4c1d41f78ad920e15527ec072881f4ccc821c",
+      "path": "book/10-git-internals/sections/transfer-protocols.asc"
+    }
+  ],
+  "archiveSha256": "b3625ac13761891597eb2ef85dc70cc1f69195b6eb45f22b0da04198c242ae05",
+  "license": "CC BY-NC-SA 3.0",
+  "resources": [
+    {
+      "sha256": "62e16555cce48eec933508878bfe035eb7410c323eb769f4a9728cf7208f6523",
+      "path": "book/07-git-tools/git-credential-read-only"
+    }
+  ]
+}

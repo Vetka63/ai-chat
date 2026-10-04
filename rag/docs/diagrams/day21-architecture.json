@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {"title": "День 21: индексация русской Pro Git", "quality_profile": "showcase", "viewBox": [1180, 570]},
+  "components": [
+    {"id": "indexLab", "type": "frontend", "label": "Лаборатория индексации", "sublabel": "Vue · документы · сравнение", "pos": [50, 140], "size": [260, 90]},
+    {"id": "indexApi", "type": "backend", "label": "Kotlin + Spring Boot", "sublabel": "Задания · chunking · поиск", "pos": [460, 140], "size": [280, 90]},
+    {"id": "embeddingRuntime", "type": "backend", "label": "Ollama", "sublabel": "qwen3-embedding:0.6b", "pos": [900, 140], "size": [230, 90]},
+    {"id": "bookSnapshot", "type": "external", "label": "Русская Pro Git", "sublabel": "AsciiDoc · commit · SHA256", "pos": [50, 410], "size": [260, 90]},
+    {"id": "indexStorage", "type": "database", "label": "SQLite + snapshot", "sublabel": "Документы · чанки · векторы", "pos": [460, 410], "size": [280, 90]},
+    {"id": "comparisonReport", "type": "external", "label": "Отчёт сравнения", "sublabel": "Размеры · покрытие · поиск", "pos": [900, 410], "size": [230, 90]}
+  ],
+  "connections": [
+    {"id": "labRest", "from": "indexLab", "to": "indexApi", "label": "REST / OpenAPI", "variant": "emphasis"},
+    {"id": "embedHttp", "from": "indexApi", "to": "embeddingRuntime", "label": "HTTP /api/embed"},
+    {"id": "snapshotImport", "from": "bookSnapshot", "to": "indexApi", "label": "Локальный импорт"},
+    {"id": "sqliteWrite", "from": "indexApi", "to": "indexStorage", "label": "JDBC: готовый индекс", "labelDy": 24},
+    {"id": "reportExport", "from": "indexStorage", "to": "comparisonReport", "label": "Экспорт MD / JSON"}
+  ]
+}

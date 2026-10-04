@@ -1,0 +1,10 @@
+data
+docs
+client/node_modules
+client/dist
+backend/build
+backend/.gradle
+.env
+.env.*
+scripts
+evaluation

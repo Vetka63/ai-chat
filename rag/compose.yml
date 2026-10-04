@@ -1,0 +1,26 @@
+name: ai-chat-rag-day-21
+services:
+  ollama:
+    image: ollama/ollama:0.35.1
+    ports: ["127.0.0.1:${RAG_OLLAMA_PORT:-11435}:11434"]
+    volumes: ["ollama-models:/root/.ollama"]
+    restart: unless-stopped
+  backend:
+    build: {context: ., dockerfile: backend/Dockerfile}
+    ports: ["127.0.0.1:${RAG_API_PORT:-8382}:8080"]
+    environment:
+      OLLAMA_BASE_URL: http://ollama:11434
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-qwen3-embedding:0.6b}
+      EMBEDDING_BATCH_SIZE: ${EMBEDDING_BATCH_SIZE:-8}
+      EMBED_TIMEOUT_SECONDS: ${EMBED_TIMEOUT_SECONDS:-180}
+    volumes: ["rag-data:/app/data"]
+    depends_on: [ollama]
+    restart: unless-stopped
+  client:
+    build: {context: ., dockerfile: client/Dockerfile}
+    ports: ["127.0.0.1:${RAG_UI_PORT:-8383}:80"]
+    depends_on: [backend]
+    restart: unless-stopped
+volumes:
+  rag-data:
+  ollama-models:

@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "corpus": "progit-ru",
+  "topK": 5,
+  "metric": "document_hit_at_5",
+  "note": "Expected files are manually selected references, not gold chunks or proof of answer correctness.",
+  "cases": [
+    {"id":"reset", "query":"Чем отличаются reset --soft, --mixed и --hard, какие три дерева Git они меняют?", "expectedSourceSuffixes":["reset.asc"]},
+    {"id":"rebase", "query":"Чем merge отличается от rebase и почему опасно перебазировать опубликованные коммиты?", "expectedSourceSuffixes":["rebasing.asc"]},
+    {"id":"stash", "query":"Как сохранить в stash неотслеживаемые untracked файлы и чем отличается опция --include-untracked?", "expectedSourceSuffixes":["stashing-cleaning.asc"]},
+    {"id":"objects", "query":"Как связаны объекты blob, tree и commit в Git и какую информацию каждый из них хранит?", "expectedSourceSuffixes":["objects.asc"]},
+    {"id":"fetch-pull", "query":"Чем git fetch отличается от git pull при работе с удалённым репозиторием?", "expectedSourceSuffixes":["remotes.asc"]}
+  ]
+}

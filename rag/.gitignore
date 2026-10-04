@@ -1,0 +1,15 @@
+.env
+.env.*
+!.env.example
+data/
+backend/.gradle/
+backend/build/
+client/node_modules/
+client/dist/
+client/test-results/
+client/playwright-report/
+test-results/
+playwright-report/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm

@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "RAG на Kotlin для дней 21–25",
+    "quality_profile": "showcase",
+    "viewBox": [1180, 570]
+  },
+  "components": [
+    {"id": "ragBrowser", "type": "frontend", "label": "Kotlin/JS + React", "sublabel": "Документы · сравнение · чат", "pos": [50, 140], "size": [250, 90]},
+    {"id": "ragApplication", "type": "backend", "label": "Kotlin + Spring Boot", "sublabel": "Индексация · RAG · проверка · память", "pos": [460, 140], "size": [280, 90]},
+    {"id": "ragDeepSeek", "type": "cloud", "label": "DeepSeek API", "sublabel": "Ответ · rewrite · task facts", "pos": [900, 140], "size": [230, 90]},
+    {"id": "ragCorpus", "type": "external", "label": "Проверенный корпус", "sublabel": "Markdown / TXT / текстовый PDF", "pos": [50, 410], "size": [250, 90]},
+    {"id": "ragStore", "type": "database", "label": "SQLite + файлы", "sublabel": "Индекс · цитаты · диалоги · метрики", "pos": [460, 410], "size": [280, 90]},
+    {"id": "ragOllama", "type": "backend", "label": "Ollama локально", "sublabel": "qwen3-embedding:0.6b", "pos": [900, 410], "size": [230, 90]}
+  ],
+  "connections": [
+    {"id": "ragUiApi", "from": "ragBrowser", "to": "ragApplication", "label": "REST / JSON", "variant": "emphasis"},
+    {"id": "ragLlmRequest", "from": "ragApplication", "to": "ragDeepSeek", "label": "HTTPS: вопрос + контекст"},
+    {"id": "ragImport", "from": "ragCorpus", "to": "ragApplication", "label": "Импорт + нормализация"},
+    {"id": "ragPersistence", "from": "ragApplication", "to": "ragStore", "label": "JDBC: индекс и история", "labelDy": 24},
+    {"id": "ragEmbeddings", "from": "ragApplication", "to": "ragOllama", "label": "HTTP /api/embed"}
+  ]
+}
