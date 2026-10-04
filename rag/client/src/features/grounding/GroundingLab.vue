@@ -43,7 +43,7 @@ async function openCitation(citation: Schema<'VerifiedCitation'>) {
 <template>
   <section class="content-panel grounding-lab">
     <h2>Ответ, который можно сопоставить с книгой</h2>
-    <p>Каждый пункт связан с точной цитатой. Сервер проверяет ID и текст только по реально переданному контексту. Это не автоматическое доказательство правильности вывода.</p>
+    <p>Сначала сервер проверяет точность цитат, затем отдельный LLM-вызов — поддержку каждого утверждения. Неподтверждённый ответ не публикуется. Проверка снижает риск ошибки, но не гарантирует истинность.</p>
     <div v-if="error" class="notice error" role="alert">{{ error }}</div>
     <fieldset class="answer-controls" :disabled="busy">
       <label>Контрольный вопрос дня 24<select v-model="selectedCase" @change="expected && (question = expected.question)"><option value="">Свой вопрос</option><option v-for="q in questions" :key="q.id" :value="q.id">{{ q.id }} — {{ q.question }}</option></select></label>
@@ -60,7 +60,7 @@ async function openCitation(citation: Schema<'VerifiedCitation'>) {
       <label class="rewrite-toggle"><input v-model="useRewrite" type="checkbox">Переформулировать запрос поиска · один дополнительный LLM-вызов</label>
     </fieldset>
     <p class="hint">Низкий score → «не знаю», без генерации. Неверная цитата или обрезанный JSON → ответ не публикуется. Пустой лимит не передаёт max_tokens; автоматических повторов нет.</p>
-    <button class="primary" :disabled="busy || invalid" @click="run">{{ busy ? 'Ищем и проверяем…' : `Ответить с цитатами · до ${useRewrite ? 2 : 1} API-вызовов` }}</button>
+    <button class="primary" :disabled="busy || invalid" @click="run">{{ busy ? 'Ищем и проверяем…' : `Ответить с цитатами · до ${useRewrite ? 3 : 2} API-вызовов` }}</button>
     <p v-if="settings && !settings.configured" class="hint">Ключ не настроен. Поиск и отказ по порогу доступны; непустой контекст потребует серверный ключ.</p>
     <article v-if="result" class="grounded-result" :data-status="result.status">
       <header><h3>{{ statusLabels[result.status] }}</h3><small>{{ result.status }} · {{ result.totalMilliseconds }} мс</small></header>
@@ -77,6 +77,7 @@ async function openCitation(citation: Schema<'VerifiedCitation'>) {
       <p class="hint">LLM-стадий: {{ result.llmStagesAttempted }} · API input/output/total: {{ result.llmStagesAttempted ? usageText(result.totalUsage) : 'LLM не вызывалась' }}</p>
       <p v-if="result.estimatedCost" class="hint">Оценка USD: {{ result.estimatedCost.minimumUsd.toFixed(6) }}–{{ result.estimatedCost.maximumUsd.toFixed(6) }}, не списание.</p>
       <p v-if="result.rewrite" class="hint">Rewrite только для поиска: {{ result.rewrite.query }}</p>
+      <details v-if="result.supportCheck" class="unverified-diagnostics"><summary>Проверка смысловой поддержки · {{ result.supportCheck.status }}</summary><p>Дополнительный LLM-вызов: {{ usageText(result.supportCheck.generation.usage) }}. Объяснения проверяющей модели — диагностика, не новые факты.</p><p v-for="c in result.supportCheck.claims" :key="c.claimIndex">Пункт {{ c.claimIndex + 1 }} · {{ c.verdict }}: {{ c.reason }}</p></details>
       <details v-if="result.retrieval"><summary>Поиск и реально переданный контекст</summary><p>{{ result.retrieval.searchQuery }} · найдено {{ result.retrieval.rawCandidates.length }} → отобрано {{ result.retrieval.selectedCandidates.length }} → передано {{ result.retrieval.included.length }}</p><p>Не поместилось по бюджету: {{ result.retrieval.omittedChunkIds.length }}</p><ul><li v-for="d in result.retrieval.decisions" :key="d.hit.chunk.chunkId">{{ d.hit.similarity.toFixed(4) }} · {{ reasonLabels[d.reason] }} · {{ d.hit.chunk.section }} · {{ d.hit.chunk.chunkId }}</li></ul></details>
       <details v-if="result.generation" class="unverified-diagnostics"><summary>Диагностика LLM · исходный JSON не является проверенным ответом</summary><p>{{ result.generation.model }} · {{ result.generation.finishReason }} · {{ result.generation.milliseconds }} мс</p><pre v-for="(m, n) in result.generation.messages" :key="n">{{ m.role }}: {{ m.content }}</pre><pre>{{ result.generation.rawJson }}</pre></details>
       <ul class="answer-warnings"><li v-for="w in result.warnings" :key="w">{{ w }}</li></ul>

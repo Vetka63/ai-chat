@@ -326,6 +326,21 @@ export interface components {
             messages: components["schemas"]["LlmMessage"][];
             rawJson: string;
         };
+        /** @enum {string} */
+        SupportCheckStatus: "PASSED" | "REJECTED" | "INVALID_RESPONSE";
+        /** @enum {string} */
+        ClaimSupportVerdict: "SUPPORTED" | "UNSUPPORTED" | "CONTRADICTED";
+        ClaimSupportAssessment: {
+            claimIndex: number;
+            verdict: components["schemas"]["ClaimSupportVerdict"];
+            reason: string;
+        };
+        ClaimSupportCheck: {
+            status: components["schemas"]["SupportCheckStatus"];
+            claims: components["schemas"]["ClaimSupportAssessment"][];
+            issues: components["schemas"]["EvidenceIssue"][];
+            generation: components["schemas"]["GroundingGeneration"];
+        };
         GroundedResult: {
             request: components["schemas"]["GroundingRequest"];
             snapshotId: string;
@@ -343,6 +358,7 @@ export interface components {
             estimatedCost: components["schemas"]["CostEstimate"] | null;
             totalMilliseconds: number;
             warnings: string[];
+            supportCheck?: components["schemas"]["ClaimSupportCheck"] | null;
         };
         /** @enum {string} */
         RetrievalMode: "RAW" | "FILTERED" | "REWRITE" | "REWRITE_FILTERED";
