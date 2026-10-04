@@ -24,7 +24,7 @@ import org.springframework.stereotype.Service
 class GroundingService(private val repository: IndexRepository, private val search: SearchService, private val selector: CandidateSelector, private val rewriter: QueryRewriter, private val packing: PromptAssembler, private val prompt: GroundingPromptAssembler, private val llm: LlmClient, private val validator: CitationValidator, private val costs: CostEstimator, private val supportValidator: ClaimSupportValidator) {
     private val log = LoggerFactory.getLogger(javaClass)
 
-    /** Пустой контекст не вызывает LLM; неверные цитаты не выпускают частичный ответ и не запускают retry. */
+    /** Неверные цитаты не запускают повтор; только смысловое отклонение допускает одно видимое исправление. */
     fun answer(request: GroundingRequest, dialogue: GroundingDialogue? = null): GroundedResult {
         validate(request)
         val clean = request.copy(question = request.question.trim())
@@ -34,12 +34,13 @@ class GroundingService(private val repository: IndexRepository, private val sear
         var retrieval: GroundingRetrieval? = null
         var generation: GroundingGeneration? = null
         var supportCheck: ClaimSupportCheck? = null
+        var repair: GroundingRepair? = null
         var attempts = 0
         fun result(checked: EvidenceValidation): GroundedResult {
-            val usages = listOfNotNull(rewrite?.usage, generation?.usage, supportCheck?.generation?.usage)
+            val usages = listOfNotNull(rewrite?.usage, repair?.originalGeneration?.usage, repair?.originalSupportCheck?.generation?.usage, generation?.usage, supportCheck?.generation?.usage)
             val complete = attempts > 0 && usages.size == attempts
-            val costParts = listOfNotNull(rewrite?.estimatedCost, generation?.estimatedCost, supportCheck?.generation?.estimatedCost)
-            val cost = if (attempts > 0 && costParts.size == attempts) costParts.first().copy(minimumUsd = costParts.sumOf { it.minimumUsd }, maximumUsd = costParts.sumOf { it.maximumUsd }, note = "Сумма стадий, rewrite один раз; не фактическое списание.") else null
+            val costParts = listOfNotNull(rewrite?.estimatedCost, repair?.originalGeneration?.estimatedCost, repair?.originalSupportCheck?.generation?.estimatedCost, generation?.estimatedCost, supportCheck?.generation?.estimatedCost)
+            val cost = if (attempts > 0 && costParts.size == attempts) costParts.first().copy(minimumUsd = costParts.sumOf { it.minimumUsd }, maximumUsd = costParts.sumOf { it.maximumUsd }, note = "Сумма всех выполненных стадий, включая одно исправление при наличии; rewrite один раз; не фактическое списание.") else null
             val answer = when (checked.status) {
                 GroundedStatus.ANSWERED -> checked.claims.joinToString("\n\n") { it.text }
                 GroundedStatus.UNKNOWN -> "Не знаю по найденным материалам."
@@ -47,8 +48,9 @@ class GroundingService(private val repository: IndexRepository, private val sear
                 GroundedStatus.ERROR -> "Не удалось подготовить ответ."
             }
             val warnings = mutableListOf("Точные цитаты и отдельная модельная проверка смысла снижают риск неподтверждённых выводов, но не гарантируют правильность книги или безошибочность проверки.", "Cosine threshold — настройка поиска, не вероятность уверенности.")
+            if (repair != null) warnings.add("После смыслового отклонения выполнена одна попытка исправления; исходный черновик и его проверка сохранены только в диагностике. Дополнительные стадии учтены в расходе.")
             if (attempts > 0 && !complete) warnings.add("Полный API usage неизвестен; доступные измерения отдельных стадий сохранены.")
-            return GroundedResult(clean, snapshotId, checked.status, answer, checked.clarification, checked.claims, checked.sources, checked.issues, retrieval, rewrite, generation, attempts, if (complete) sumUsage(usages) else null, cost, (System.nanoTime() - started) / 1_000_000, warnings, supportCheck)
+            return GroundedResult(clean, snapshotId, checked.status, answer, checked.clarification, checked.claims, checked.sources, checked.issues, retrieval, rewrite, generation, attempts, if (complete) sumUsage(usages) else null, cost, (System.nanoTime() - started) / 1_000_000, warnings, supportCheck, repair)
         }
         try {
             val query = dialogue?.resolvedQuestion ?: if (clean.useRewrite) { attempts++; rewriter.rewrite(clean.question).also { rewrite = it }.query } else clean.question
@@ -68,12 +70,31 @@ class GroundingService(private val repository: IndexRepository, private val sear
                 attempts++
                 val support = supportValidator.validate(checked.claims, included)
                 supportCheck = support
-                if (support.status != SupportCheckStatus.PASSED) checked = EvidenceValidation(GroundedStatus.INVALID_EVIDENCE, issues = support.issues)
+                if (support.status == SupportCheckStatus.REJECTED) {
+                    val original = requireNotNull(generation)
+                    val repairMessages = prompt.assembleRepair(messages, original.rawJson, support.claims)
+                    repair = GroundingRepair(original, support)
+                    // С этого момента основные trace-поля относятся только к последней попытке.
+                    generation = null
+                    supportCheck = null
+                    attempts++
+                    val repaired = llm.completeJson(repairMessages, clean.maxOutputTokens)
+                    generation = GroundingGeneration(repaired.model, repaired.finishReason, repaired.milliseconds, repaired.usage, costs.estimate(repaired.model, repaired.usage), repairMessages, repaired.content)
+                    checked = validator.validate(repaired.content, repaired.finishReason, included)
+                    if (checked.status == GroundedStatus.ANSWERED) {
+                        attempts++
+                        val repairedSupport = supportValidator.validate(checked.claims, included)
+                        supportCheck = repairedSupport
+                        if (repairedSupport.status != SupportCheckStatus.PASSED) checked = EvidenceValidation(GroundedStatus.INVALID_EVIDENCE, issues = repairedSupport.issues)
+                    }
+                } else if (support.status != SupportCheckStatus.PASSED) {
+                    checked = EvidenceValidation(GroundedStatus.INVALID_EVIDENCE, issues = support.issues)
+                }
             }
             log.info("Grounding completed status={} sources={} claims={} issueCodes={}", checked.status, checked.sources.size, checked.claims.size, checked.issues.map { it.code })
             return result(checked)
         } catch (failure: Exception) {
-            val issue = if (failure is LabException) EvidenceIssue(failure.code, failure.message ?: "Ошибка стадии.") else EvidenceIssue("grounding_stage_failed", "Ошибка стадии. Автоматический повтор не выполнялся.")
+            val issue = if (failure is LabException) EvidenceIssue(failure.code, failure.message ?: "Ошибка стадии.") else EvidenceIssue("grounding_stage_failed", "Ошибка стадии. Транспортный повтор не выполнялся.")
             log.warn("Grounding failed type={} code={}", failure.javaClass.simpleName, issue.code)
             return result(EvidenceValidation(GroundedStatus.ERROR, issues = listOf(issue)))
         }

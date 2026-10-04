@@ -19,7 +19,7 @@ class LlmClaimSupportValidator(private val llm: LlmClient, private val prompt: C
     override fun validate(claims: List<GroundedClaim>, included: List<SearchHit>): ClaimSupportCheck {
         val messages = prompt.assemble(claims, included)
         // Технический лимит только проверяющей модели; пользовательский лимит генерации не меняется.
-        val response = llm.completeJson(messages, 2048)
+        val response = llm.completeVerifiedJson(messages, 16384)
         val generation = GroundingGeneration(response.model, response.finishReason, response.milliseconds, response.usage, costs.estimate(response.model, response.usage), messages, response.content)
         fun invalid(code: String, message: String) = ClaimSupportCheck(SupportCheckStatus.INVALID_RESPONSE, emptyList(), listOf(EvidenceIssue(code, message)), generation)
         if (response.finishReason != "stop") return invalid("truncated_support_check", "Проверка смысла не завершена. Ответ не опубликован; автоматического повтора нет.")
@@ -37,8 +37,15 @@ class LlmClaimSupportValidator(private val llm: LlmClient, private val prompt: C
                 "contradicted" -> ClaimSupportVerdict.CONTRADICTED
                 else -> null
             }
-            if (!shape(node, "claim_index", "verdict", "reason") || !indexNode.isIntegralNumber || !indexNode.canConvertToInt() || indexNode.asInt() !in claims.indices || !seen.add(indexNode.asInt()) || verdict == null || reason.isNullOrBlank() || reason.length > 300) return invalid("invalid_support_shape", "Вердикты проверки неполны, неоднозначны или имеют неверную форму.")
-            assessments.add(ClaimSupportAssessment(indexNode.asInt(), verdict, reason))
+            val evidenceScope = node.path("evidence_scope").takeIf { it.isString }?.asText()
+            val claimScope = node.path("claim_scope").takeIf { it.isString }?.asText()
+            val validShape = shape(node, "claim_index", "verdict", "reason", "evidence_scope", "claim_scope") || shape(node, "claim_index", "verdict", "reason", "evidence_scope", "claim_scope", "text")
+            if (!validShape || !indexNode.isIntegralNumber || !indexNode.canConvertToInt() || indexNode.asInt() !in claims.indices || !seen.add(indexNode.asInt()) || verdict == null || reason.isNullOrBlank() || reason.length > 300 || evidenceScope !in setOf("general", "example") || claimScope !in setOf("general", "example")) return invalid("invalid_support_shape", "Вердикты проверки неполны, неоднозначны или имеют неверную форму.")
+            // Допустимо только дословное эхо исходного claim; оно не заменяет и не исправляет его.
+            if (node.has("text") && (!node.path("text").isString || node.path("text").asText() != claims[indexNode.asInt()].text)) return invalid("invalid_support_shape", "Текст в вердикте не совпадает с исходным пунктом ответа.")
+            // Частный пример не подтверждает обобщение даже при положительном вердикте модели.
+            val scopeMismatch = verdict == ClaimSupportVerdict.SUPPORTED && evidenceScope == "example" && claimScope == "general"
+            assessments.add(ClaimSupportAssessment(indexNode.asInt(), if (scopeMismatch) ClaimSupportVerdict.UNSUPPORTED else verdict, if (scopeMismatch) "Обобщён частный пример. $reason".take(300) else reason))
         }
         if (seen != claims.indices.toSet()) return invalid("invalid_support_shape", "Проверка смысла пропустила пункт ответа.")
         val ordered = assessments.sortedBy { it.claimIndex }

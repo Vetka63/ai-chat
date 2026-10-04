@@ -481,6 +481,11 @@ export interface components {
             issues: components["schemas"]["EvidenceIssue"][];
             generation: components["schemas"]["GroundingGeneration"];
         };
+        /** @description One bounded semantic refinement. The rejected original draft and its judge remain unverified diagnostics; GroundedResult.generation/supportCheck describe the latest attempt. */
+        GroundingRepair: {
+            originalGeneration: components["schemas"]["GroundingGeneration"];
+            originalSupportCheck: components["schemas"]["ClaimSupportCheck"];
+        };
         GroundedResult: {
             request: components["schemas"]["GroundingRequest"];
             snapshotId: string;
@@ -499,6 +504,8 @@ export interface components {
             totalMilliseconds: number;
             warnings: string[];
             supportCheck?: components["schemas"]["ClaimSupportCheck"] | null;
+            /** @description Absent or null for older results and requests without semantic refinement. Its usage/cost already belong to the total. */
+            repair?: components["schemas"]["GroundingRepair"] | null;
         };
         /** @enum {string} */
         RetrievalMode: "RAW" | "FILTERED" | "REWRITE" | "REWRITE_FILTERED";

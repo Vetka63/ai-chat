@@ -2,7 +2,10 @@ package dev.aichallenge.rag
 
 import com.sun.net.httpserver.HttpServer
 import dev.aichallenge.rag.answering.adapters.DeepSeekLlmClient
+import dev.aichallenge.rag.answering.models.AnswerSettings
+import dev.aichallenge.rag.answering.models.LlmCompletion
 import dev.aichallenge.rag.answering.models.LlmMessage
+import dev.aichallenge.rag.answering.ports.LlmClient
 import dev.aichallenge.rag.common.LabException
 import dev.aichallenge.rag.config.DeepSeekProperties
 import org.junit.jupiter.api.Assertions.*
@@ -13,7 +16,11 @@ import java.net.InetSocketAddress
 /** Локальный HTTP fixture проверяет протокол и защиту ключа без обращения к DeepSeek. */
 class DeepSeekAdapterTest {
     private val valid = """{"id":"request","model":"deepseek-flash","choices":[{"finish_reason":"stop","message":{"content":"Ответ"}}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15,"prompt_cache_hit_tokens":4,"prompt_cache_miss_tokens":6}}"""
-    private fun withServer(body: String, status: Int = 200, action: (DeepSeekLlmClient, MutableList<String>) -> Unit) {
+    private fun withServer(
+        body: String, status: Int = 200,
+        supportModel: String = "deepseek-v4-pro", supportReasoningEffort: String = "high",
+        action: (DeepSeekLlmClient, MutableList<String>) -> Unit,
+    ) {
         val requests = mutableListOf<String>()
         val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
         server.createContext("/chat/completions") { exchange ->
@@ -23,7 +30,10 @@ class DeepSeekAdapterTest {
             exchange.sendResponseHeaders(status, bytes.size.toLong()); exchange.responseBody.use { it.write(bytes) }
         }
         server.start()
-        try { action(DeepSeekLlmClient(DeepSeekProperties("test-only", "http://127.0.0.1:${server.address.port}"), jacksonObjectMapper()), requests) }
+        try {
+            val properties = DeepSeekProperties("test-only", "http://127.0.0.1:${server.address.port}", supportModel = supportModel, supportReasoningEffort = supportReasoningEffort)
+            action(DeepSeekLlmClient(properties, jacksonObjectMapper()), requests)
+        }
         finally { server.stop(0) }
     }
     @Test fun `optional max tokens omitted and thinking disabled`() {
@@ -32,6 +42,8 @@ class DeepSeekAdapterTest {
             val request = jacksonObjectMapper().readTree(requests.single())
             assertFalse(request.has("max_tokens"))
             assertFalse(request.has("response_format"))
+            assertFalse(request.has("reasoning_effort"))
+            assertEquals("deepseek-flash", request.path("model").asText())
             assertEquals("disabled", request.path("thinking").path("type").asText())
             assertEquals(0.0, request.path("temperature").asDouble())
             assertEquals(15L, result.usage!!.totalTokens)
@@ -68,6 +80,9 @@ class DeepSeekAdapterTest {
             val request = jacksonObjectMapper().readTree(requests.single())
             assertEquals("json_object", request.path("response_format").path("type").asText())
             assertEquals(512, request.path("max_tokens").asInt())
+            assertEquals("deepseek-flash", request.path("model").asText())
+            assertEquals("disabled", request.path("thinking").path("type").asText())
+            assertFalse(request.has("reasoning_effort"))
         }
     }
     @Test fun `JSON generation with no local cap omits max tokens`() {
@@ -77,5 +92,64 @@ class DeepSeekAdapterTest {
             assertEquals("json_object", request.path("response_format").path("type").asText())
             assertFalse(request.has("max_tokens"))
         }
+    }
+    @Test fun `verified JSON uses isolated thinking model and preserves full completion usage`() {
+        val body = valid.replace("deepseek-flash", "provider-support-model")
+            .replace("\"content\":\"Ответ\"", "\"content\":\"Ответ\",\"reasoning_content\":\"private-reasoning\"")
+            .replace("\"completion_tokens\":5", "\"completion_tokens\":5,\"completion_tokens_details\":{\"reasoning_tokens\":3}")
+        withServer(body) { client, requests ->
+            val messages = listOf(LlmMessage("user", "Проверь утверждение и верни JSON"))
+            val result = client.completeVerifiedJson(messages, 8192)
+            val request = jacksonObjectMapper().readTree(requests.single())
+            assertEquals("deepseek-v4-pro", request.path("model").asText())
+            assertEquals("enabled", request.path("thinking").path("type").asText())
+            assertEquals("high", request.path("reasoning_effort").asText())
+            assertEquals("json_object", request.path("response_format").path("type").asText())
+            assertEquals(8192, request.path("max_tokens").asInt())
+            assertFalse(request.path("stream").asBoolean())
+            assertEquals(messages.single().content, request.path("messages").first().path("content").asText())
+            assertEquals("provider-support-model", result.model)
+            assertEquals("Ответ", result.content)
+            assertEquals(5L, result.usage!!.completionTokens)
+            assertEquals(15L, result.usage!!.totalTokens)
+            assertFalse(result.toString().contains("private-reasoning"))
+            assertFalse(result.toString().contains("test-only"))
+            assertEquals("deepseek-flash", client.settings().model)
+            assertEquals("disabled", client.settings().thinking)
+        }
+    }
+    @Test fun `support configuration and optional cap do not leak into regular requests`() {
+        withServer(valid, supportModel = "fixture-support-model", supportReasoningEffort = "high") { client, requests ->
+            val messages = listOf(LlmMessage("user", "Верни JSON"))
+            client.completeVerifiedJson(messages, null)
+            client.completeJson(messages, 512)
+            client.complete(messages, null)
+            val verified = jacksonObjectMapper().readTree(requests[0])
+            assertEquals("fixture-support-model", verified.path("model").asText())
+            assertEquals("high", verified.path("reasoning_effort").asText())
+            assertFalse(verified.has("max_tokens"))
+            requests.drop(1).forEach { raw ->
+                val request = jacksonObjectMapper().readTree(raw)
+                assertEquals("deepseek-flash", request.path("model").asText())
+                assertEquals("disabled", request.path("thinking").path("type").asText())
+                assertFalse(request.has("reasoning_effort"))
+            }
+        }
+    }
+    @Test fun `verified JSON default delegates to JSON for existing clients`() {
+        val messages = listOf(LlmMessage("user", "Верни JSON"))
+        val expected = LlmCompletion("fixture", "fixture-model", "{}", "stop", 1, null)
+        val calls = mutableListOf<Pair<List<LlmMessage>, Int?>>()
+        val client = object : LlmClient {
+            override fun settings(): AnswerSettings = error("Settings are not needed")
+            override fun complete(messages: List<LlmMessage>, maxOutputTokens: Int?): LlmCompletion = error("JSON override should be used")
+            override fun completeJson(messages: List<LlmMessage>, maxOutputTokens: Int?): LlmCompletion {
+                calls += messages to maxOutputTokens
+                return expected
+            }
+        }
+        assertSame(expected, client.completeVerifiedJson(messages, 8192))
+        assertSame(expected, client.completeVerifiedJson(messages, null))
+        assertEquals(listOf(messages to 8192, messages to null), calls)
     }
 }

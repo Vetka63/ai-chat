@@ -13,7 +13,7 @@ import java.net.URI
 import java.net.http.*
 import java.time.Duration
 
-/** Один HTTP-вызов без скрытых retry. Non-thinking + temperature=0 одинаковы для обоих режимов. */
+/** Один HTTP-вызов без скрытых retry; профиль смысловой проверки отделён от обычной генерации. */
 @Component
 class DeepSeekLlmClient(private val properties: DeepSeekProperties, private val mapper: ObjectMapper) : LlmClient {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -25,15 +25,25 @@ class DeepSeekLlmClient(private val properties: DeepSeekProperties, private val 
         return execute(messages, maxOutputTokens, false)
     }
     override fun completeJson(messages: List<LlmMessage>, maxOutputTokens: Int?) = execute(messages, maxOutputTokens, true)
+    override fun completeVerifiedJson(messages: List<LlmMessage>, maxOutputTokens: Int?) = execute(
+        messages, maxOutputTokens, true,
+        model = properties.supportModel, thinkingEnabled = true, reasoningEffort = properties.supportReasoningEffort,
+        timeoutSeconds = properties.supportTimeoutSeconds,
+    )
 
     /** Один запрос; JSON object только для явно выбранных структурированных флоу, не старых текстовых ответов. */
-    private fun execute(messages: List<LlmMessage>, maxOutputTokens: Int?, jsonObject: Boolean): LlmCompletion {
+    private fun execute(
+        messages: List<LlmMessage>, maxOutputTokens: Int?, jsonObject: Boolean,
+        model: String = properties.model, thinkingEnabled: Boolean = false, reasoningEffort: String? = null,
+        timeoutSeconds: Long = properties.timeoutSeconds,
+    ): LlmCompletion {
         if (properties.apiKey.isBlank()) throw LabException("llm_not_configured", "Настройте DEEPSEEK_API_KEY только на backend и пересоздайте контейнер.", HttpStatus.SERVICE_UNAVAILABLE)
-        val body = linkedMapOf<String, Any>("model" to properties.model, "messages" to messages, "stream" to false, "temperature" to 0.0, "thinking" to mapOf("type" to "disabled"))
+        val body = linkedMapOf<String, Any>("model" to model, "messages" to messages, "stream" to false, "temperature" to 0.0, "thinking" to mapOf("type" to if (thinkingEnabled) "enabled" else "disabled"))
+        if (thinkingEnabled && reasoningEffort != null) body["reasoning_effort"] = reasoningEffort
         if (maxOutputTokens != null) body["max_tokens"] = maxOutputTokens
         if (jsonObject) body["response_format"] = mapOf("type" to "json_object")
         val request = HttpRequest.newBuilder(URI.create(properties.baseUrl.trimEnd('/') + "/chat/completions"))
-            .timeout(Duration.ofSeconds(properties.timeoutSeconds)).header("Content-Type", "application/json").header("Authorization", "Bearer ${properties.apiKey}")
+            .timeout(Duration.ofSeconds(timeoutSeconds)).header("Content-Type", "application/json").header("Authorization", "Bearer ${properties.apiKey}")
             .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(body))).build()
         val started = System.nanoTime()
         val response = try { http.send(request, HttpResponse.BodyHandlers.ofString()) } catch (error: Exception) {
@@ -50,12 +60,13 @@ class DeepSeekLlmClient(private val properties: DeepSeekProperties, private val 
         val choice = json.path("choices").firstOrNull() ?: throw invalid("Провайдер не вернул choices.")
         val content = choice.path("message").path("content").takeIf { it.isString }?.asText()?.trim().orEmpty()
         if (content.isBlank()) throw LabException("llm_empty_response", "DeepSeek вернул пустой финальный ответ. Попробуйте повторить или увеличить явный лимит ответа.", HttpStatus.BAD_GATEWAY)
-        val model = json.path("model").takeIf { it.isString }?.asText()?.takeIf { it.isNotBlank() } ?: throw invalid("Нет имени фактически ответившей модели.")
+        val responseModel = json.path("model").takeIf { it.isString }?.asText()?.takeIf { it.isNotBlank() } ?: throw invalid("Нет имени фактически ответившей модели.")
         val finish = choice.path("finish_reason").takeIf { it.isString }?.asText() ?: throw invalid("Нет finish_reason.")
         if (finish !in setOf("stop", "length")) throw invalid("Неожиданный тип завершения: $finish.")
         val usageNode = json.path("usage")
         val usage = if (usageNode.isMissingNode || usageNode.isNull) null else {
             val prompt = count(usageNode, "prompt_tokens", true)!!
+            // API completion_tokens уже включает reasoning: не вычитаем и не прибавляем его отдельно.
             val completion = count(usageNode, "completion_tokens", true)!!
             val total = count(usageNode, "total_tokens", true)!!
             if (total != prompt + completion) throw invalid("Usage API не согласован.")
@@ -64,8 +75,8 @@ class DeepSeekLlmClient(private val properties: DeepSeekProperties, private val 
             if (hit != null && miss != null && hit + miss != prompt) throw invalid("Cache usage API не согласован.")
             TokenUsage(prompt, completion, total, hit, miss)
         }
-        val result = LlmCompletion(json.path("id").asText("unknown"), model, content, finish, (System.nanoTime() - started) / 1_000_000, usage)
-        log.info("DeepSeek completed model={} latencyMs={} finish={} promptTokens={} outputTokens={}", model, result.milliseconds, finish, usage?.promptTokens, usage?.completionTokens)
+        val result = LlmCompletion(json.path("id").asText("unknown"), responseModel, content, finish, (System.nanoTime() - started) / 1_000_000, usage)
+        log.info("DeepSeek completed model={} latencyMs={} finish={} promptTokens={} outputTokens={}", responseModel, result.milliseconds, finish, usage?.promptTokens, usage?.completionTokens)
         return result
     }
     private fun count(node: JsonNode, name: String, required: Boolean): Long? {
