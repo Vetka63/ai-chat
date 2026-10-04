@@ -11,8 +11,9 @@ import java.net.InetSocketAddress
 
 /** Проверяет HTTP-контракт адаптера без скачивания модели и без платных LLM-вызовов. */
 class OllamaAdapterTest {
-    private fun withRuntime(response: String, status: Int = 200, action: (OllamaEmbeddingProvider, MutableList<String>) -> Unit) {
+    private fun withRuntime(response: String, status: Int = 200, digests: List<String> = emptyList(), action: (OllamaEmbeddingProvider, MutableList<String>) -> Unit) {
         val requests = mutableListOf<String>()
+        var tagReads = 0
         val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
         server.createContext("/api/embed") { exchange ->
             requests.add(exchange.requestBody.bufferedReader().readText())
@@ -21,7 +22,8 @@ class OllamaAdapterTest {
             exchange.responseBody.use { it.write(bytes) }
         }
         server.createContext("/api/tags") { exchange ->
-            val bytes = """{"models":[]}""".toByteArray()
+            val digest = digests.getOrNull(tagReads++) ?: digests.lastOrNull()
+            val bytes = (if (digest == null) """{"models":[]}""" else """{"models":[{"name":"test","digest":"$digest"}]}""").toByteArray()
             exchange.sendResponseHeaders(200, bytes.size.toLong())
             exchange.responseBody.use { it.write(bytes) }
         }
@@ -55,5 +57,14 @@ class OllamaAdapterTest {
         withRuntime("failure", 500) { provider, _ -> assertEquals("ollama_error", assertThrows(LabException::class.java) { provider.embed(listOf("a")) }.code) }
         withRuntime("not JSON") { provider, _ -> assertEquals("ollama_invalid_json", assertThrows(LabException::class.java) { provider.embed(listOf("a")) }.code) }
         withRuntime("unused") { provider, _ -> assertEquals("model_missing", assertThrows(LabException::class.java) { provider.identity() }.code) }
+    }
+    @Test fun `identity brackets dimension probe with digest reads`() {
+        val response = """{"model":"test","embeddings":[[1,0]]}"""
+        withRuntime(response, digests = listOf("digest-a", "digest-a")) { provider, _ ->
+            val id = provider.identity(); assertEquals("digest-a", id.digest); assertEquals(2, id.dimension)
+        }
+        withRuntime(response, digests = listOf("digest-a", "digest-b")) { provider, _ ->
+            assertEquals("embedding_space_mismatch", assertThrows(LabException::class.java) { provider.identity() }.code)
+        }
     }
 }
