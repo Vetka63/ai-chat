@@ -25,5 +25,10 @@ class RealCorpusTest {
             assertEquals(100.0, preview.metrics.coveragePercent)
             assertTrue(preview.chunks.all { it.text.length <= 3000 })
         }
+        val edge = chunking.preview(snapshot, ChunkConfig(ChunkStrategy.STRUCTURAL, 300, 149))
+        assertEquals(100.0, edge.metrics.coveragePercent)
+        assertTrue(edge.metrics.indexedCharacters <= 2L * edge.metrics.uniqueCharacters)
+        assertTrue(edge.chunks.groupBy { it.documentId to it.endExclusive }.values.all { it.size <= 2 })
+        println("Structural 300/149: ${edge.metrics.chunkCount} chunks, ${edge.metrics.indexedCharacters} characters, coverage ${edge.metrics.coveragePercent}")
     }
 }

@@ -40,7 +40,10 @@ internal fun windows(start: Int, endExclusive: Int, config: ChunkConfig, boundar
         require(end > cursor && end <= hardEnd)
         ranges.add(cursor until end)
         if (end == endExclusive) break
-        cursor = maxOf(cursor + 1, end - config.overlapCharacters)
+        // Смысловая граница может оказаться ближе maxCharacters. Перекрытие считается
+        // от фактического окна: сохраняем минимум половину нового текста, а не шаг в 1 символ.
+        val actualOverlap = minOf(config.overlapCharacters, (end - cursor) / 2)
+        cursor = end - actualOverlap
     }
     return ranges
 }
