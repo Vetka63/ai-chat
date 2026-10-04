@@ -37,9 +37,10 @@ class GroundingService(private val repository: IndexRepository, private val sear
         var repair: GroundingRepair? = null
         var attempts = 0
         fun result(checked: EvidenceValidation): GroundedResult {
-            val usages = listOfNotNull(rewrite?.usage, repair?.originalGeneration?.usage, repair?.originalSupportCheck?.generation?.usage, generation?.usage, supportCheck?.generation?.usage)
+            val checks = repair?.originalSupportCheck?.generations().orEmpty() + supportCheck?.generations().orEmpty()
+            val usages = listOfNotNull(rewrite?.usage, repair?.originalGeneration?.usage, generation?.usage) + checks.mapNotNull { it.usage }
             val complete = attempts > 0 && usages.size == attempts
-            val costParts = listOfNotNull(rewrite?.estimatedCost, repair?.originalGeneration?.estimatedCost, repair?.originalSupportCheck?.generation?.estimatedCost, generation?.estimatedCost, supportCheck?.generation?.estimatedCost)
+            val costParts = listOfNotNull(rewrite?.estimatedCost, repair?.originalGeneration?.estimatedCost, generation?.estimatedCost) + checks.mapNotNull { it.estimatedCost }
             val cost = if (attempts > 0 && costParts.size == attempts) costParts.first().copy(minimumUsd = costParts.sumOf { it.minimumUsd }, maximumUsd = costParts.sumOf { it.maximumUsd }, note = "Сумма всех выполненных стадий, включая одно исправление при наличии; rewrite один раз; не фактическое списание.") else null
             val answer = when (checked.status) {
                 GroundedStatus.ANSWERED -> checked.claims.joinToString("\n\n") { it.text }
@@ -69,6 +70,7 @@ class GroundingService(private val repository: IndexRepository, private val sear
             if (checked.status == GroundedStatus.ANSWERED) {
                 attempts++
                 val support = supportValidator.validate(checked.claims, included)
+                attempts += support.additionalGenerations.size
                 supportCheck = support
                 if (support.status == SupportCheckStatus.REJECTED) {
                     val original = requireNotNull(generation)
@@ -84,6 +86,7 @@ class GroundingService(private val repository: IndexRepository, private val sear
                     if (checked.status == GroundedStatus.ANSWERED) {
                         attempts++
                         val repairedSupport = supportValidator.validate(checked.claims, included)
+                        attempts += repairedSupport.additionalGenerations.size
                         supportCheck = repairedSupport
                         if (repairedSupport.status != SupportCheckStatus.PASSED) checked = EvidenceValidation(GroundedStatus.INVALID_EVIDENCE, issues = repairedSupport.issues)
                     }

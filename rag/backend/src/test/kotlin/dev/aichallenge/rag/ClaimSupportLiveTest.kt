@@ -5,6 +5,7 @@ import dev.aichallenge.rag.answering.services.CostEstimator
 import dev.aichallenge.rag.config.DeepSeekProperties
 import dev.aichallenge.rag.grounding.adapters.ExactCitationValidator
 import dev.aichallenge.rag.grounding.adapters.LlmClaimSupportValidator
+import dev.aichallenge.rag.grounding.adapters.IsolatedClaimSupportValidator
 import dev.aichallenge.rag.grounding.enums.GroundedStatus
 import dev.aichallenge.rag.grounding.enums.SupportCheckStatus
 import dev.aichallenge.rag.grounding.services.ClaimSupportPromptAssembler
@@ -36,7 +37,7 @@ class ClaimSupportLiveTest {
             supportReasoningEffort = System.getenv("RAG_SUPPORT_TEST_EFFORT")?.takeIf { it.isNotBlank() } ?: "high",
             supportThinkingEnabled = System.getenv("RAG_SUPPORT_TEST_THINKING")?.toBooleanStrict() ?: false,
         )
-        val checker = LlmClaimSupportValidator(DeepSeekLlmClient(properties, mapper), ClaimSupportPromptAssembler(mapper), mapper, CostEstimator())
+        val checker = IsolatedClaimSupportValidator(LlmClaimSupportValidator(DeepSeekLlmClient(properties, mapper), ClaimSupportPromptAssembler(mapper), mapper, CostEstimator()), ClaimSupportPromptAssembler(mapper))
         val bookCases = listOf(
             Case("add-does-not-delete", "02-git-basics/sections/recording-changes.asc", "Индексация изменённых файлов",
                 "Команда git add удаляет изменённый файл из рабочего каталога.",

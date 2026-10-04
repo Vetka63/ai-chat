@@ -7,4 +7,7 @@ import dev.aichallenge.rag.grounding.enums.SupportCheckStatus
 data class ClaimSupportAssessment(val claimIndex: Int, val verdict: ClaimSupportVerdict, val reason: String)
 
 /** Сохраняет расход платной стадии и исходный ответ даже при отклонении JSON или вердиктов. */
-data class ClaimSupportCheck(val status: SupportCheckStatus, val claims: List<ClaimSupportAssessment>, val issues: List<EvidenceIssue>, val generation: GroundingGeneration)
+data class ClaimSupportCheck(val status: SupportCheckStatus, val claims: List<ClaimSupportAssessment>, val issues: List<EvidenceIssue>, val generation: GroundingGeneration, val additionalGenerations: List<GroundingGeneration> = emptyList()) {
+    /** Первый trace сохранён совместимо со старыми результатами; остальные вызовы учитываются отдельно. */
+    fun generations() = listOf(generation) + additionalGenerations
+}

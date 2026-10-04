@@ -39,10 +39,15 @@ class LlmClaimSupportValidator(private val llm: LlmClient, private val prompt: C
             }
             val evidenceScope = node.path("evidence_scope").takeIf { it.isString }?.asText()
             val claimScope = node.path("claim_scope").takeIf { it.isString }?.asText()
-            val validShape = shape(node, "claim_index", "conditions", "verdict", "reason", "evidence_scope", "claim_scope") || shape(node, "claim_index", "conditions", "verdict", "reason", "evidence_scope", "claim_scope", "text")
-            if (!validShape || !indexNode.isIntegralNumber || !indexNode.canConvertToInt() || indexNode.asInt() !in claims.indices || !seen.add(indexNode.asInt()) || verdict == null || reason.isNullOrBlank() || reason.length > 300 || evidenceScope !in setOf("general", "example") || claimScope !in setOf("general", "example")) return invalid("invalid_support_shape", "Вердикты проверки неполны, неоднозначны или имеют неверную форму.")
+            val required = setOf("claim_index", "conditions", "verdict", "reason", "evidence_scope", "claim_scope")
+            val validShape = node.isObject && required.all { node.has(it) } && node.size() == required.size + (if (node.has("text")) 1 else 0) + (if (node.has("citations")) 1 else 0)
+            if (!validShape || !indexNode.isIntegralNumber || !indexNode.canConvertToInt() || indexNode.asInt() !in claims.indices || !seen.add(indexNode.asInt()) || verdict == null || reason.isNullOrBlank() || reason.length > 1000 || evidenceScope !in setOf("general", "example") || claimScope !in setOf("general", "example")) return invalid("invalid_support_shape", "Вердикты проверки неполны, неоднозначны или имеют неверную форму.")
             // Допустимо только дословное эхо исходного claim; оно не заменяет и не исправляет его.
             if (node.has("text") && (!node.path("text").isString || node.path("text").asText() != claims[indexNode.asInt()].text)) return invalid("invalid_support_shape", "Текст в вердикте не совпадает с исходным пунктом ответа.")
+            if (node.has("citations")) {
+                val original = mapper.valueToTree<JsonNode>(claims[indexNode.asInt()].citations.map { mapOf("chunk_id" to it.source.chunkId, "quote" to it.quote) })
+                if (node.path("citations") != original) return invalid("invalid_support_shape", "Эхо доказательств не совпало с исходными цитатами.")
+            }
             // Предпосылки не служат новым доказательством, но отрицательная оценка не может сопровождаться допуском.
             val conditions = node.path("conditions")
             if (!conditions.isArray || conditions.size() > 8) return invalid("invalid_support_conditions", "Нужен ограниченный список проверенных предпосылок.")
@@ -69,7 +74,7 @@ class LlmClaimSupportValidator(private val llm: LlmClient, private val prompt: C
         if (seen != claims.indices.toSet()) return invalid("invalid_support_shape", "Проверка смысла пропустила пункт ответа.")
         val ordered = assessments.sortedBy { it.claimIndex }
         val issues = ordered.filter { it.verdict != ClaimSupportVerdict.SUPPORTED }.map {
-            EvidenceIssue(if (it.verdict == ClaimSupportVerdict.CONTRADICTED) "contradicted_claim" else "unsupported_claim", "Цитаты не подтверждают полный смысл пункта ${it.claimIndex + 1}. Ответ не опубликован.", it.claimIndex)
+            EvidenceIssue(if (it.verdict == ClaimSupportVerdict.CONTRADICTED) "contradicted_claim" else "unsupported_claim", "Цитаты не подтверждают полный смысл этого пункта. Ответ не опубликован.", it.claimIndex)
         }
         return ClaimSupportCheck(if (issues.isEmpty()) SupportCheckStatus.PASSED else SupportCheckStatus.REJECTED, ordered, issues, generation)
     }

@@ -27,6 +27,7 @@ class DeepSeekLlmClient(private val properties: DeepSeekProperties, private val 
     override fun completeJson(messages: List<LlmMessage>, maxOutputTokens: Int?) = execute(messages, maxOutputTokens, true)
     override fun completeGroundedJson(messages: List<LlmMessage>, maxOutputTokens: Int?) = execute(
         messages, maxOutputTokens, true, model = properties.groundingModel,
+        thinkingEnabled = properties.groundingThinkingEnabled, reasoningEffort = properties.groundingReasoningEffort,
         timeoutSeconds = properties.groundingTimeoutSeconds,
     )
     override fun completeVerifiedJson(messages: List<LlmMessage>, maxOutputTokens: Int?) = execute(

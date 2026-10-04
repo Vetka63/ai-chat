@@ -340,6 +340,8 @@ export interface components {
             claims: components["schemas"]["ClaimSupportAssessment"][];
             issues: components["schemas"]["EvidenceIssue"][];
             generation: components["schemas"]["GroundingGeneration"];
+            /** @description Additional isolated per-claim calls; absent in historical results. Every entry counts as one attempted LLM stage. */
+            additionalGenerations?: components["schemas"]["GroundingGeneration"][];
         };
         /** @description One bounded semantic refinement. The rejected original draft and its judge remain unverified diagnostics; GroundedResult.generation/supportCheck describe the latest attempt. */
         GroundingRepair: {

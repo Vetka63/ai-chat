@@ -18,7 +18,7 @@ class DeepSeekAdapterTest {
     private val valid = """{"id":"request","model":"deepseek-flash","choices":[{"finish_reason":"stop","message":{"content":"Ответ"}}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15,"prompt_cache_hit_tokens":4,"prompt_cache_miss_tokens":6}}"""
     private fun withServer(
         body: String, status: Int = 200,
-        supportModel: String = "deepseek-v4-pro", supportReasoningEffort: String = "high", supportThinking: Boolean = true,
+        supportModel: String = "deepseek-v4-pro", supportReasoningEffort: String = "high", supportThinking: Boolean = true, groundingThinking: Boolean = false,
         action: (DeepSeekLlmClient, MutableList<String>) -> Unit,
     ) {
         val requests = mutableListOf<String>()
@@ -31,7 +31,7 @@ class DeepSeekAdapterTest {
         }
         server.start()
         try {
-            val properties = DeepSeekProperties("test-only", "http://127.0.0.1:${server.address.port}", supportModel = supportModel, supportReasoningEffort = supportReasoningEffort, supportThinkingEnabled = supportThinking)
+            val properties = DeepSeekProperties("test-only", "http://127.0.0.1:${server.address.port}", supportModel = supportModel, supportReasoningEffort = supportReasoningEffort, supportThinkingEnabled = supportThinking, groundingThinkingEnabled = groundingThinking)
             action(DeepSeekLlmClient(properties, jacksonObjectMapper()), requests)
         }
         finally { server.stop(0) }
@@ -187,6 +187,19 @@ class DeepSeekAdapterTest {
             assertEquals("deepseek-v4-pro", request.path("model").asText())
             assertEquals("disabled", request.path("thinking").path("type").asText())
             assertFalse(request.has("reasoning_effort"))
+        }
+    }
+    @Test fun `grounded reasoning is explicit and never enables thinking in baseline comparison`() {
+        withServer(valid, groundingThinking = true) { client, requests ->
+            client.completeGroundedJson(listOf(LlmMessage("user", "JSON")), null)
+            client.completeJson(listOf(LlmMessage("user", "JSON")), null)
+            val grounded = jacksonObjectMapper().readTree(requests[0])
+            assertEquals("enabled", grounded.path("thinking").path("type").asText())
+            assertEquals("high", grounded.path("reasoning_effort").asText())
+            assertFalse(grounded.has("max_tokens"))
+            val baseline = jacksonObjectMapper().readTree(requests[1])
+            assertEquals("disabled", baseline.path("thinking").path("type").asText())
+            assertFalse(baseline.has("reasoning_effort"))
         }
     }
 }

@@ -91,7 +91,7 @@ class GroundingTest {
         assertEquals(GroundedStatus.INVALID_EVIDENCE, validator.validate(good.replace("[]", "[{}]"), "stop", listOf(hit)).status)
         assertEquals(GroundedStatus.INVALID_EVIDENCE, validator.validate(good.replace("Какую операцию Git вы имеете в виду?", ""), "stop", listOf(hit)).status)
     }
-    private inner class Fixture(val modelContent: String = json(), val finish: String = "stop", val fail: Boolean = false, val supportContent: String = supportJson(), val supportFinish: String = "stop", val failSupport: Boolean = false, val missingSupportUsage: Boolean = false, val repairContent: String? = null, val repairFinish: String = "stop", val failRepair: Boolean = false, val repairSupportContent: String? = null, val repairSupportFinish: String = "stop", val failRepairSupport: Boolean = false) {
+    private inner class Fixture(val modelContent: String = json(), val finish: String = "stop", val fail: Boolean = false, val supportContent: String = supportJson(), val supportFinish: String = "stop", val failSupport: Boolean = false, val missingSupportUsage: Boolean = false, val repairContent: String? = null, val repairFinish: String = "stop", val failRepair: Boolean = false, val repairSupportContent: String? = null, val repairSupportFinish: String = "stop", val failRepairSupport: Boolean = false, val isolated: Boolean = false) {
         val repository = mock(IndexRepository::class.java)
         val search = mock(SearchService::class.java)
         var calls = 0; var generationCalls = 0; var supportCalls = 0; var rewriteCalls = 0; var cap: Int? = 999; var messages = emptyList<LlmMessage>()
@@ -119,7 +119,7 @@ class GroundingTest {
             val index = mock(IndexInfo::class.java); `when`(index.snapshotId).thenReturn("snapshot")
             `when`(repository.index("index")).thenReturn(index)
             `when`(search.search(eq("index") ?: "index", any(SearchRequest::class.java) ?: SearchRequest("fixture"))).thenReturn(SearchResult("index", "original", 1, 2, listOf(hit)))
-            service = GroundingService(repository, search, SimilarityCandidateSelector(), rewriter, PromptAssembler(mapper), GroundingPromptAssembler(mapper), llm, validator, CostEstimator(), LlmClaimSupportValidator(llm, supportPrompt, mapper, CostEstimator()))
+            service = GroundingService(repository, search, SimilarityCandidateSelector(), rewriter, PromptAssembler(mapper), GroundingPromptAssembler(mapper), llm, validator, CostEstimator(), LlmClaimSupportValidator(llm, supportPrompt, mapper, CostEstimator()).let { if (isolated) dev.aichallenge.rag.grounding.adapters.IsolatedClaimSupportValidator(it, supportPrompt, 1) else it })
         }
         fun request() = GroundingRequest("original", "index", candidateTopK = 10)
     }
@@ -318,4 +318,27 @@ class GroundingTest {
         assertNull(mapper.readValue(oldJson, GroundedResult::class.java).supportCheck)
         assertNull(mapper.readValue(oldJson, GroundedResult::class.java).repair)
     }
+    @Test fun `isolated checks count and aggregate each call exactly once`() {
+        val claim = mapper.readTree(json()).path("claims").first()
+        val content = mapper.writeValueAsString(mapOf("status" to "known", "claims" to listOf(claim, claim), "clarification" to null))
+        val f = Fixture(modelContent = content, isolated = true)
+        val result = f.service.answer(f.request())
+        assertEquals(GroundedStatus.ANSWERED, result.status)
+        assertEquals(3, result.llmStagesAttempted)
+        assertEquals(45L, result.totalUsage!!.totalTokens)
+        assertEquals(2, result.supportCheck!!.generations().size)
+        assertEquals(listOf(0, 1), result.supportCheck!!.claims.map { it.claimIndex })
+    }
+    @Test fun `isolated failed second check keeps known first usage but not false complete total`() {
+        val claim = mapper.readTree(json()).path("claims").first()
+        val content = mapper.writeValueAsString(mapOf("status" to "known", "claims" to listOf(claim, claim), "clarification" to null))
+        val f = Fixture(modelContent = content, isolated = true, failRepairSupport = true)
+        val result = f.service.answer(f.request())
+        assertEquals(GroundedStatus.INVALID_EVIDENCE, result.status)
+        assertEquals(3, result.llmStagesAttempted)
+        assertNull(result.totalUsage); assertNull(result.estimatedCost); assertNull(result.repair)
+        assertEquals(15L, result.supportCheck!!.generation.usage!!.totalTokens)
+        assertNull(result.supportCheck!!.additionalGenerations.single().usage)
+    }
+
 }

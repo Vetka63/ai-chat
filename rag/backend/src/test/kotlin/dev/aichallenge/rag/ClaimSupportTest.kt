@@ -61,8 +61,8 @@ class ClaimSupportTest {
             assertEquals(0, checked.issues.single().claimIndex)
             assertEquals(1, f.calls); assertEquals(30L, checked.generation.usage!!.totalTokens)
             val payload = mapper.readTree(f.sent[1].content)
-            assertEquals(text, payload.path("claims")[0].path("text").asText())
-            assertEquals(quote, payload.path("claims")[0].path("citations")[0].path("quote").asText())
+            assertEquals(text, payload.path("items")[0].path("statement").asText())
+            assertEquals(quote, payload.path("items")[0].path("evidence")[0].path("quote").asText())
         }
     }
 
@@ -74,10 +74,10 @@ class ClaimSupportTest {
         f.validator.validate(listOf(claim("Режим --soft сохраняет индекс.", quote, cited)), listOf(cited, omittedProof))
         val payload = mapper.readTree(f.sent[1].content)
         assertEquals(2, payload.size())
-        assertTrue(payload.has("claims")); assertTrue(payload.has("cited_context"))
-        assertEquals(1, payload.path("cited_context").size())
-        assertEquals("mixed", payload.path("cited_context")[0].path("chunk_id").asText())
-        assertEquals(ClaimSupportPromptAssembler.passages(cited.chunk.text), payload.path("cited_context")[0].path("passages").toList().map { it.path("text").asText() })
+        assertTrue(payload.has("items")); assertTrue(payload.has("source_context"))
+        assertEquals(1, payload.path("source_context").size())
+        assertEquals("mixed", payload.path("source_context")[0].path("chunk_id").asText())
+        assertEquals(ClaimSupportPromptAssembler.passages(cited.chunk.text), payload.path("source_context")[0].path("passages").toList().map { it.path("text").asText() })
         assertFalse(f.sent[1].content.contains(omittedProof.chunk.text))
     }
 
@@ -90,6 +90,22 @@ class ClaimSupportTest {
         assertEquals(1, checked.issues.single().claimIndex)
         assertEquals(ClaimSupportVerdict.SUPPORTED, checked.claims.first().verdict)
         assertEquals(SupportCheckStatus.PASSED, Fixture(response("supported")).validator.validate(claims.take(1), listOf(evidence)).status)
+    }
+    @Test fun `citation echo is allowed only when it exactly preserves the original evidence`() {
+        val quote = "Git сохраняет подготовленный снимок файла."
+        val evidence = hit("c", quote)
+        val claim = claim("Подготовленная версия сохраняется.", quote, evidence)
+        val echoes = listOf(
+            listOf(mapOf("chunk_id" to "c", "quote" to quote)),
+            listOf(mapOf("chunk_id" to "other", "quote" to quote)),
+            listOf(mapOf("chunk_id" to "c", "quote" to "Изменённое доказательство")),
+            emptyList<Map<String, String>>(),
+        )
+        echoes.forEachIndexed { index, echo ->
+            val raw = response("supported").replace("\"conditions\":[]", "\"conditions\":[],\"citations\":" + mapper.writeValueAsString(echo))
+            val checked = Fixture(raw).validator.validate(listOf(claim), listOf(evidence))
+            assertEquals(if (index == 0) SupportCheckStatus.PASSED else SupportCheckStatus.INVALID_RESPONSE, checked.status)
+        }
     }
     @Test fun `condition evidence is exact own source and missing premise overrides model approval`() {
         val quote = "При активном флаге X обработчик повторяет запрос."
@@ -184,7 +200,7 @@ class ClaimSupportTest {
             valid.replace("\"verdict\":\"supported\"", "\"verdict\":true"),
             valid.replace("\"verdict\":\"supported\"", "\"verdict\":\"unsupported\",\"verdict\":\"supported\""),
             valid.replace("Проверены смысл и границы цитаты.", " "),
-            valid.replace("Проверены смысл и границы цитаты.", "x".repeat(301)),
+            valid.replace("Проверены смысл и границы цитаты.", "x".repeat(1001)),
             valid.replace("\"reason\":", "\"extra\":true,\"reason\":"),
             valid.dropLast(1) + ",\"approved\":true}", valid + " {}",
         )
@@ -197,6 +213,17 @@ class ClaimSupportTest {
         }
     }
 
+    @Test fun `bounded long explanation never discards a valid negative verdict or starts retry`() {
+        val quote = "Git сохраняет проиндексированную версию файла."
+        val evidence = hit("c", quote)
+        val raw = response("unsupported").replace("Проверены смысл и границы цитаты.", "Объяснение. ".repeat(60))
+        val f = Fixture(raw)
+        val result = f.validator.validate(listOf(claim("Версия сохраняется в индексе.", quote, evidence)), listOf(evidence))
+        assertEquals(SupportCheckStatus.REJECTED, result.status)
+        assertEquals(1, f.calls)
+        assertEquals(raw, result.generation.rawJson)
+        assertTrue(result.claims.single().reason.length > 300)
+    }
     @Test fun `optional exact text echo preserves supported and unsupported verdicts`() {
         val quote = "Git сохраняет проиндексированную версию файла."
         val evidence = hit("c", quote)

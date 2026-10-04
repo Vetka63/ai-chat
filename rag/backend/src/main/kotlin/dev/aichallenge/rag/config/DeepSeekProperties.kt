@@ -14,5 +14,7 @@ class DeepSeekProperties(
     val supportTimeoutSeconds: Long = 180,
     val groundingModel: String = "deepseek-v4-pro",
     val groundingTimeoutSeconds: Long = 180,
+    val groundingThinkingEnabled: Boolean = false,
+    val groundingReasoningEffort: String = "high",
     val supportThinkingEnabled: Boolean = false,
 )
