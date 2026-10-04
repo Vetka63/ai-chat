@@ -17,11 +17,19 @@
 ## Фактические повторные проверки
 
 - День 21: 20 backend tests, без ошибок.
+- День 22: отдельный git archive ветки `319a3e8`, 33 backend tests без ошибок, `bootJar`, frontend build и 2 unit tests прошли. Без ключей, данных чатов и внешних API.
+- День 23: отдельный git archive ветки `b5954f0`, 49 backend tests без ошибок, frontend build прошёл. Неплатная изолированная сборка, не новый live-эксперимент.
 - День 24: 76 backend tests passed, 1 opt-in live test skipped; production frontend build, 4 unit tests; 12 неплатных браузерных проверок.
 - День 25: 103 backend tests passed, 1 opt-in live test skipped; production frontend build, 5 unit tests; 28 неплатных браузерных проверок.
 - Живой **локальный** поиск по существующим индексам: ожидаемый документ в top-5 для 5/5 вопросов FIXED и 5/5 STRUCTURAL. Отчёт: `data/live-verification-20261004-122515-229.json` (ignored). Это не проверка генерации LLM.
 - Контейнеры исправленного дня 25 пересобраны, health UP. После обновления доступны прежние 12 чатов и два индекса: 254 STRUCTURAL и 170 FIXED чанков.
 - Скриншоты desktop/mobile просмотрены; browser-тесты проверяют отсутствие горизонтального переполнения. Новый [Archify HTML](diagrams/verified-chat.html) имеет [отдельный receipt](diagrams/verified-chat-acceptance.md).
+
+## Ветки и сохранность
+
+Исправление индексирования сохранено как `8da1d3e` на дне 21 и обычными merge перенесено последовательно в дни 22–25. Смысловая проверка — `6a38125` на дне 24, её документация — `8dec2dd`; память/клиент дня 25 — `ab53bc9`. Исходная работа дня 25 предварительно сохранена как `1d94b24`, чтобы не потерять незакоммиченные изменения.
+
+Все пять веток `ai-challenge-day-21` … `ai-challenge-day-25` опубликованы в существующий origin `Vetka63/ai-chat`. Успешный atomic push и последующий `ls-remote` подтвердили точные refs. История не переписывалась, force push не применялся, `main` не изменён. Рабочая ветка оставлена на дне 25; стенд на 8383 обслуживает его исправленный код. `.env`, SQLite, runtime traces, build outputs и зависимости не включены в коммиты.
 
 ### Что пока не подтверждено заново
 
