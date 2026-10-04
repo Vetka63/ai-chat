@@ -44,8 +44,20 @@ test('invalid output quarantined mobile contained and unknown explicit', async (
   await expect(page.locator('.grounded-result')).toContainText('LLM не вызывалась')
   await expect(page.locator('.clarification')).toContainText('Уточните вопрос')
 })
+test('semantic verdict is visible and unsupported claim stays quarantined', async ({ page }) => {
+  await page.route('**/api/v1/grounded-answers', r => r.fulfill({ json: {
+    ...result(r.request().postDataJSON(), 'INVALID_EVIDENCE'), llmStagesAttempted: 2,
+    supportCheck: { status: 'REJECTED', claims: [{ claimIndex: 0, verdict: 'UNSUPPORTED', reason: 'Цитата относится к другой опции.' }], issues: [], generation: { usage: null } },
+  } }))
+  await page.goto('/'); await page.getByRole('button', { name: 'Источники и цитаты' }).click()
+  await page.getByRole('button', { name: /^Ответить с цитатами/ }).click()
+  await expect(page.locator('.grounded-claim')).toHaveCount(0)
+  await page.locator('summary').filter({ hasText: 'Проверка смысловой поддержки' }).click()
+  await expect(page.getByText('Цитата относится к другой опции.', { exact: false })).toBeVisible()
+})
+
 test('live grounded quote opens correct immutable document @live', async ({ page }) => {
-  test.skip(process.env.RAG_LIVE !== 'true', 'Opt-in: 1 paid DeepSeek call')
+  test.skip(process.env.RAG_LIVE !== 'true', 'Opt-in: up to 2 paid DeepSeek calls')
   test.setTimeout(180_000)
   await page.goto('/'); await page.getByRole('button', { name: 'Источники и цитаты' }).click()
   await page.getByRole('button', { name: /^Ответить с цитатами/ }).click()

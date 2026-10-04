@@ -1,4 +1,4 @@
-param([string]$ApiUrl = 'http://localhost:8382', [switch]$BuildIndexes)
+param([string]$ApiUrl = 'http://localhost:8382', [switch]$BuildIndexes, [ValidateRange(0,1)][double]$MinimumDocumentHitRate = 0.8)
 $ErrorActionPreference = 'Stop'
 $ragApi = $ApiUrl.TrimEnd('/') + '/api/v1'
 function Assert-Lab([bool]$Condition, [string]$Message) { if (!$Condition) { throw $Message } }
@@ -63,9 +63,15 @@ foreach ($ragCheck in @(
 }
 $ragMissing = Invoke-WebRequest ($ragApi+'/indexes/missing/chunks') -SkipHttpErrorCheck
 Assert-Lab ($ragMissing.StatusCode -eq 404) 'Неизвестный index должен возвращать 404.'
-$ragReport = @{at=[DateTime]::UtcNow.ToString('o');kind='live-local-embedding';corpus=$ragCorpus;previews=$ragPreviews;comparison=$ragComparison;searches=$ragSearches;negativeChecks=$ragNegative;unknownIndexStatus=$ragMissing.StatusCode}
+$ragQuality = @($ragSearches | Group-Object strategy | ForEach-Object {
+    $hits = @($_.Group | Where-Object documentHitAt5).Count
+    @{ strategy=$_.Name; hits=$hits; total=$_.Count; hitRate=$hits / $_.Count; required=$MinimumDocumentHitRate; passed=($hits / $_.Count -ge $MinimumDocumentHitRate) }
+})
+$ragReport = @{at=[DateTime]::UtcNow.ToString('o');kind='live-local-embedding';corpus=$ragCorpus;previews=$ragPreviews;comparison=$ragComparison;searches=$ragSearches;quality=$ragQuality;negativeChecks=$ragNegative;unknownIndexStatus=$ragMissing.StatusCode}
 $ragOutputDirectory = Join-Path $PSScriptRoot '../data'
 New-Item -ItemType Directory -Path $ragOutputDirectory -Force | Out-Null
 # Производный отчёт измерений не является исходным кодом и исключён из Git.
-[System.IO.File]::WriteAllText((Join-Path $ragOutputDirectory 'live-verification.json'), ($ragReport | ConvertTo-Json -Depth 30), [System.Text.UTF8Encoding]::new($false))
-Write-Output 'Live verification passed; report: rag/data/live-verification.json'
+$ragReportName = 'live-verification-' + [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss-fff') + '.json'
+[System.IO.File]::WriteAllText((Join-Path $ragOutputDirectory $ragReportName), ($ragReport | ConvertTo-Json -Depth 30), [System.Text.UTF8Encoding]::new($false))
+Assert-Lab (@($ragQuality | Where-Object { !$_.passed }).Count -eq 0) "Retrieval quality gate FAILED; report: rag/data/$ragReportName"
+Write-Output "Technical checks and retrieval quality gate passed; report: rag/data/$ragReportName"

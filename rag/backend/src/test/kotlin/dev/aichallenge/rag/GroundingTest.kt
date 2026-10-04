@@ -5,7 +5,9 @@ import dev.aichallenge.rag.answering.ports.LlmClient
 import dev.aichallenge.rag.answering.services.*
 import dev.aichallenge.rag.common.LabException
 import dev.aichallenge.rag.grounding.adapters.ExactCitationValidator
+import dev.aichallenge.rag.grounding.adapters.LlmClaimSupportValidator
 import dev.aichallenge.rag.grounding.enums.GroundedStatus
+import dev.aichallenge.rag.grounding.enums.SupportCheckStatus
 import dev.aichallenge.rag.grounding.models.*
 import dev.aichallenge.rag.grounding.services.*
 import dev.aichallenge.rag.indexing.models.*
@@ -20,13 +22,14 @@ import org.junit.jupiter.api.Test
 import org.mockito.Mockito.*
 import tools.jackson.module.kotlin.jacksonObjectMapper
 
-/** Fixtures доказывают gate и точные цитаты, но не заменяют ручную проверку смысла ответа. */
+/** Проверяет дословность, смысловой этап и учёт стадий; качество модели требует отдельной живой оценки. */
 class GroundingTest {
     private val mapper = jacksonObjectMapper()
     private val quote = "Git сохраняет состояние файла на момент git add."
     private val hit = SearchHit(1, .8, Chunk("c1", "doc", "book.asc", "Git", "Индекс", listOf("Индекс"), 0, 100, 100 + quote.length + 3, 1, 2, "До $quote", "sha"))
     private val validator = ExactCitationValidator(mapper)
     private fun json(id: String = "c1", q: String = quote, text: String = "В коммит идёт подготовленная версия.") = mapper.writeValueAsString(mapOf("status" to "known", "claims" to listOf(mapOf("text" to text, "citations" to listOf(mapOf("chunk_id" to id, "quote" to q)))), "clarification" to null))
+    private fun supportJson(verdict: String = "supported") = """{"claims":[{"claim_index":0,"verdict":"$verdict","reason":"Проверена связь утверждения с его цитатой."}]}"""
 
     @Test fun `valid quote gets server metadata and canonical offsets`() {
         val r = validator.validate(json(), "stop", listOf(hit))
@@ -78,15 +81,23 @@ class GroundingTest {
         assertEquals(GroundedStatus.INVALID_EVIDENCE, validator.validate(good.replace("[]", "[{}]"), "stop", listOf(hit)).status)
         assertEquals(GroundedStatus.INVALID_EVIDENCE, validator.validate(good.replace("Какую операцию Git вы имеете в виду?", ""), "stop", listOf(hit)).status)
     }
-    private inner class Fixture(val modelContent: String = json(), val finish: String = "stop", val fail: Boolean = false) {
+    private inner class Fixture(val modelContent: String = json(), val finish: String = "stop", val fail: Boolean = false, val supportContent: String = supportJson(), val supportFinish: String = "stop", val failSupport: Boolean = false, val missingSupportUsage: Boolean = false) {
         val repository = mock(IndexRepository::class.java)
         val search = mock(SearchService::class.java)
-        var calls = 0; var rewriteCalls = 0; var cap: Int? = 999; var messages = emptyList<LlmMessage>()
+        var calls = 0; var supportCalls = 0; var rewriteCalls = 0; var cap: Int? = 999; var messages = emptyList<LlmMessage>()
         val usage = TokenUsage(10, 5, 15, 0, 10)
+        val supportPrompt = ClaimSupportPromptAssembler(mapper)
         val llm = object : LlmClient {
             override fun settings() = AnswerSettings(true, "deepseek-flash", 0.0, "disabled", 16000, null, "")
             override fun complete(messages: List<LlmMessage>, maxOutputTokens: Int?): LlmCompletion {
-                calls++; this@Fixture.messages = messages; cap = maxOutputTokens
+                calls++
+                if (messages.first().content == supportPrompt.system) {
+                    supportCalls++
+                    assertEquals(2048, maxOutputTokens)
+                    if (failSupport) throw LabException("llm_unavailable", "Тестовый сбой проверки смысла.")
+                    return LlmCompletion("support", "deepseek-flash", supportContent, supportFinish, 3, if (missingSupportUsage) null else usage)
+                }
+                this@Fixture.messages = messages; cap = maxOutputTokens
                 if (fail) throw LabException("llm_unavailable", "Тестовый сбой.")
                 return LlmCompletion("id", "deepseek-flash", modelContent, finish, 2, usage)
             }
@@ -97,7 +108,7 @@ class GroundingTest {
             val index = mock(IndexInfo::class.java); `when`(index.snapshotId).thenReturn("snapshot")
             `when`(repository.index("index")).thenReturn(index)
             `when`(search.search(eq("index") ?: "index", any(SearchRequest::class.java) ?: SearchRequest("fixture"))).thenReturn(SearchResult("index", "original", 1, 2, listOf(hit)))
-            service = GroundingService(repository, search, SimilarityCandidateSelector(), rewriter, PromptAssembler(mapper), GroundingPromptAssembler(mapper), llm, validator, CostEstimator())
+            service = GroundingService(repository, search, SimilarityCandidateSelector(), rewriter, PromptAssembler(mapper), GroundingPromptAssembler(mapper), llm, validator, CostEstimator(), LlmClaimSupportValidator(llm, supportPrompt, mapper, CostEstimator()))
         }
         fun request() = GroundingRequest("original", "index")
     }
@@ -110,16 +121,19 @@ class GroundingTest {
         val f = Fixture(); val r = f.service.answer(f.request())
         assertEquals(GroundedStatus.ANSWERED, r.status); assertEquals(r.claims.joinToString("\n\n") { it.text }, r.answer)
         assertEquals("original", mapper.readTree(f.messages[1].content).path("question").asText()); assertNull(f.cap)
-        assertEquals(15L, r.totalUsage!!.totalTokens)
+        assertEquals(30L, r.totalUsage!!.totalTokens); assertEquals(2, r.llmStagesAttempted); assertEquals(1, f.supportCalls)
+        assertEquals(SupportCheckStatus.PASSED, r.supportCheck!!.status)
+        assertEquals(CostEstimator().estimate("deepseek-flash", f.usage)!!.minimumUsd * 2, r.estimatedCost!!.minimumUsd, 1e-10)
     }
     @Test fun `invalid evidence preserves usage but no public claims`() {
         val f = Fixture(modelContent = json("fake")); val r = f.service.answer(f.request())
         assertEquals(GroundedStatus.INVALID_EVIDENCE, r.status); assertTrue(r.claims.isEmpty()); assertTrue(r.sources.isEmpty())
         assertNotNull(r.generation); assertEquals(15L, r.totalUsage!!.totalTokens); assertEquals(1, f.calls)
+        assertEquals(0, f.supportCalls); assertNull(r.supportCheck)
     }
     @Test fun `rewrite counts once and never replaces question`() {
         val f = Fixture(); val r = f.service.answer(f.request().copy(useRewrite = true))
-        assertEquals(1, f.rewriteCalls); assertEquals(30L, r.totalUsage!!.totalTokens); assertEquals(2, r.llmStagesAttempted)
+        assertEquals(1, f.rewriteCalls); assertEquals(45L, r.totalUsage!!.totalTokens); assertEquals(3, r.llmStagesAttempted)
         assertEquals("original", mapper.readTree(f.messages[1].content).path("question").asText())
         verify(f.search).search("index", SearchRequest("rewritten", 10))
     }
@@ -138,5 +152,50 @@ class GroundingTest {
         `when`(f.search.search(eq("index") ?: "index", any(SearchRequest::class.java) ?: SearchRequest("fixture"))).thenReturn(SearchResult("index", "original", 1, 2, listOf(large)))
         val r = f.service.answer(f.request().copy(contextMaxCharacters = 300))
         assertEquals(GroundedStatus.ERROR, r.status); assertEquals("context_budget_too_small", r.issues.single().code); assertEquals(0, f.calls)
+    }
+
+    @Test fun `exact citation with unsupported meaning never becomes a public answer`() {
+        val f = Fixture(modelContent = json(text = "На самом деле git add удаляет файлы."), supportContent = supportJson("contradicted"))
+        val r = f.service.answer(f.request())
+        assertEquals(GroundedStatus.INVALID_EVIDENCE, r.status)
+        assertTrue(r.claims.isEmpty()); assertTrue(r.sources.isEmpty()); assertFalse(r.answer.contains("git add"))
+        assertEquals("contradicted_claim", r.issues.single().code); assertEquals(0, r.issues.single().claimIndex)
+        assertEquals(SupportCheckStatus.REJECTED, r.supportCheck!!.status)
+        assertEquals(2, r.llmStagesAttempted); assertEquals(2, f.calls); assertEquals(30L, r.totalUsage!!.totalTokens)
+        assertNotNull(r.generation); assertNotNull(r.supportCheck!!.generation.estimatedCost)
+    }
+
+    @Test fun `malformed or truncated checker quarantines whole answer while preserving both usages`() {
+        for (f in listOf(Fixture(supportContent = "{}"), Fixture(supportFinish = "length"))) {
+            val r = f.service.answer(f.request())
+            assertEquals(GroundedStatus.INVALID_EVIDENCE, r.status); assertTrue(r.claims.isEmpty()); assertTrue(r.sources.isEmpty())
+            assertEquals(SupportCheckStatus.INVALID_RESPONSE, r.supportCheck!!.status)
+            assertEquals(2, f.calls); assertEquals(2, r.llmStagesAttempted); assertEquals(30L, r.totalUsage!!.totalTokens)
+            assertNotNull(r.estimatedCost); assertNotNull(r.supportCheck!!.generation.rawJson)
+        }
+    }
+
+    @Test fun `checker transport failure is an error with no fallback retry or partial answer`() {
+        val f = Fixture(failSupport = true); val r = f.service.answer(f.request())
+        assertEquals(GroundedStatus.ERROR, r.status); assertTrue(r.claims.isEmpty()); assertTrue(r.sources.isEmpty())
+        assertEquals(2, r.llmStagesAttempted); assertEquals(2, f.calls); assertNull(r.totalUsage); assertNull(r.estimatedCost)
+        assertEquals(15L, r.generation!!.usage!!.totalTokens); assertNull(r.supportCheck)
+    }
+
+    @Test fun `unknown skips support check and absent support usage never becomes zero`() {
+        val unknown = Fixture(modelContent = """{"status":"unknown","claims":[],"clarification":"Уточните операцию Git."}""")
+        val r = unknown.service.answer(unknown.request())
+        assertEquals(GroundedStatus.UNKNOWN, r.status); assertEquals(1, unknown.calls); assertNull(r.supportCheck)
+        val missing = Fixture(missingSupportUsage = true); val checked = missing.service.answer(missing.request())
+        assertEquals(GroundedStatus.ANSWERED, checked.status); assertNull(checked.totalUsage); assertNull(checked.estimatedCost)
+        assertEquals(2, checked.llmStagesAttempted); assertEquals(15L, checked.generation!!.usage!!.totalTokens)
+        assertNull(checked.supportCheck!!.generation.usage)
+    }
+
+    @Test fun `old saved result without support field remains readable`() {
+        val f = Fixture(fail = true); val r = f.service.answer(f.request())
+        val oldJson = mapper.writeValueAsString(r).replace(",\"supportCheck\":null", "")
+        assertFalse(oldJson.contains("supportCheck"))
+        assertNull(mapper.readValue(oldJson, GroundedResult::class.java).supportCheck)
     }
 }
