@@ -24,7 +24,7 @@ class ClaimSupportReplayLiveTest {
         val mapper = jacksonObjectMapper()
         val key = System.getenv("DEEPSEEK_API_KEY").orEmpty()
         require(key.isNotBlank())
-        val properties = DeepSeekProperties(apiKey = key, supportThinkingEnabled = System.getenv("RAG_SUPPORT_TEST_THINKING")?.toBooleanStrict() ?: false)
+        val properties = DeepSeekProperties(apiKey = key, baseUrl = requireNotNull(System.getenv("DEEPSEEK_BASE_URL")), supportThinkingEnabled = System.getenv("RAG_SUPPORT_TEST_THINKING")?.toBooleanStrict() ?: true)
         val prompt = ClaimSupportPromptAssembler(mapper)
         val checker = IsolatedClaimSupportValidator(LlmClaimSupportValidator(DeepSeekLlmClient(properties, mapper), prompt, mapper, CostEstimator()), prompt)
         val root = javaClass.getResourceAsStream("/grounding/rebase-batch-regression.json").use { mapper.readTree(it) }
@@ -38,7 +38,7 @@ class ClaimSupportReplayLiveTest {
         for (round in 1..repeats) {
             val result = checker.validate(claims, included)
             records.add(mapOf("round" to round, "supportCheck" to result))
-            Files.writeString(path, mapper.writerWithDefaultPrettyPrinter().writeValueAsString(mapOf("thinkingEnabled" to properties.supportThinkingEnabled, "scopeThinkingEnabled" to properties.scopeThinkingEnabled, "maximumCalls" to (claims.size + 1) * repeats, "records" to records)))
+            Files.writeString(path, mapper.writerWithDefaultPrettyPrinter().writeValueAsString(mapOf("thinkingEnabled" to properties.supportThinkingEnabled, "scopeThinkingEnabled" to properties.scopeThinkingEnabled, "maximumCalls" to (claims.size + 2) * repeats, "records" to records)))
             for (index in listOf(0, 2)) if (result.claims.firstOrNull { it.claimIndex == index }?.verdict != ClaimSupportVerdict.UNSUPPORTED) failures.add("round=$round index=$index")
             println("Replay round=$round ${result.status}, calls=${result.generations().size}; trace=$path")
         }

@@ -4,7 +4,6 @@ import dev.aichallenge.rag.grounding.enums.SupportCheckStatus
 import dev.aichallenge.rag.grounding.models.*
 import dev.aichallenge.rag.grounding.ports.ClaimSupportValidator
 import dev.aichallenge.rag.grounding.services.ClaimSupportPromptAssembler
-import dev.aichallenge.rag.grounding.services.ClaimScopePromptAssembler
 import dev.aichallenge.rag.retrieval.models.SearchHit
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
@@ -37,9 +36,10 @@ class IsolatedClaimSupportValidator(
         val generations = checks.flatMap { it.generations() }.toMutableList()
         val assessments = checks.flatMapIndexed { index, checked -> checked.claims.map { it.copy(claimIndex = index) } }.toMutableList()
         val issues = checks.flatMapIndexed { index, checked -> checked.issues.map { it.copy(claimIndex = index) } }.toMutableList()
-        // Первый проверяющий не видит решение второго и наоборот. Проверяем только ещё допустимые пункты.
+        // Уже отклонённый черновик отправляется на единственное исправление. Дополнительный
+        // guard не нужен до исправления и не должен превращать смысловой отказ в сбой контракта.
         val approved = checks.indices.filter { checks[it].status == SupportCheckStatus.PASSED }
-        val scope = if (approved.isNotEmpty() && checks.none { it.status == SupportCheckStatus.INVALID_RESPONSE }) {
+        val scope = if (checks.all { it.status == SupportCheckStatus.PASSED }) {
             val selected = approved.map { claims[it] }
             val ownIds = selected.flatMap { it.citations }.map { it.source.chunkId }.toSet()
             CompletableFuture.supplyAsync({ checkScope(selected, included.filter { it.chunk.chunkId in ownIds }, question) }, executor).join()
@@ -64,7 +64,7 @@ class IsolatedClaimSupportValidator(
     private fun checkScope(claims: List<GroundedClaim>, included: List<SearchHit>, question: String?): ClaimSupportCheck {
         val started = System.nanoTime()
         return try { delegate.validateScope(claims, included, question) } catch (_: Exception) {
-            val messages = ClaimScopePromptAssembler.assemble(prompt.assemble(claims, included, question))
+            val messages = prompt.assemble(claims, included, question)
             val trace = GroundingGeneration("unavailable", "error", (System.nanoTime() - started) / 1_000_000, null, null, messages, "")
             ClaimSupportCheck(SupportCheckStatus.INVALID_RESPONSE, emptyList(), listOf(EvidenceIssue("scope_check_failed", "Проверка условий источника не завершена. Ответ не опубликован; повтор не выполнялся.")), trace)
         }

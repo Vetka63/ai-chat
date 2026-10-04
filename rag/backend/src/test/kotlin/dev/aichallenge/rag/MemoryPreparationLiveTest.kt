@@ -84,7 +84,7 @@ class MemoryPreparationLiveTest {
         val key = System.getenv("DEEPSEEK_API_KEY")?.takeIf { it.isNotBlank() } ?: System.getenv("LLM_API_KEY").orEmpty()
         require(key.isNotBlank()) { "Для opt-in теста нужен серверный DEEPSEEK_API_KEY/LLM_API_KEY." }
         val properties = DeepSeekProperties(apiKey = key,
-            baseUrl = System.getenv("DEEPSEEK_BASE_URL")?.takeIf { it.isNotBlank() } ?: "https://api.deepseek.com",
+            baseUrl = requireNotNull(System.getenv("DEEPSEEK_BASE_URL")?.takeIf { it.isNotBlank() }) { "Для платного теста задайте явный адрес, включая бюджетный шлюз при его использовании." },
             model = System.getenv("DEEPSEEK_MODEL")?.takeIf { it.isNotBlank() } ?: "deepseek-flash",
             preparationModel = System.getenv("DEEPSEEK_PREPARATION_MODEL")?.takeIf { it.isNotBlank() } ?: "deepseek-v4-pro",
             preparationReasoningEffort = System.getenv("DEEPSEEK_PREPARATION_REASONING_EFFORT")?.takeIf { it.isNotBlank() } ?: "high",

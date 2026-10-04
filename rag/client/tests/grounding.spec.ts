@@ -66,9 +66,9 @@ test('one repaired draft stays collapsed while only final evidence is public', a
     supportCheck: { status: 'PASSED', claims: [{ claimIndex: 0, verdict: 'SUPPORTED', reason: 'Подтверждено.' }], issues: [], generation: { ...generation, rawJson: '{}' } },
   } }))
   await page.goto('/'); await page.getByRole('button', { name: 'Источники и цитаты' }).click()
-  await expect(page.getByRole('button', { name: 'Ответить с цитатами · до 20 API-вызовов', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Ответить с цитатами · до 22 API-вызовов', exact: true })).toBeVisible()
   await page.getByRole('checkbox', { name: /Переформулировать запрос поиска/ }).check()
-  await expect(page.getByRole('button', { name: 'Ответить с цитатами · до 21 API-вызовов', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Ответить с цитатами · до 23 API-вызовов', exact: true })).toBeVisible()
   await page.getByRole('button', { name: /^Ответить с цитатами/ }).click()
   await expect(page.locator('.grounded-claim')).toContainText('Используйте -u.')
   await expect(page.locator('.grounded-claim')).not.toContainText(rejected)
@@ -96,9 +96,12 @@ test('one repaired draft stays collapsed while only final evidence is public', a
 })
 
 test('live grounded quote opens correct immutable document @live', async ({ page }, testInfo) => {
-  test.skip(process.env.RAG_LIVE !== 'true', 'Opt-in: up to 20 paid DeepSeek calls including one bounded repair and scope guards')
+  test.skip(process.env.RAG_LIVE !== 'true', 'Opt-in: up to 22 paid DeepSeek calls including one bounded repair and source/scope guards')
   test.setTimeout(900_000)
   await page.goto('/'); await page.getByRole('button', { name: 'Источники и цитаты' }).click()
+  const cap = Number(process.env.RAG_LIVE_MAX_OUTPUT_TOKENS ?? '6000')
+  expect(Number.isInteger(cap) && cap > 0 && cap <= 16384).toBe(true)
+  await page.getByLabel('Лимит structured ответа').fill(String(cap))
   const responsePromise = page.waitForResponse(r => new URL(r.url()).pathname.endsWith('/grounded-answers') && r.request().method() === 'POST', { timeout: 840_000 })
   await page.getByRole('button', { name: /^Ответить с цитатами/ }).click()
   const response = await responsePromise, trace = await response.json()

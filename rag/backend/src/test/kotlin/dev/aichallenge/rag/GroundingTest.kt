@@ -103,14 +103,22 @@ class GroundingTest {
             override fun settings() = AnswerSettings(true, "deepseek-flash", 0.0, "disabled", 16000, null, "")
             override fun complete(messages: List<LlmMessage>, maxOutputTokens: Int?): LlmCompletion {
                 calls++
+                if (messages.first().content == dev.aichallenge.rag.grounding.services.SourceScopeInspector.system) {
+                    assertEquals(16384, maxOutputTokens)
+                    val bindings = mapper.readTree(messages.last().content).path("items").toList().map { item ->
+                        mapOf("claim_index" to item.path("claim_index").asInt(), "chunk_id" to item.path("chunk_id").asText(), "scope" to "general", "premise_spans" to emptyList<Int>())
+                    }
+                    return LlmCompletion("source-scope", "deepseek-flash", mapper.writeValueAsString(mapOf("bindings" to bindings)), "stop", 3, usage)
+                }
                 if (messages.first().content in listOf(supportPrompt.system, dev.aichallenge.rag.grounding.services.ClaimScopePromptAssembler.system)) {
                     supportCalls++
                     assertEquals(16384, maxOutputTokens)
                     if (failSupport || supportCalls > 1 && failRepairSupport) throw LabException("llm_unavailable", "Тестовый сбой проверки смысла.")
                     if (messages.first().content == dev.aichallenge.rag.grounding.services.ClaimScopePromptAssembler.system) {
-                        val count = mapper.readTree(messages.last().content).path("items").size()
-                        val content = mapper.writeValueAsString(mapOf("claims" to (0 until count).map { n -> mapper.readTree(supportJson().replace("\"claim_index\":0", "\"claim_index\":$n")).path("claims").first() }))
-                        return LlmCompletion("scope", "deepseek-flash", content, "stop", 3, usage)
+                        val checks = mapper.readTree(messages.last().content).path("items").toList().flatMap { it.path("requirements").toList() }.map {
+                            mapOf("id" to it.path("id").asText(), "applicable" to false, "preserved" to true, "anchor" to "", "reason" to "Fixture не задаёт условий.")
+                        }
+                        return LlmCompletion("scope", "deepseek-flash", mapper.writeValueAsString(mapOf("checks" to checks)), "stop", 3, usage)
                     }
                     return LlmCompletion("support", "deepseek-flash", if (supportCalls > 1) repairSupportContent ?: supportContent else supportContent, if (supportCalls > 1) repairSupportFinish else supportFinish, 3, if (missingSupportUsage) null else usage)
                 }
@@ -160,9 +168,14 @@ class GroundingTest {
     @Test fun `repair reuses original scope in each isolated check without treating rewrite as user question`() {
         val f = Fixture(supportContent = supportJson("unsupported"), repairSupportContent = supportJson(), isolated = true)
         val result = f.service.answer(f.request().copy(useRewrite = true))
-        assertEquals(GroundedStatus.ANSWERED, result.status)
+        assertEquals(GroundedStatus.ANSWERED, result.status, mapper.writeValueAsString(result.supportCheck))
         val checks = result.repair!!.originalSupportCheck.generations() + result.supportCheck!!.generations()
-        checks.forEach { assertEquals("original", mapper.readTree(it.messages[1].content).path("question").asText()) }
+        checks.forEach {
+            val payload = mapper.readTree(it.messages[1].content)
+            if (it.messages.first().content == dev.aichallenge.rag.grounding.services.SourceScopeInspector.system) {
+                assertFalse(payload.has("question")) // Независимый анализ источника не видит вопрос или ответ.
+            } else assertEquals("original", payload.path("question").asText())
+        }
     }
     @Test fun `provider error is not unknown or ungrounded fallback`() {
         val f = Fixture(fail = true); val r = f.service.answer(f.request())
@@ -354,10 +367,10 @@ class GroundingTest {
         val content = mapper.writeValueAsString(mapOf("status" to "known", "claims" to listOf(claim, claim), "clarification" to null))
         val f = Fixture(modelContent = content, isolated = true)
         val result = f.service.answer(f.request())
-        assertEquals(GroundedStatus.ANSWERED, result.status)
-        assertEquals(4, result.llmStagesAttempted)
-        assertEquals(60L, result.totalUsage!!.totalTokens)
-        assertEquals(3, result.supportCheck!!.generations().size)
+        assertEquals(GroundedStatus.ANSWERED, result.status, mapper.writeValueAsString(result.supportCheck))
+        assertEquals(5, result.llmStagesAttempted)
+        assertEquals(75L, result.totalUsage!!.totalTokens)
+        assertEquals(4, result.supportCheck!!.generations().size)
         assertEquals(listOf(0, 1), result.supportCheck!!.claims.map { it.claimIndex })
     }
     @Test fun `isolated failed second check keeps known first usage but not false complete total`() {

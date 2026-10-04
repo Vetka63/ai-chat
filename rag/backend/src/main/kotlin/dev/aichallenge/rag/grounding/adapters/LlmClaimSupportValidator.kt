@@ -8,6 +8,7 @@ import dev.aichallenge.rag.grounding.models.*
 import dev.aichallenge.rag.grounding.ports.ClaimSupportValidator
 import dev.aichallenge.rag.grounding.services.ClaimSupportPromptAssembler
 import dev.aichallenge.rag.grounding.services.ClaimScopePromptAssembler
+import dev.aichallenge.rag.grounding.services.SourceScopeInspector
 import dev.aichallenge.rag.answering.models.LlmMessage
 import dev.aichallenge.rag.retrieval.models.SearchHit
 import org.springframework.stereotype.Component
@@ -15,7 +16,7 @@ import tools.jackson.databind.DeserializationFeature
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.ObjectMapper
 
-/** Один ограниченный вызов проверки; неверный или отсутствующий вердикт закрывает ответ без повторного запроса. */
+/** Проверка фактов и отдельный двухшаговый анализ условий; технические ошибки не повторяются. */
 @Component
 class LlmClaimSupportValidator(private val llm: LlmClient, private val prompt: ClaimSupportPromptAssembler, private val mapper: ObjectMapper, private val costs: CostEstimator) : ClaimSupportValidator {
     override fun validate(claims: List<GroundedClaim>, included: List<SearchHit>): ClaimSupportCheck {
@@ -25,12 +26,38 @@ class LlmClaimSupportValidator(private val llm: LlmClient, private val prompt: C
         val messages = prompt.assemble(claims, included, question)
         return check(claims, included, messages)
     }
-    override fun validateScope(claims: List<GroundedClaim>, included: List<SearchHit>, question: String?): ClaimSupportCheck =
-        check(claims, included, ClaimScopePromptAssembler.assemble(prompt.assemble(claims, included, question)), scopeOnly = true)
+    override fun validateScope(claims: List<GroundedClaim>, included: List<SearchHit>, question: String?): ClaimSupportCheck {
+        val sourceMessages = SourceScopeInspector.messages(claims, included, mapper)
+        val sourceResponse = llm.completeVerifiedJson(sourceMessages, 16384)
+        val sourceGeneration = GroundingGeneration(sourceResponse.model, sourceResponse.finishReason, sourceResponse.milliseconds, sourceResponse.usage, costs.estimate(sourceResponse.model, sourceResponse.usage), sourceMessages, sourceResponse.content)
+        val bindings = if (sourceResponse.finishReason == "stop") SourceScopeInspector.parse(sourceResponse.content, claims, included, mapper) else null
+        if (bindings == null) return ClaimSupportCheck(SupportCheckStatus.INVALID_RESPONSE, emptyList(), listOf(EvidenceIssue("invalid_source_scope", "Не удалось выделить область действия источника. Ответ не опубликован.")), sourceGeneration)
+        val requirements = ClaimScopePromptAssembler.requirements(bindings, included)
+        val messages = ClaimScopePromptAssembler.assemble(claims, requirements, question, mapper)
+        return try {
+            val response = llm.completeScopeJson(messages, 16384)
+            val generation = GroundingGeneration(response.model, response.finishReason, response.milliseconds, response.usage, costs.estimate(response.model, response.usage), messages, response.content)
+            val verdicts = if (response.finishReason == "stop") ClaimScopePromptAssembler.parse(response.content, requirements, claims, question, mapper) else null
+            if (verdicts == null) ClaimSupportCheck(SupportCheckStatus.INVALID_RESPONSE, emptyList(), listOf(EvidenceIssue("invalid_scope_checks", "Не получены однозначные проверки всех условий источника.")), sourceGeneration, listOf(generation))
+            else {
+                val assessments = claims.indices.map { index ->
+                    val missing = verdicts.filter { it.requirement.claimIndex == index && !it.preserved }
+                    ClaimSupportAssessment(index, if (missing.isEmpty()) ClaimSupportVerdict.SUPPORTED else ClaimSupportVerdict.UNSUPPORTED,
+                        if (missing.isEmpty()) "Область действия и условия источника сохранены." else missing.joinToString("; ") { it.reason }.take(1000))
+                }
+                val issues = assessments.filter { it.verdict != ClaimSupportVerdict.SUPPORTED }.map { EvidenceIssue("unsupported_claim", "Потеряно условие или область действия источника.", it.claimIndex) }
+                ClaimSupportCheck(if (issues.isEmpty()) SupportCheckStatus.PASSED else SupportCheckStatus.REJECTED, assessments, issues, sourceGeneration, listOf(generation))
+            }
+        } catch (_: Exception) {
+            // Второй вызов имеет неизвестный usage, первый нельзя терять при транспортной ошибке.
+            val failed = GroundingGeneration(sourceResponse.model, "error", 0, null, null, emptyList(), "")
+            ClaimSupportCheck(SupportCheckStatus.INVALID_RESPONSE, emptyList(), listOf(EvidenceIssue("scope_check_unavailable", "Сравнение условий недоступно; ответ не опубликован.")), sourceGeneration, listOf(failed))
+        }
+    }
 
-    private fun check(claims: List<GroundedClaim>, included: List<SearchHit>, messages: List<LlmMessage>, scopeOnly: Boolean = false): ClaimSupportCheck {
+    private fun check(claims: List<GroundedClaim>, included: List<SearchHit>, messages: List<LlmMessage>): ClaimSupportCheck {
         // Технический лимит только проверяющей модели; пользовательский лимит генерации не меняется.
-        val response = if (scopeOnly) llm.completeScopeJson(messages, 16384) else llm.completeVerifiedJson(messages, 16384)
+        val response = llm.completeVerifiedJson(messages, 16384)
         val generation = GroundingGeneration(response.model, response.finishReason, response.milliseconds, response.usage, costs.estimate(response.model, response.usage), messages, response.content)
         fun invalid(code: String, message: String) = ClaimSupportCheck(SupportCheckStatus.INVALID_RESPONSE, emptyList(), listOf(EvidenceIssue(code, message)), generation)
         if (response.finishReason != "stop") return invalid("truncated_support_check", "Проверка смысла не завершена. Ответ не опубликован; автоматического повтора нет.")
@@ -70,11 +97,13 @@ class LlmClaimSupportValidator(private val llm: LlmClient, private val prompt: C
                 val span = condition.path("span_index")
                 val preserved = condition.path("preserved")
                 val hit = included.firstOrNull { it.chunk.chunkId == id }
-                if (!shape(condition, "chunk_id", "span_index", "preserved") || id !in ownSources || hit == null || !span.isIntegralNumber || !span.canConvertToInt() || span.asInt() !in ClaimSupportPromptAssembler.passages(hit.chunk.text).indices || !preserved.isBoolean || !seenConditions.add(id!! to span.asInt())) return invalid("invalid_support_conditions", "Предпосылка не совпала с цитируемым контекстом или имеет неверную форму.")
+                val conditionFields = arrayOf("chunk_id", "span_index", "preserved")
+                if (!shape(condition, *conditionFields) || id !in ownSources || hit == null || !span.isIntegralNumber || !span.canConvertToInt() || span.asInt() !in ClaimSupportPromptAssembler.passages(hit.chunk.text).indices || !preserved.isBoolean || !seenConditions.add(id!! to span.asInt())) return invalid("invalid_support_conditions", "Предпосылка не совпала с цитируемым контекстом или имеет неверную форму.")
                 if (!preserved.asBoolean()) missingCondition = true
             }
             // Частный пример не подтверждает обобщение даже при положительном вердикте модели.
-            val scopeMismatch = verdict == ClaimSupportVerdict.SUPPORTED && evidenceScope == "example" && claimScope == "general"
+            val sourceIsExample = evidenceScope == "example"
+            val scopeMismatch = verdict == ClaimSupportVerdict.SUPPORTED && sourceIsExample && claimScope == "general"
             val conditionMismatch = verdict == ClaimSupportVerdict.SUPPORTED && missingCondition
             assessments.add(ClaimSupportAssessment(indexNode.asInt(), if (scopeMismatch || conditionMismatch) ClaimSupportVerdict.UNSUPPORTED else verdict, when {
                 scopeMismatch -> "Обобщён частный пример. $reason".take(300)

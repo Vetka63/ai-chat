@@ -52,6 +52,17 @@ class DeepSeekAdapterTest {
             assertFalse(client.settings().toString().contains("test-only"))
         }
     }
+    @Test fun `JSON request without explicit JSON instruction is rejected before network IO`() {
+        withServer(valid) { client, requests ->
+            val messages = listOf(LlmMessage("system", "Верни объект."), LlmMessage("user", "Вопрос"))
+            for (invoke in listOf<() -> LlmCompletion>(
+                { client.completeJson(messages, 512) }, { client.completeVerifiedJson(messages, 512) },
+                { client.completeScopeJson(messages, 512) }, { client.completeGroundedJson(messages, 512) },
+                { client.completePreparationJson(messages, 512) },
+            )) assertEquals("llm_json_instruction_missing", assertThrows(LabException::class.java) { invoke() }.code)
+            assertTrue(requests.isEmpty())
+        }
+    }
     @Test fun `explicit max tokens and length finish preserved`() {
         withServer(valid.replace("\"stop\"", "\"length\"")) { client, requests ->
             assertEquals("length", client.complete(listOf(LlmMessage("user", "Вопрос")), 1200).finishReason)
@@ -183,7 +194,7 @@ class DeepSeekAdapterTest {
     }
 
     @Test fun `preparation has an isolated configurable thinking profile and technical cap`() {
-        val messages = listOf(LlmMessage("user", "Подготовь синтетический вопрос и память"))
+        val messages = listOf(LlmMessage("user", "Подготовь синтетический вопрос и память в JSON"))
         withServer(valid, supportModel = "fixture-judge", supportReasoningEffort = "low", preparationModel = "fixture-preparation", preparationReasoningEffort = "high") { client, requests ->
             client.completePreparationJson(messages, 16384)
             client.completeVerifiedJson(messages, 8192)
@@ -226,7 +237,7 @@ class DeepSeekAdapterTest {
         assertSame(expected, client.completePreparationJson(messages, 16384))
         assertEquals(listOf(messages to 16384), calls)
     }
-    @Test fun `scope profile is Pro without reasoning and does not change support profile`() {
+    @Test fun `scope comparison is Pro without reasoning while source analysis keeps high profile`() {
         withServer(valid) { client, requests ->
             client.completeScopeJson(listOf(LlmMessage("user", "JSON")), 16384)
             client.completeVerifiedJson(listOf(LlmMessage("user", "JSON")), 16384)
@@ -237,6 +248,7 @@ class DeepSeekAdapterTest {
             assertEquals(16384, scope.path("max_tokens").asInt())
             assertEquals("json_object", scope.path("response_format").path("type").asText())
             assertEquals("enabled", jacksonObjectMapper().readTree(requests[1]).path("thinking").path("type").asText())
+            assertEquals("high", jacksonObjectMapper().readTree(requests[1]).path("reasoning_effort").asText())
         }
     }
 

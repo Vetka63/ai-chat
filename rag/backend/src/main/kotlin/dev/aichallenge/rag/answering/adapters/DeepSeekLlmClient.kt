@@ -42,7 +42,7 @@ class DeepSeekLlmClient(private val properties: DeepSeekProperties, private val 
     )
     override fun completeScopeJson(messages: List<LlmMessage>, maxOutputTokens: Int?) = execute(
         messages, maxOutputTokens, true,
-        model = properties.supportModel, thinkingEnabled = properties.scopeThinkingEnabled, reasoningEffort = properties.supportReasoningEffort,
+        model = properties.supportModel, thinkingEnabled = properties.scopeThinkingEnabled, reasoningEffort = properties.scopeReasoningEffort,
         timeoutSeconds = properties.supportTimeoutSeconds,
     )
 
@@ -53,6 +53,7 @@ class DeepSeekLlmClient(private val properties: DeepSeekProperties, private val 
         timeoutSeconds: Long = properties.timeoutSeconds,
     ): LlmCompletion {
         if (properties.apiKey.isBlank()) throw LabException("llm_not_configured", "Настройте DEEPSEEK_API_KEY только на backend и пересоздайте контейнер.", HttpStatus.SERVICE_UNAVAILABLE)
+        if (jsonObject && messages.none { it.content.contains("json", ignoreCase = true) }) throw LabException("llm_json_instruction_missing", "Для JSON-режима инструкция должна явно требовать JSON. Вызов API не отправлен.", HttpStatus.INTERNAL_SERVER_ERROR)
         val body = linkedMapOf<String, Any>("model" to model, "messages" to messages, "stream" to false, "temperature" to 0.0, "thinking" to mapOf("type" to if (thinkingEnabled) "enabled" else "disabled"))
         if (thinkingEnabled && reasoningEffort != null) body["reasoning_effort"] = reasoningEffort
         if (maxOutputTokens != null) body["max_tokens"] = maxOutputTokens

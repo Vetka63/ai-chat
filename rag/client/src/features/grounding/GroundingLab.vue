@@ -61,7 +61,7 @@ async function openCitation(citation: Schema<'VerifiedCitation'>) {
       <label class="rewrite-toggle"><input v-model="useRewrite" type="checkbox">Переформулировать запрос поиска · один дополнительный LLM-вызов</label>
     </fieldset>
     <p class="hint">Низкий score → «не знаю», без генерации. После смыслового отклонения возможна одна попытка исправления черновика. Неверная цитата, обрезанный JSON и ошибки связи не запускают повтор. Пустой лимит не передаёт max_tokens.</p>
-    <button class="primary" :disabled="busy || invalid" @click="run">{{ busy ? 'Ищем и проверяем…' : `Ответить с цитатами · до ${useRewrite ? 21 : 20} API-вызовов` }}</button>
+    <button class="primary" :disabled="busy || invalid" @click="run">{{ busy ? 'Ищем и проверяем…' : `Ответить с цитатами · до ${useRewrite ? 23 : 22} API-вызовов` }}</button>
     <p v-if="settings && !settings.configured" class="hint">Ключ не настроен. Поиск и отказ по порогу доступны; непустой контекст потребует серверный ключ.</p>
     <article v-if="result" class="grounded-result" :data-status="result.status">
       <header><h3>{{ statusLabels[result.status] }}</h3><small>{{ result.status }} · {{ result.totalMilliseconds }} мс</small></header>

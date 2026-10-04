@@ -21,4 +21,5 @@ class DeepSeekProperties(
     val groundingReasoningEffort: String = "high",
     val supportThinkingEnabled: Boolean = true,
     val scopeThinkingEnabled: Boolean = false,
+    val scopeReasoningEffort: String = "low",
 )

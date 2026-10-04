@@ -46,8 +46,7 @@ class IsolatedClaimSupportTest {
         var calls = 0
         val delegate = object : ClaimSupportValidator {
             override fun validateScope(claims: List<GroundedClaim>, included: List<SearchHit>, question: String?): ClaimSupportCheck {
-                assertEquals(listOf(this@IsolatedClaimSupportTest.claims[0], this@IsolatedClaimSupportTest.claims[2]), claims)
-                return scopePassed(claims)
+                error("Уже отклонённый черновик не требует дополнительной платной проверки")
             }
             override fun validate(input: List<GroundedClaim>, included: List<SearchHit>): ClaimSupportCheck {
                 assertEquals(listOf(claims[calls]), input)
@@ -59,7 +58,7 @@ class IsolatedClaimSupportTest {
             }
         }
         val checked = IsolatedClaimSupportValidator(delegate, ClaimSupportPromptAssembler(jacksonObjectMapper()), 1).validate(claims, hits)
-        assertEquals(3, calls); assertEquals(4, checked.generations().size)
+        assertEquals(3, calls); assertEquals(3, checked.generations().size)
         assertEquals(listOf(0, 1, 2), checked.claims.map { it.claimIndex })
         assertEquals(1, checked.issues.single().claimIndex)
         assertEquals(SupportCheckStatus.REJECTED, checked.status)

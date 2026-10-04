@@ -1,0 +1,13 @@
+# Opt-in paid test harness; never required for normal application startup.
+services:
+  budget-guard:
+    image: python:3.13-slim
+    command: [python, /checks/budget_proxy.py]
+    environment:
+      BUDGET_LEDGER: /ledger/day24-25-budget-cycle2.json
+      BUDGET_STAGE_CNY: ${RAG_BUDGET_STAGE_CNY:-5}
+    volumes: ["./scripts:/checks:ro", "./data:/ledger"]
+    ports: ["127.0.0.1:8787:8787"]
+  backend:
+    environment:
+      DEEPSEEK_BASE_URL: http://budget-guard:8787

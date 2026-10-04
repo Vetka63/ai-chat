@@ -19,6 +19,8 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
 import java.util.UUID
+import java.util.concurrent.Callable
+import java.util.concurrent.Executors
 
 /** Опциональные платные вызовы настоящего проверяющего адаптера; без генерации, rewrite и повторов. */
 @EnabledIfEnvironmentVariable(named = "RAG_RUN_LIVE_SUPPORT", matches = "true")
@@ -31,11 +33,11 @@ class ClaimSupportLiveTest {
         require(key.isNotBlank()) { "Для явно включённого live-теста нужен серверный DEEPSEEK_API_KEY." }
         val properties = DeepSeekProperties(
             apiKey = key,
-            baseUrl = System.getenv("DEEPSEEK_BASE_URL")?.takeIf { it.isNotBlank() } ?: "https://api.deepseek.com",
+            baseUrl = requireNotNull(System.getenv("DEEPSEEK_BASE_URL")?.takeIf { it.isNotBlank() }) { "Задайте явный DEEPSEEK_BASE_URL, чтобы live-тест не обошёл бюджетный шлюз." },
             model = System.getenv("RAG_SUPPORT_TEST_MODEL")?.takeIf { it.isNotBlank() } ?: System.getenv("DEEPSEEK_MODEL")?.takeIf { it.isNotBlank() } ?: "deepseek-flash",
             supportModel = System.getenv("RAG_SUPPORT_TEST_MODEL")?.takeIf { it.isNotBlank() } ?: "deepseek-v4-pro",
             supportReasoningEffort = System.getenv("RAG_SUPPORT_TEST_EFFORT")?.takeIf { it.isNotBlank() } ?: "high",
-            supportThinkingEnabled = System.getenv("RAG_SUPPORT_TEST_THINKING")?.toBooleanStrict() ?: false,
+            supportThinkingEnabled = System.getenv("RAG_SUPPORT_TEST_THINKING")?.toBooleanStrict() ?: true,
         )
         val checker = IsolatedClaimSupportValidator(LlmClaimSupportValidator(DeepSeekLlmClient(properties, mapper), ClaimSupportPromptAssembler(mapper), mapper, CostEstimator()), ClaimSupportPromptAssembler(mapper))
         val bookCases = listOf(
@@ -90,17 +92,20 @@ class ClaimSupportLiveTest {
         )
         val repeats = System.getenv("RAG_SUPPORT_TEST_REPEATS")?.toInt() ?: 1
         require(repeats in 1..3) { "Разрешены 1–3 ограниченных повторения полного набора." }
+        val parallelism = System.getenv("RAG_SUPPORT_TEST_PARALLELISM")?.toInt() ?: 1
+        require(parallelism in 1..3)
         val directory = Path.of("../data").toAbsolutePath().normalize()
         Files.createDirectories(directory)
         val runId = Instant.now().toString().replace(':', '-') + "-" + UUID.randomUUID().toString().take(8)
         val reportPath = directory.resolve("day24-support-live-$runId.json")
         val records = mutableListOf<Map<String, Any>>()
-        val report = mapOf("at" to Instant.now().toString(), "runId" to runId, "thinkingEnabled" to properties.supportThinkingEnabled, "scopeThinkingEnabled" to properties.scopeThinkingEnabled, "repeats" to repeats, "maximumCalls" to cases.size * repeats * 2, "note" to "Полный набор: книга + синтетические контрастные случаи. Поддержка цитат и отдельный scope guard. Без retry. Все повторения сохранены, не выбор удачных ответов.", "cases" to records)
+        val report = mapOf("at" to Instant.now().toString(), "runId" to runId, "thinkingEnabled" to properties.supportThinkingEnabled, "scopeThinkingEnabled" to properties.scopeThinkingEnabled, "repeats" to repeats, "parallelism" to parallelism, "maximumCalls" to cases.size * repeats * 3, "note" to "Полный набор: книга + синтетические контрастные случаи. Поддержка цитат, независимый source-only анализ и scope guard. Без retry. Все повторения сохранены, не выбор удачных ответов.", "cases" to records)
         fun save() = Files.writeString(reportPath, mapper.writerWithDefaultPrettyPrinter().writeValueAsString(report))
         save()
-        println("Live support trace: $reportPath; максимум ${cases.size * repeats * 2} платных вызовов.")
+        println("Live support trace: $reportPath; максимум ${cases.size * repeats * 3} платных вызовов.")
         val failures = mutableListOf<String>()
-        for (round in 1..repeats) for (case in cases) {
+        val reportLock = Any()
+        fun runOne(round: Int, case: Case) {
             val document = case.context ?: Files.readString(Path.of("../corpus/progit-ru/book").resolve(case.source))
             val quoteStart = document.indexOf(case.quote)
             assertTrue(quoteStart >= 0, "Опорная цитата отсутствует в локальном корпусе: ${case.id}")
@@ -112,15 +117,26 @@ class ClaimSupportLiveTest {
             val exact = ExactCitationValidator(mapper).validate(json, "stop", listOf(hit))
             assertEquals(GroundedStatus.ANSWERED, exact.status, "Проверка дословности fixture: ${case.id}")
             val checked = try { checker.validate(exact.claims, listOf(hit)) } catch (failure: Exception) {
-                records.add(mapOf("id" to case.id, "round" to round, "expected" to case.expected, "errorType" to failure.javaClass.simpleName))
-                save()
+                synchronized(reportLock) {
+                    records.add(mapOf("id" to case.id, "round" to round, "expected" to case.expected, "errorType" to failure.javaClass.simpleName))
+                    save()
+                }
                 throw failure
             }
-            records.add(mapOf("id" to case.id, "round" to round, "expected" to case.expected, "claim" to case.claim, "source" to case.source, "quote" to case.quote, "supportCheck" to checked))
-            save()
+            synchronized(reportLock) {
+                records.add(mapOf("id" to case.id, "round" to round, "expected" to case.expected, "claim" to case.claim, "source" to case.source, "quote" to case.quote, "supportCheck" to checked))
+                if (checked.status != case.expected) failures.add("${case.id}: ожидался ${case.expected}, получен ${checked.status}")
+                save()
+            }
             println("Support round=$round ${case.id}: expected=${case.expected} actual=${checked.status}")
-            if (checked.status != case.expected) failures.add("${case.id}: ожидался ${case.expected}, получен ${checked.status}")
         }
+        val callers = Executors.newFixedThreadPool(parallelism)
+        try {
+            for (round in 1..repeats) {
+                callers.invokeAll(cases.map { case -> Callable { runOne(round, case) } }).forEach { it.get() }
+                if (failures.isNotEmpty()) break // Полный неуспешный круг сохранён; повторять его без исправления незачем.
+            }
+        } finally { callers.shutdown(); checker.close() }
         assertTrue(failures.isEmpty(), "${failures.joinToString("; ")}. Все результаты сохранены: $reportPath")
     }
 }

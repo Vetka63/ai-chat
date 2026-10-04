@@ -47,11 +47,34 @@ class ClaimSupportTest {
     }
     private fun response(vararg verdicts: String) = mapper.writeValueAsString(mapOf("claims" to verdicts.mapIndexed { index, verdict -> mapOf("claim_index" to index, "verdict" to verdict, "reason" to "Проверены смысл и границы цитаты.", "conditions" to emptyList<Any>(), "evidence_scope" to "general", "claim_scope" to "general") }))
 
+    @Test fun `scope condition cannot be silently imported from source into the answer`() {
+        val quote = "При двух исправных датчиках получены два показания."
+        val evidence = hit("c", quote)
+        val original = claim("Получены два показания.", quote, evidence)
+        fun checked(anchor: String, preserved: Boolean, text: String = original.text, question: String? = null): SupportCheckStatus {
+            val condition = mapOf("id" to "R0", "applicable" to true, "preserved" to preserved, "anchor" to anchor, "reason" to "Проверка условия")
+            val raw = mapper.writeValueAsString(mapOf("checks" to listOf(condition)))
+            return Fixture(raw).validator.validateScope(listOf(original.copy(text = text)), listOf(evidence), question).status
+        }
+        assertEquals(SupportCheckStatus.INVALID_RESPONSE, checked("двух исправных датчиках", true))
+        assertEquals(SupportCheckStatus.INVALID_RESPONSE, checked("", true))
+        assertEquals(SupportCheckStatus.REJECTED, checked("", false))
+        assertEquals(SupportCheckStatus.PASSED, checked("двух исправных датчиках", true, quote))
+        assertEquals(SupportCheckStatus.PASSED, checked("двух исправных датчиках", true, question = "Что происходит при двух исправных датчиках?"))
+    }
+
     private inner class Fixture(val raw: String, val finish: String = "stop") {
         var calls = 0
         var sent = emptyList<LlmMessage>()
         val llm = object : LlmClient {
             override fun settings() = AnswerSettings(true, "deepseek-flash", 0.0, "disabled", 16000, null, "")
+            override fun completeVerifiedJson(messages: List<LlmMessage>, maxOutputTokens: Int?): LlmCompletion {
+                if (messages.first().content == dev.aichallenge.rag.grounding.services.SourceScopeInspector.system) {
+                    calls++
+                    return LlmCompletion("source", "deepseek-flash", """{"bindings":[{"claim_index":0,"chunk_id":"c","scope":"general","premise_spans":[0]}]}""", "stop", 5, usage)
+                }
+                return complete(messages, maxOutputTokens)
+            }
             override fun complete(messages: List<LlmMessage>, maxOutputTokens: Int?): LlmCompletion {
                 calls++; sent = messages; assertEquals(16384, maxOutputTokens)
                 return LlmCompletion("check", "deepseek-flash", raw, finish, 5, usage)

@@ -27,6 +27,7 @@ deepseek:
   support-reasoning-effort: ${DEEPSEEK_SUPPORT_REASONING_EFFORT:high}
   support-thinking-enabled: ${DEEPSEEK_SUPPORT_THINKING_ENABLED:true}
   scope-thinking-enabled: ${DEEPSEEK_SCOPE_THINKING_ENABLED:false}
+  scope-reasoning-effort: ${DEEPSEEK_SCOPE_REASONING_EFFORT:low}
   support-timeout-seconds: ${DEEPSEEK_SUPPORT_TIMEOUT_SECONDS:180}
   preparation-model: ${DEEPSEEK_PREPARATION_MODEL:deepseek-v4-pro}
   preparation-reasoning-effort: ${DEEPSEEK_PREPARATION_REASONING_EFFORT:high}

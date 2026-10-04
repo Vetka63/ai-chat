@@ -1,6 +1,6 @@
 # Optional standalone paid regression; never part of the ordinary test suite.
 # Run explicitly: pwsh -File ./scripts/verify-memory-lifecycle.ps1 -RunLive
-# Four user turns, at most 84 LLM calls. One bounded semantic revision is visible; no HTTP retries, Git operations or chat deletion.
+# Four user turns, at most 92 LLM calls. One bounded semantic revision is visible; no HTTP retries, Git operations or chat deletion.
 # Long-tail retention/restart are covered separately by verify-day25.ps1 (2 x 12 turns).
 param(
     [switch]$RunLive,
@@ -8,14 +8,14 @@ param(
     [ValidateRange(1,32768)][int]$MaxOutputTokens = 16384
 )
 $ErrorActionPreference = 'Stop'
-if (!$RunLive) { throw 'Опциональный платный тест: укажите -RunLive для 4 сообщений, до 84 LLM-вызовов. Без флага API не вызывается.' }
+if (!$RunLive) { throw 'Опциональный платный тест: укажите -RunLive для 4 сообщений, до 92 LLM-вызовов. Без флага API не вызывается.' }
 $ragApi = $ApiUrl.TrimEnd('/')
 $ragRunId = '{0}-{1}' -f [DateTimeOffset]::UtcNow.ToString('yyyyMMdd-HHmmss-fff'), [Guid]::NewGuid().ToString('N').Substring(0,8)
 $ragData = Join-Path $PSScriptRoot '../data'
 New-Item -ItemType Directory -Path $ragData -Force | Out-Null
 $ragReportPath = Join-Path $ragData "memory-lifecycle-live-$ragRunId.json"
 if (Test-Path -LiteralPath $ragReportPath) { throw 'Уникальный путь отчёта уже занят; существующий файл не заменяется.' }
-$ragReport = @{ at = [DateTimeOffset]::UtcNow.ToString('o'); runId = $ragRunId; status = 'RUNNING'; indexId = $null; maxOutputTokens = $MaxOutputTokens; chats = @{}; attempts = @(); results = @(); isolation = @(); checks = @(); note = 'Optional standalone memory lifecycle test: 4 turns, at most 84 paid calls, at most one visible semantic revision, no HTTP retries. Fictional task; no Git operations. Memory preparation/provenance and lifecycle are asserted. Book answer status is recorded separately; this is not a usefulness or long-tail benchmark.' }
+$ragReport = @{ at = [DateTimeOffset]::UtcNow.ToString('o'); runId = $ragRunId; status = 'RUNNING'; indexId = $null; maxOutputTokens = $MaxOutputTokens; chats = @{}; attempts = @(); results = @(); isolation = @(); checks = @(); note = 'Optional standalone memory lifecycle test: 4 turns, at most 92 paid calls, at most one visible semantic revision, no HTTP retries. Fictional task; no Git operations. Memory preparation/provenance and lifecycle are asserted. Book answer status is recorded separately; this is not a usefulness or long-tail benchmark.' }
 $ragDocuments = @{}
 function Save-RagReport { [IO.File]::WriteAllText($ragReportPath, ($ragReport | ConvertTo-Json -Depth 90), [Text.UTF8Encoding]::new($false)) }
 function Assert-Rag([bool]$Condition, [string]$Message) { if (!$Condition) { throw $Message } }

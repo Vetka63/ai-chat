@@ -49,14 +49,15 @@ async function fixture(page: Page, options: FixtureOptions = {}) {
   await page.route('**/api/v1/indexes/*/documents/doc', r => r.fulfill({ json: { id: 'doc', title: 'Git', text: quote, sections: [] } }))
   return state
 }
-async function start(page: Page, name = 'Моя задача', threshold?: number) {
+async function start(page: Page, name = 'Моя задача', threshold?: number, maxTokens?: number) {
   await page.goto('/'); await page.getByRole('button', { name: 'Чат с RAG и памятью' }).click()
   await expect(page.getByRole('button', { name: 'Новый чат' })).toBeEnabled()
   if (!await page.getByRole('textbox', { name: 'Название чата' }).isVisible()) await page.getByRole('button', { name: 'Новый чат' }).click()
   await page.getByRole('textbox', { name: 'Название чата' }).fill(name)
-  if (threshold !== undefined) {
+  if (threshold !== undefined || maxTokens !== undefined) {
     await page.getByText('Настройки поиска и памяти', { exact: true }).click()
-    await page.getByRole('spinbutton', { name: 'Порог', exact: true }).fill(String(threshold))
+    if (threshold !== undefined) await page.getByRole('spinbutton', { name: 'Порог', exact: true }).fill(String(threshold))
+    if (maxTokens !== undefined) await page.getByLabel('Лимит ответа', { exact: true }).fill(String(maxTokens))
   }
   await page.getByRole('button', { name: 'Создать чат', exact: true }).click()
   await expect(page.locator('.rag-chat-heading h2')).toHaveText(name)
@@ -105,7 +106,7 @@ test('invalid output remains quarantined and settings cannot mutate existing cha
 })
 test('chat repair preserves final-only answer and collapses rejected draft across reload', async ({ page }) => {
   await fixture(page, { repair: true }); await start(page); await send(page, 'Что делает add?')
-  await expect(page.locator('.rag-chat-composer')).toContainText('до 21 LLM-вызовов')
+  await expect(page.locator('.rag-chat-composer')).toContainText('до 23 LLM-вызовов')
   await expect(page.locator('.rag-chat-claim')).toContainText('Сохраняется подготовленная версия.')
   await expect(page.locator('.rag-chat-claim')).not.toContainText('ИСХОДНЫЙ ЛОЖНЫЙ ВЫВОД ЧАТА')
   const diagnostic = page.locator('.grounding-repair')
@@ -296,9 +297,11 @@ test('another tab editing its draft preserves in-flight receipt and both chat st
   } finally { release(); await other.close() }
 })
 test('live chat resolves followup keeps goal and opens snapshot source @live', async ({ page }, testInfo) => {
-  test.skip(process.env.RAG_LIVE !== 'true', 'Opt-in: up to 42 paid DeepSeek calls including isolated checks and bounded repairs')
+  test.skip(process.env.RAG_LIVE !== 'true', 'Opt-in: up to 46 paid DeepSeek calls including isolated checks and bounded repairs')
   test.setTimeout(1_800_000)
-  await start(page, `UI день25 ${Date.now()}`)
+  const cap = Number(process.env.RAG_LIVE_MAX_OUTPUT_TOKENS ?? '16384')
+  expect(Number.isInteger(cap) && cap > 0 && cap <= 16384).toBe(true)
+  await start(page, `UI день25 ${Date.now()}`, undefined, cap)
   const questions = ['Моя цель — отменить локальный коммит и сохранить изменения. Что делает git reset --soft?', 'А что станет с индексом?']
   for (const [position, question] of questions.entries()) {
     await page.getByRole('textbox', { name: 'Сообщение по задаче' }).fill(question)
