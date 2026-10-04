@@ -66,12 +66,16 @@ class MemoryPatchValidator(private val mapper: ObjectMapper) {
                 else -> listOf("action", "layer", "key", "value", "quote")
             }
             require(shape(item, *fields.toTypedArray())) { "memory_inventory_shape" }
-            val retainWithoutQuote = action == "RETAIN" && !item.has("quote")
             val layer = MemoryLayer.valueOf(text(item, "layer", 20).uppercase())
             val key = text(item, "key", 80)
             val id = layer to key
             require(seen.add(id)) { "duplicate_memory_inventory_key" }
-            val quote = if (retainWithoutQuote) null else text(item, "quote", 500, trim = false).also {
+            val quote = if (action == "RETAIN") {
+                // Не основание для изменения: необязательная аннотация остаётся только в raw trace.
+                // Проверяем формат, но не заменяем ею provenance существующего факта.
+                if (item.has("quote")) text(item, "quote", 500, trim = false)
+                null
+            } else text(item, "quote", 500, trim = false).also {
                 require(input.question.contains(it)) { "memory_inventory_quote_not_exact" }
             }
             when (action) {

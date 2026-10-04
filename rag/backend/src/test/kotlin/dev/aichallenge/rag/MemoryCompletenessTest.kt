@@ -100,14 +100,42 @@ class MemoryCompletenessTest {
         assertThrows(IllegalArgumentException::class.java) { validate(raw(removals = listOf(removal), inventory = listOf(retain)), context(q, old)) }
     }
 
-    @Test fun `optional retain quote when present must still be an exact current user substring`() {
+    @Test fun `optional retain annotation is bounded but cannot change existing provenance`() {
         val q = "По-прежнему используем имя Атлас."
         val old = TaskMemory(listOf(MemoryFact(MemoryLayer.TERMS, "project_name", "Атлас", "original", "Назовём проект Атлас.")))
         val retain = mapOf("action" to "RETAIN", "layer" to "TERMS", "key" to "project_name")
-        assertEquals(old, validate(raw(inventory = listOf(retain + ("quote" to q))), context(q, old)).second)
-        for (quote in listOf(null, "", "Назовём проект Атлас.", "Придуманный текст")) {
+        for (quote in listOf(q, "Назовём проект Атлас.", "Перефразированная аннотация", "x".repeat(500))) {
+            val result = validate(raw(inventory = listOf(retain + ("quote" to quote))), context(q, old))
+            assertEquals(old, result.second)
+            assertTrue(result.third.isEmpty())
+            assertSame(old.facts.single(), result.second.facts.single())
+        }
+        for (quote in listOf<Any?>(null, "", "  \n\t", "x".repeat(501), false, 0, emptyList<String>(), emptyMap<String, String>())) {
             assertThrows(IllegalArgumentException::class.java) { validate(raw(inventory = listOf(retain + ("quote" to quote))), context(q, old)) }
         }
+    }
+
+    @Test fun `synthetic shared history followup accepts nonexact retain annotation without new provenance`() {
+        val ban = MemoryFact(MemoryLayer.CONSTRAINTS, "no_rewrite_shared_branch_history", "Не переписывать общую историю", "previous-user", "Мы договорились не переписывать общую историю.")
+        val old = TaskMemory(listOf(ban, fact(MemoryLayer.GOAL, "goal", "Сохранить изменения")))
+        val q = "С учётом запрета переписывать общую историю чем revert отличается от reset?"
+        val annotation = "запретом переписывать общую историю"
+        assertFalse(q.contains(annotation))
+        val retain = mapOf("action" to "RETAIN", "layer" to "CONSTRAINTS", "key" to ban.key, "quote" to annotation)
+        val payload = raw(inventory = listOf(retain))
+        val fake = object : LlmClient {
+            override fun settings(): AnswerSettings = error("Not needed")
+            override fun complete(messages: List<LlmMessage>, maxOutputTokens: Int?): LlmCompletion = error("Regular generation must not run")
+            override fun completePreparationJson(messages: List<LlmMessage>, maxOutputTokens: Int?) = LlmCompletion("fixture", "synthetic-preparer", payload, "stop", 1, null)
+        }
+        val trace = LlmDialoguePreparer(fake, mapper, validator, CostEstimator()).prepare(context(q, old))
+        assertTrue(trace.issues.isEmpty())
+        assertTrue(trace.changes.isEmpty())
+        assertEquals(old, trace.memory)
+        assertSame(ban, trace.memory.facts.first())
+        assertEquals(annotation, mapper.readTree(trace.rawJson).path("inventory").first().path("quote").asText())
+        assertEquals(ban.quote, trace.memory.facts.first().quote)
+        assertEquals("previous-user", trace.memory.facts.first().sourceTurnId)
     }
 
     @Test fun `retain value and quote are independently optional but supplied value is exact`() {
@@ -136,7 +164,7 @@ class MemoryCompletenessTest {
         val quote = "Переименуем рабочую ветку в release-payments-v2."
         val q = "$quote Общая цель и запрет force push прежние. Как переименовать локальную ветку?"
         val update = change("TERMS", branch.key, "release-payments-v2", quote)
-        val retained = listOf(mapOf("action" to "RETAIN", "layer" to "GOAL", "key" to goal.key), mapOf("action" to "RETAIN", "layer" to "CONSTRAINTS", "key" to ban.key))
+        val retained = listOf(mapOf("action" to "RETAIN", "layer" to "GOAL", "key" to goal.key), mapOf("action" to "RETAIN", "layer" to "CONSTRAINTS", "key" to ban.key, "quote" to "Перефразированное старое ограничение"))
         val result = validate(raw(listOf(update), inventory = listOf(item(update)) + retained), context(q, old))
         assertEquals(3, result.second.facts.size)
         assertEquals(goal, result.second.facts.single { it.layer == MemoryLayer.GOAL })
@@ -157,6 +185,11 @@ class MemoryCompletenessTest {
         val upsert = item(update)
         assertThrows(IllegalArgumentException::class.java) { validate(raw(listOf(update), inventory = listOf(upsert - "quote")), context(q)) }
         assertThrows(IllegalArgumentException::class.java) { validate(raw(listOf(update - "quote"), inventory = listOf(upsert)), context(q)) }
+        for (wrongQuote in listOf("Не обращаться к интернету", "Придуманный текст")) {
+            val badUpdate = update + ("quote" to wrongQuote)
+            assertThrows(IllegalArgumentException::class.java) { validate(raw(listOf(badUpdate), inventory = listOf(item(badUpdate))), context(q)) }
+            assertThrows(IllegalArgumentException::class.java) { validate(raw(listOf(update), inventory = listOf(upsert + ("quote" to wrongQuote))), context(q)) }
+        }
         val old = TaskMemory(listOf(fact(MemoryLayer.CONSTRAINTS, "offline", q)))
         val cancel = "Снимаю ограничение на обращения к сети."
         val removal = mapOf("layer" to "CONSTRAINTS", "key" to "offline", "quote" to cancel)
