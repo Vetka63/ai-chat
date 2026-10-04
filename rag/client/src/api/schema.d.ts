@@ -4,6 +4,22 @@
  */
 
 export interface paths {
+    "/api/v1/grounded-answers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["generateGroundedAnswer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/experiments/compare": {
         parameters: {
             query?: never;
@@ -248,6 +264,86 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        GroundingRequest: {
+            question: string;
+            indexId: string;
+            /** @default 10 */
+            candidateTopK: number;
+            /** @default 5 */
+            finalTopK: number;
+            /** @default 0.65 */
+            similarityThreshold: number;
+            /** @default 16000 */
+            contextMaxCharacters: number;
+            /** @default false */
+            useRewrite: boolean;
+            maxOutputTokens?: number | null;
+        };
+        /** @enum {string} */
+        GroundedStatus: "ANSWERED" | "UNKNOWN" | "INVALID_EVIDENCE" | "ERROR";
+        EvidenceSource: {
+            chunkId: string;
+            documentId: string;
+            source: string;
+            title: string;
+            section: string;
+        };
+        VerifiedCitation: {
+            source: components["schemas"]["EvidenceSource"];
+            quote: string;
+            startInChunk: number;
+            endInChunkExclusive: number;
+            canonicalStart: number;
+            canonicalEndExclusive: number;
+        };
+        GroundedClaim: {
+            text: string;
+            citations: components["schemas"]["VerifiedCitation"][];
+        };
+        EvidenceIssue: {
+            code: string;
+            message: string;
+            claimIndex: number | null;
+            citationIndex: number | null;
+        };
+        GroundingRetrieval: {
+            searchQuery: string;
+            rawCandidates: components["schemas"]["SearchHit"][];
+            selectedCandidates: components["schemas"]["SearchHit"][];
+            decisions: components["schemas"]["CandidateDecision"][];
+            included: components["schemas"]["SearchHit"][];
+            omittedChunkIds: string[];
+            textCharacters: number;
+            milliseconds: number;
+            embeddingInputTokens: number | null;
+        };
+        GroundingGeneration: {
+            model: string;
+            finishReason: string;
+            milliseconds: number;
+            usage: components["schemas"]["TokenUsage"] | null;
+            estimatedCost: components["schemas"]["CostEstimate"] | null;
+            messages: components["schemas"]["LlmMessage"][];
+            rawJson: string;
+        };
+        GroundedResult: {
+            request: components["schemas"]["GroundingRequest"];
+            snapshotId: string;
+            status: components["schemas"]["GroundedStatus"];
+            answer: string;
+            clarification: string | null;
+            claims: components["schemas"]["GroundedClaim"][];
+            sources: components["schemas"]["EvidenceSource"][];
+            issues: components["schemas"]["EvidenceIssue"][];
+            retrieval: components["schemas"]["GroundingRetrieval"] | null;
+            rewrite: components["schemas"]["RewriteTrace"] | null;
+            generation: components["schemas"]["GroundingGeneration"] | null;
+            llmStagesAttempted: number;
+            totalUsage: components["schemas"]["TokenUsage"] | null;
+            estimatedCost: components["schemas"]["CostEstimate"] | null;
+            totalMilliseconds: number;
+            warnings: string[];
+        };
         /** @enum {string} */
         RetrievalMode: "RAW" | "FILTERED" | "REWRITE" | "REWRITE_FILTERED";
         ExperimentRequest: {
@@ -547,6 +643,44 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    generateGroundedAnswer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GroundingRequest"];
+            };
+        };
+        responses: {
+            /** @description Grounded result: читать status, UNKNOWN/INVALID/ERROR не являются доказанным ответом */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroundedResult"];
+                };
+            };
+            /** @description Некорректные параметры */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Индекс отсутствует */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     compareRetrievalModes: {
         parameters: {
             query?: never;

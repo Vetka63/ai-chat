@@ -24,9 +24,9 @@ class DeepSeekLlmClient(private val properties: DeepSeekProperties, private val 
     override fun complete(messages: List<LlmMessage>, maxOutputTokens: Int?): LlmCompletion {
         return execute(messages, maxOutputTokens, false)
     }
-    override fun completeJson(messages: List<LlmMessage>, maxOutputTokens: Int) = execute(messages, maxOutputTokens, true)
+    override fun completeJson(messages: List<LlmMessage>, maxOutputTokens: Int?) = execute(messages, maxOutputTokens, true)
 
-    /** Один запрос; JSON object включается только для rewrite, не для пользовательского ответа. */
+    /** Один запрос; JSON object только для явно выбранных структурированных флоу, не старых текстовых ответов. */
     private fun execute(messages: List<LlmMessage>, maxOutputTokens: Int?, jsonObject: Boolean): LlmCompletion {
         if (properties.apiKey.isBlank()) throw LabException("llm_not_configured", "Настройте DEEPSEEK_API_KEY только на backend и пересоздайте контейнер.", HttpStatus.SERVICE_UNAVAILABLE)
         val body = linkedMapOf<String, Any>("model" to properties.model, "messages" to messages, "stream" to false, "temperature" to 0.0, "thinking" to mapOf("type" to "disabled"))

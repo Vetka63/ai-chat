@@ -70,4 +70,12 @@ class DeepSeekAdapterTest {
             assertEquals(512, request.path("max_tokens").asInt())
         }
     }
+    @Test fun `JSON generation with no local cap omits max tokens`() {
+        withServer(valid) { client, requests ->
+            client.completeJson(listOf(LlmMessage("user", "Верни JSON")), null)
+            val request = jacksonObjectMapper().readTree(requests.single())
+            assertEquals("json_object", request.path("response_format").path("type").asText())
+            assertFalse(request.has("max_tokens"))
+        }
+    }
 }

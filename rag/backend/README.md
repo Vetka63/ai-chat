@@ -12,6 +12,7 @@ JDK 21, Kotlin, Spring Boot MVC. Boot создаёт компоненты чер
 | `answering` | Два режима генерации, сборка контекста, DeepSeek и измерения ответа |
 | `rewriting` | JSON-переформулировка только поискового запроса |
 | `experiments` | Сравнение четырёх режимов retrieval, общие стадии и независимые результаты |
+| `grounding` | JSON-пункты с точными цитатами, серверные источники и fail-closed проверка |
 | `config` | Пути, runtime URL, модель, batch size, timeout |
 | `common` | Общий формат ошибки и hashing |
 
@@ -21,4 +22,4 @@ JDK 21, Kotlin, Spring Boot MVC. Boot создаёт компоненты чер
 
 API contract: `../api/openapi.json`, копируется при сборке в `static/api-spec`. Изменение DTO требует синхронного обновления OpenAPI, генерации frontend типов и contract/UI checks. API не принимает произвольный путь/URL документа, размерность вектора или секрет от клиента.
 
-Алгоритм индексации: `../docs/application-guide.md`. Генерация дня 22 по классам: `src/main/kotlin/dev/aichallenge/rag/answering/README.md` и `../docs/day22-guide.md`. День 23: `../docs/day23-guide.md` и README рядом с experiments, rewriting и retrieval/selection. Пределы и будущие домены: `../docs/architecture.md`.
+Алгоритм индексации: `../docs/application-guide.md`. Генерация дня 22 по классам: `src/main/kotlin/dev/aichallenge/rag/answering/README.md` и `../docs/day22-guide.md`. День 23: `../docs/day23-guide.md` и README рядом с experiments, rewriting и retrieval/selection. День 24: `../docs/day24-guide.md` и `src/main/kotlin/dev/aichallenge/rag/grounding/README.md`. Пределы и будущие домены: `../docs/architecture.md`.

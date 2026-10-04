@@ -12,6 +12,7 @@ export async function request<T>(path: string, body?: unknown): Promise<T> {
 }
 
 export const api = {
+  groundedAnswer: (body: Schema<'GroundingRequest'>) => request<Schema<'GroundedResult'>>('/grounded-answers', body),
   experiment: (body: Schema<'ExperimentRequest'>) => request<Schema<'ExperimentComparison'>>('/experiments/compare', body),
   answerSettings: () => request<Schema<'AnswerSettings'>>('/answer-settings'),
   questions: () => request<Schema<'ControlQuestion'>[]>('/evaluation/questions'),

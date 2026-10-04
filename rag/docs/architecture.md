@@ -1,6 +1,6 @@
 # Архитектура лаборатории RAG
 
-Этот документ описывает индексацию дня 21, генерацию дня 22 и сравнение retrieval дня 23. Основной корпус — русский перевод Pro Git, не старое предложение QASPER. Алгоритмы и проверки — в [day22-guide.md](day22-guide.md) и [day23-guide.md](day23-guide.md).
+Этот документ описывает индексацию дня 21, генерацию дня 22, сравнение retrieval дня 23 и grounded-ответы дня 24. Основной корпус — русский перевод Pro Git, не старое предложение QASPER. Алгоритмы и проверки — в [day22-guide.md](day22-guide.md), [day23-guide.md](day23-guide.md) и [day24-guide.md](day24-guide.md).
 
 ## Назначение компонентов
 
@@ -34,7 +34,7 @@ rag/
 └── .env.example             Несекретные параметры нового приложения
 ```
 
-Backend пакеты: `config`, `common`, `documents`, `indexing`, `embeddings`, `retrieval`, `answering`, `rewriting`, `experiments`. Внутри доменов находятся models, controllers, services, ports, adapters и enums только при наличии реального кода. DTO принадлежат своему домену. Будущие `grounding`, `chat`, `taskmemory` не создаются пустыми каталогами заранее.
+Backend пакеты: `config`, `common`, `documents`, `indexing`, `embeddings`, `retrieval`, `answering`, `rewriting`, `experiments`, `grounding`. Внутри доменов находятся models, controllers, services, ports, adapters и enums только при наличии реального кода. DTO принадлежат своему домену. Будущие `chat`, `taskmemory` не создаются пустыми каталогами заранее.
 
 ## Зависимости доменов
 
@@ -56,7 +56,7 @@ AsciiDocDocumentLoader поддерживает текстовые секции 
 
 Канонический текст хранится отдельно от оригинала. Все диапазоны `[start,endExclusive)` относятся к UTF-16 этого текста. `sourceLineStart/End` чанка — начальные строки первого/последнего затронутого блока; они не являются точными конечными строками оригинальной цитаты. Точную принадлежность обеспечивает source + snapshot + canonical range. Номера PDF страниц не выдумываются.
 
-Для будущей проверки цитат используется канонический snapshot, показанный в UI. Изображения книги не считаются извлечёнными текстовыми доказательствами.
+Для проверки цитат дня 24 используется канонический snapshot, показанный в UI. Изображения книги не считаются извлечёнными текстовыми доказательствами.
 
 ## Две стратегии разбиения
 
@@ -109,7 +109,7 @@ Compare требует два разных индекса. Контролиру�
 
 День 23 добавил QueryRewriter и CandidateSelector для четырёх сравнимых режимов. ExperimentService выполняет один общий rewrite и максимум два поиска; ошибки независимых генераций не уничтожают соседние результаты. AnswerGenerator выделен из AnswerService и переиспользуется обоими флоу. Исходный вопрос сохраняется в генерации, rewrite используется только в поиске. API usage общего rewrite считается один раз; отсутствие измерения не превращается в ноль.
 
-День 24 — server-owned evidence IDs, валидатор точных цитат и unknown gate по качеству доказательств. День 25 — conversation repository и изолированная task memory с provenance пользовательских сообщений.
+День 24 реализует отдельный GroundingService: исходный вопрос → optional rewrite → поиск → отбор → упаковка → JSON → CitationValidator. ExactCitationValidator проверяет каждый claim по фактически переданным чанкам. В ответе только валидные claims; один плохой пункт отклоняет весь ответ. Source metadata и UTF-16 координаты принадлежат серверу. Слабый score даёт UNKNOWN без генерации; содержательный unknown модели тоже допустим. Подлинность цитаты и semantic support — разные проверки, последняя пока ручная. AnswerService/ExperimentService сохраняют исторические режимы без строгих цитат; дня 24 нужно выбирать отдельную вкладку. День 25 — conversation repository и изолированная task memory с provenance пользовательских сообщений.
 
 Контрольные вопросы, expected answers и gold evidence живут в evaluation, не в CorpusSnapshot и не в embedding input. Нельзя добиться хорошей проверки, проиндексировав эталонные ответы рядом с книгой.
 
@@ -120,6 +120,8 @@ Compare требует два разных индекса. Контролиру�
 Логи включают job/index ID, стратегию, прогресс, dimension и ошибки. Домен answering пишет статус провайдера, фактическую модель, latency, finish reason и usage, но не ключ, тексты вопросов или сырой ответ API. Для дня 21 ключ не нужен; день 22 получает его только через окружение backend. Runtime SQLite, модели и node_modules не отправляются в Git. Model pull и исходники скачиваются только при подготовке; индексирование после этого выполняется локально.
 
 ## Архитектурная схема
+
+[Схема дня 24](diagrams/day24-grounding.html) показывает зависимости grounded-флоу; [receipt](diagrams/day24-acceptance.md) отделяет artifact checks, browser evidence и визуальную оценку.
 
 [Схема дня 23](diagrams/day23-architecture.html) показывает доменные обращения эксперимента; [receipt](diagrams/day23-acceptance.md) фиксирует проверку артефакта, браузера и визуальный просмотр отдельно.
 

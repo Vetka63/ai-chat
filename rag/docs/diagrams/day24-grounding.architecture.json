@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": { "title": "День 24 · Проверяемые источники", "quality_profile": "showcase", "viewBox": [1340, 760] },
+  "components": [
+    { "id": "evidence-ui", "type": "frontend", "label": "GroundingLab", "sublabel": "Ответ · цитаты · источник", "pos": [60, 120], "size": [240, 90] },
+    { "id": "evidence-flow", "type": "backend", "label": "GroundingService", "sublabel": "Отбор · упаковка · генерация", "pos": [540, 120], "size": [250, 90] },
+    { "id": "evidence-check", "type": "security", "label": "ExactCitationValidator", "sublabel": "ID · текст · координаты", "pos": [1000, 120], "size": [270, 90] },
+    { "id": "evidence-rewrite", "type": "backend", "label": "QueryRewriter", "sublabel": "Необязательное уточнение", "pos": [60, 560], "size": [240, 90] },
+    { "id": "evidence-search", "type": "backend", "label": "SearchService", "sublabel": "Индекс · cosine · порог", "pos": [540, 560], "size": [250, 90] },
+    { "id": "evidence-llm", "type": "external", "label": "DeepSeek JSON", "sublabel": "Пункты ответа + цитаты", "pos": [1000, 560], "size": [270, 90] }
+  ],
+  "connections": [
+    { "id": "evidence-request", "from": "evidence-ui", "to": "evidence-flow", "label": "HTTP запрос", "variant": "emphasis" },
+    { "id": "evidence-validation", "from": "evidence-flow", "to": "evidence-check", "label": "Проверка JSON", "variant": "security" },
+    { "id": "evidence-rewriting", "from": "evidence-flow", "to": "evidence-rewrite", "label": "Переформулирование", "variant": "dashed" },
+    { "id": "evidence-retrieval", "from": "evidence-flow", "to": "evidence-search", "label": "Поиск и отбор", "labelDy": 24 },
+    { "id": "evidence-generation", "from": "evidence-flow", "to": "evidence-llm", "label": "Вопрос + чанки" }
+  ],
+  "cards": [
+    { "dot": "emerald", "title": "Публикация", "items": ["Все пункты проходят проверку", "Метаданные берутся из индекса"] },
+    { "dot": "amber", "title": "Слабый контекст", "items": ["Нет подходящих чанков → «не знаю»", "Никакой подмены обычным ответом"] },
+    { "dot": "rose", "title": "Граница гарантии", "items": ["Точная цитата не доказывает смысл", "Смысл проверяется на 10 вопросах"] }
+  ]
+}
