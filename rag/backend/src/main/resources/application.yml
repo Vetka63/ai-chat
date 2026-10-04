@@ -26,3 +26,6 @@ deepseek:
   support-model: ${DEEPSEEK_SUPPORT_MODEL:deepseek-v4-pro}
   support-reasoning-effort: ${DEEPSEEK_SUPPORT_REASONING_EFFORT:high}
   support-timeout-seconds: ${DEEPSEEK_SUPPORT_TIMEOUT_SECONDS:180}
+  preparation-model: ${DEEPSEEK_PREPARATION_MODEL:deepseek-v4-pro}
+  preparation-reasoning-effort: ${DEEPSEEK_PREPARATION_REASONING_EFFORT:high}
+  preparation-timeout-seconds: ${DEEPSEEK_PREPARATION_TIMEOUT_SECONDS:180}

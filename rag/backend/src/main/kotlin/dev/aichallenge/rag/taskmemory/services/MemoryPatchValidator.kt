@@ -60,8 +60,11 @@ class MemoryPatchValidator(private val mapper: ObjectMapper) {
         for (item in inventory) {
             val action = text(item, "action", 10)
             // RETAIN не создаёт и не обновляет факт: исходные quote/sourceTurnId остаются в памяти.
-            val fields = if (action == "RETAIN") listOf("action", "layer", "key") + listOf("value", "quote").filter { item.has(it) }
-                else listOf("action", "layer", "key", "value", "quote")
+            val fields = when (action) {
+                "RETAIN" -> listOf("action", "layer", "key") + listOf("value", "quote").filter { item.has(it) }
+                "REMOVE" -> listOf("action", "layer", "key", "quote") + listOf("value").filter { item.has(it) }
+                else -> listOf("action", "layer", "key", "value", "quote")
+            }
             require(shape(item, *fields.toTypedArray())) { "memory_inventory_shape" }
             val retainWithoutQuote = action == "RETAIN" && !item.has("quote")
             val layer = MemoryLayer.valueOf(text(item, "layer", 20).uppercase())
@@ -78,7 +81,7 @@ class MemoryPatchValidator(private val mapper: ObjectMapper) {
                     covered.add(id)
                 }
                 "REMOVE" -> {
-                    require(item.path("value").isNull) { "memory_removal_value" }
+                    require(!item.has("value") || item.path("value").isNull) { "memory_removal_value" }
                     require(changes.any { it.layer == layer && it.key == key && it.value == null && it.quote == quote }) { "uncovered_memory_removal" }
                     covered.add(id)
                 }

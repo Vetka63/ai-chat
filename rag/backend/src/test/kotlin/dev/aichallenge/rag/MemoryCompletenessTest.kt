@@ -207,7 +207,7 @@ class MemoryCompletenessTest {
         assertThrows(IllegalArgumentException::class.java) { validate(raw(removals = listOf(removal), inventory = listOf(inventory)), context(q)) }
     }
 
-    @Test fun `live explicit null removal and omitted value are equivalent in production preparation`() {
+    @Test fun `all four optional null removal value combinations are equivalent in production preparation`() {
         val ban = MemoryFact(MemoryLayer.CONSTRAINTS, "force_push_common_branch", "в общую ветку force push запрещён", "first", "В общую ветку force push запрещён.")
         val goal = fact(MemoryLayer.GOAL, "goal", "подготовить выпуск приложения в отдельной ветке")
         val branch = MemoryFact(MemoryLayer.TERMS, "working_branch", "рабочая ветка называется release-payments-v2", "rename", "Переименуем рабочую ветку в release-payments-v2.")
@@ -215,8 +215,8 @@ class MemoryCompletenessTest {
         val quote = "Снимаю прежний запрет на force push в общую ветку."
         val q = "$quote Это изменение условий учебного сценария, команды выполнять не нужно. Как посмотреть список локальных веток?"
         val removal = mapOf("layer" to "CONSTRAINTS", "key" to ban.key, "quote" to quote)
-        val inventory = removal + mapOf("action" to "REMOVE", "value" to null)
-        for (entry in listOf(removal, removal + ("value" to null))) {
+        val reference = removal + ("action" to "REMOVE")
+        for (entry in listOf(removal, removal + ("value" to null))) for (inventory in listOf(reference, reference + ("value" to null))) {
             val payload = raw(removals = listOf(entry), inventory = listOf(inventory))
             val fake = object : LlmClient {
                 override fun settings() = AnswerSettings(true, "deepseek-flash", 0.0, "disabled", 16000, null, "")
@@ -241,7 +241,7 @@ class MemoryCompletenessTest {
         for (bad in listOf(removal - "quote", removal + ("quote" to null), removal + ("quote" to ""), removal + ("quote" to ban.quote))) {
             assertThrows(IllegalArgumentException::class.java) { validate(raw(removals = listOf(bad), inventory = listOf(bad + ("action" to "REMOVE"))), context(q, old)) }
         }
-        for (badInventory in listOf(inventory - "quote", inventory - "value", inventory + ("value" to "null"), inventory + ("quote" to "Как посмотреть ветки?"))) {
+        for (badInventory in listOf(inventory - "quote", inventory - "quote" - "value", inventory + ("quote" to "Как посмотреть ветки?"), inventory + ("sourceTurnId" to "forged"))) {
             assertThrows(IllegalArgumentException::class.java) { validate(raw(removals = listOf(removal), inventory = listOf(badInventory)), context(q, old)) }
         }
         assertThrows(IllegalArgumentException::class.java) { validate(raw(removals = listOf(removal)), context(q, old)) }
@@ -261,6 +261,8 @@ class MemoryCompletenessTest {
         val inventory = listOf(item(update), removal + mapOf("action" to "REMOVE", "value" to null))
         for (value in listOf<Any>("null", "", ban.value, false, 0, emptyList<String>(), emptyMap<String, String>())) {
             assertThrows(IllegalArgumentException::class.java) { validate(raw(listOf(update), listOf(removal + ("value" to value)), inventory), context(q, old)) }
+            val badInventory = listOf(item(update), removal + mapOf("action" to "REMOVE", "value" to value))
+            assertThrows(IllegalArgumentException::class.java) { validate(raw(listOf(update), listOf(removal), badInventory), context(q, old)) }
             assertEquals(listOf(ban), old.facts)
         }
         for (extra in listOf("action" to "REMOVE", "sourceTurnId" to "forged", "extra" to "ignored")) {
@@ -300,7 +302,7 @@ class MemoryCompletenessTest {
         val fake = object : LlmClient {
             override fun settings() = AnswerSettings(true, "deepseek-flash", 0.0, "disabled", 16000, null, "")
             override fun complete(messages: List<LlmMessage>, maxOutputTokens: Int?): LlmCompletion {
-                assertNull(maxOutputTokens)
+                assertEquals(16384, maxOutputTokens)
                 return LlmCompletion("id", "deepseek-flash", raw(inventory = listOf(item(discovered))), "stop", 2, usage)
             }
         }
@@ -311,6 +313,24 @@ class MemoryCompletenessTest {
         assertEquals(listOf("invalid_dialogue_preparation"), trace.issues)
         assertTrue(trace.changes.isEmpty())
         assertTrue(trace.rawJson.contains("release-blue"))
+    }
+
+    @Test fun `production preparer uses separate profile with technical cap`() {
+        var calls = 0
+        val fake = object : LlmClient {
+            override fun settings(): AnswerSettings = error("Not needed")
+            override fun complete(messages: List<LlmMessage>, maxOutputTokens: Int?): LlmCompletion = error("Regular generation must not run")
+            override fun completeJson(messages: List<LlmMessage>, maxOutputTokens: Int?): LlmCompletion = error("Generic JSON must not run")
+            override fun completePreparationJson(messages: List<LlmMessage>, maxOutputTokens: Int?): LlmCompletion {
+                calls++
+                assertEquals(16384, maxOutputTokens)
+                return LlmCompletion("fixture", "separate-preparer", raw(), "stop", 1, null)
+            }
+        }
+        val trace = LlmDialoguePreparer(fake, mapper, validator, CostEstimator()).prepare(context("Как создать ветку?"))
+        assertTrue(trace.issues.isEmpty())
+        assertEquals("separate-preparer", trace.model)
+        assertEquals(1, calls)
     }
 
     @Test fun `facts survive beyond six exchanges restart and stay isolated from another chat`() {

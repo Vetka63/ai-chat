@@ -29,7 +29,8 @@
     "memoryExpectations":[
       {"id":"working_branch","fromPosition":2,"layer":"TERMS","pattern":"feature-login","sourcePosition":2},
       {"id":"force_push_ban","fromPosition":1,"layer":"CONSTRAINTS","pattern":"force"},
-      {"id":"shared_history","fromPosition":11,"layer":"CONSTRAINTS","pattern":"не перепис|нельзя перепис|перепис.*нельзя|запрет.*перепис|запрещ.*перепис"}
+      {"id":"shared_history","fromPosition":11,"layer":"CONSTRAINTS","pattern":"не перепис|нельзя перепис|перепис.*нельзя|запрет.*перепис|запрещ.*перепис"},
+      {"id":"same_line_changed","fromPosition":9,"layer":"CLARIFICATIONS","pattern":"(дв[еу]|обе).*вет.*(одн|ту же).*строк|строк.*(дв[еу]|обе).*вет","sourcePosition":9}
     ],
     "questions":[
       "Моя цель — работать в отдельной ветке над исправлением, затем объединить изменения с командой. В общую ветку force push запрещён. Как создать ветку и переключиться на неё?",

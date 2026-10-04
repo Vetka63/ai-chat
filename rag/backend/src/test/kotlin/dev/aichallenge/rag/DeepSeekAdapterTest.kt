@@ -19,6 +19,7 @@ class DeepSeekAdapterTest {
     private fun withServer(
         body: String, status: Int = 200,
         supportModel: String = "deepseek-v4-pro", supportReasoningEffort: String = "high",
+        preparationModel: String = "deepseek-v4-pro", preparationReasoningEffort: String = "high",
         action: (DeepSeekLlmClient, MutableList<String>) -> Unit,
     ) {
         val requests = mutableListOf<String>()
@@ -31,7 +32,7 @@ class DeepSeekAdapterTest {
         }
         server.start()
         try {
-            val properties = DeepSeekProperties("test-only", "http://127.0.0.1:${server.address.port}", supportModel = supportModel, supportReasoningEffort = supportReasoningEffort)
+            val properties = DeepSeekProperties("test-only", "http://127.0.0.1:${server.address.port}", supportModel = supportModel, supportReasoningEffort = supportReasoningEffort, preparationModel = preparationModel, preparationReasoningEffort = preparationReasoningEffort)
             action(DeepSeekLlmClient(properties, jacksonObjectMapper()), requests)
         }
         finally { server.stop(0) }
@@ -151,5 +152,50 @@ class DeepSeekAdapterTest {
         assertSame(expected, client.completeVerifiedJson(messages, 8192))
         assertSame(expected, client.completeVerifiedJson(messages, null))
         assertEquals(listOf(messages to 8192, messages to null), calls)
+    }
+
+    @Test fun `preparation has an isolated configurable thinking profile and technical cap`() {
+        val messages = listOf(LlmMessage("user", "Подготовь синтетический вопрос и память"))
+        withServer(valid, supportModel = "fixture-judge", supportReasoningEffort = "low", preparationModel = "fixture-preparation", preparationReasoningEffort = "high") { client, requests ->
+            client.completePreparationJson(messages, 16384)
+            client.completeVerifiedJson(messages, 8192)
+            client.completeJson(messages, null)
+            val preparation = jacksonObjectMapper().readTree(requests[0])
+            assertEquals("fixture-preparation", preparation.path("model").asText())
+            assertEquals("enabled", preparation.path("thinking").path("type").asText())
+            assertEquals("high", preparation.path("reasoning_effort").asText())
+            assertEquals("json_object", preparation.path("response_format").path("type").asText())
+            assertEquals(16384, preparation.path("max_tokens").asInt())
+            assertFalse(preparation.path("stream").asBoolean())
+            val judge = jacksonObjectMapper().readTree(requests[1])
+            assertEquals("fixture-judge", judge.path("model").asText())
+            assertEquals("low", judge.path("reasoning_effort").asText())
+            assertEquals(8192, judge.path("max_tokens").asInt())
+            val ordinary = jacksonObjectMapper().readTree(requests[2])
+            assertEquals("deepseek-flash", ordinary.path("model").asText())
+            assertEquals("disabled", ordinary.path("thinking").path("type").asText())
+            assertFalse(ordinary.has("reasoning_effort"))
+            assertFalse(ordinary.has("max_tokens"))
+            assertEquals("deepseek-flash", client.settings().model)
+            assertEquals("disabled", client.settings().thinking)
+            assertNull(client.settings().maxOutputTokensDefault)
+        }
+        val defaults = DeepSeekProperties()
+        assertEquals("deepseek-v4-pro", defaults.preparationModel)
+        assertEquals("high", defaults.preparationReasoningEffort)
+        assertEquals(180L, defaults.preparationTimeoutSeconds)
+    }
+
+    @Test fun `preparation JSON default delegates to existing JSON override`() {
+        val messages = listOf(LlmMessage("user", "Синтетический вопрос"))
+        val expected = LlmCompletion("fixture", "fixture-model", "{}", "stop", 1, null)
+        val calls = mutableListOf<Pair<List<LlmMessage>, Int?>>()
+        val client = object : LlmClient {
+            override fun settings(): AnswerSettings = error("Settings are not needed")
+            override fun complete(messages: List<LlmMessage>, maxOutputTokens: Int?): LlmCompletion = error("JSON override should be used")
+            override fun completeJson(messages: List<LlmMessage>, maxOutputTokens: Int?): LlmCompletion { calls += messages to maxOutputTokens; return expected }
+        }
+        assertSame(expected, client.completePreparationJson(messages, 16384))
+        assertEquals(listOf(messages to 16384), calls)
     }
 }

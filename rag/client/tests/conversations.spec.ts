@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { writeFile } from 'node:fs/promises'
 
 const quote = 'Git сохраняет состояние файла на момент git add.'
 const source = { chunkId: 'c1', documentId: 'doc', source: 'git.asc', title: 'Git', section: 'Индекс' }
@@ -300,7 +301,9 @@ test('live chat resolves followup keeps goal and opens snapshot source @live', a
     const responsePromise = page.waitForResponse(r => new URL(r.url()).pathname.endsWith('/turns') && r.request().method() === 'POST', { timeout: 840_000 })
     await page.getByRole('button', { name: 'Отправить', exact: true }).click()
     const response = await responsePromise, trace = await response.json(), turn = trace.turns?.at(-1)
-    await testInfo.attach(`day25-live-turn-${position + 1}-${Date.now()}.json`, { body: JSON.stringify(trace, null, 2), contentType: 'application/json' })
+    const tracePath = testInfo.outputPath(`day25-live-turn-${position + 1}-${Date.now()}.json`)
+    await writeFile(tracePath, JSON.stringify(trace, null, 2), 'utf8')
+    await testInfo.attach(`day25-live-turn-${position + 1}`, { path: tracePath, contentType: 'application/json' })
     console.log(`Day25 live turn ${position + 1}: HTTP ${response.status()}, status=${turn?.result?.status}, llmStagesAttempted=${turn?.llmStagesAttempted ?? 'unknown'}, repair=${!!turn?.result?.repair}`)
     await expect(page.getByRole('button', { name: 'Отправить', exact: true })).toBeVisible({ timeout: 840_000 })
     await expect(page.locator('.rag-chat-turn').last()).toHaveAttribute('data-status', 'ANSWERED')

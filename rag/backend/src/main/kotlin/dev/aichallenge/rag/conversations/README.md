@@ -32,7 +32,7 @@ Read detail выполняется в read-транзакции, поэтому 
 
 При перезапуске единственного локального backend pending меняется в INTERRUPTED. Вопрос остаётся видимым; его можно задать заново вручную. Отсутствующий usage нельзя заменить нулём: totalUsage=null, хотя доступные метрики стадии сохраняются. Стоимость — сумма известных оценок, не списание баланса.
 
-Успешный технический ответ в чате использует до трёх LLM-стадий: preparation, grounded generation и support check. GroundedResult.totalUsage уже включает generation и supportCheck.generation; ConversationService прибавляет preparation один раз. При раннем UNKNOWN или ошибке стадий меньше. Статус PASSED проверяющей модели не доказывает безошибочность вывода; у старых результатов nullable supportCheck может отсутствовать.
+Успешный технический ответ в чате использует три LLM-стадии без исправления: preparation, grounded generation и support check. После смыслового отклонения допускается одно исправление с повторной проверкой, максимум пять стадий. GroundedResult.totalUsage уже включает исходный черновик/checker из repair и последние generation/supportCheck; ConversationService прибавляет preparation один раз. При раннем UNKNOWN или ошибке стадий меньше. PASSED не доказывает безошибочность или полноту; у старых результатов nullable supportCheck/repair могут отсутствовать.
 
 ## Восстановление в браузере
 

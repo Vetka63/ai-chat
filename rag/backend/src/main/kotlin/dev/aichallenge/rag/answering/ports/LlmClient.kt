@@ -8,6 +8,8 @@ interface LlmClient {
     fun complete(messages: List<LlmMessage>, maxOutputTokens: Int?): LlmCompletion
     /** JSON для rewrite и grounded-ответа; null не навязывает собственный output cap. */
     fun completeJson(messages: List<LlmMessage>, maxOutputTokens: Int?): LlmCompletion = complete(messages, maxOutputTokens)
+    /** Независимый профиль подготовки памяти; default сохраняет совместимость прежних адаптеров/fixtures. */
+    fun completePreparationJson(messages: List<LlmMessage>, maxOutputTokens: Int?): LlmCompletion = completeJson(messages, maxOutputTokens)
     /** Отдельный профиль смысловой проверки; старые адаптеры и fixtures используют свой JSON-путь. */
     fun completeVerifiedJson(messages: List<LlmMessage>, maxOutputTokens: Int?): LlmCompletion = completeJson(messages, maxOutputTokens)
 }

@@ -80,7 +80,9 @@ class ConversationTest {
         }
         val input = context(memory = TaskMemory(listOf(MemoryFact(MemoryLayer.GOAL, "goal", "Existing", "old", "Existing"))))
         val r = LlmDialoguePreparer(fake, mapper, patch, CostEstimator()).prepare(input)
-        assertEquals(input.memory, r.memory); assertTrue(r.issues.isNotEmpty()); assertEquals(usage, r.usage); assertNull(cap)
+        assertEquals(input.memory, r.memory); assertTrue(r.issues.isNotEmpty()); assertEquals(usage, r.usage)
+        // Это техническая подготовка JSON, не пользовательская генерация ответа.
+        assertEquals(16384, cap)
         assertTrue(r.messages[0].content.contains("GOAL")); assertTrue(r.messages[1].content.contains("user_question"))
     }
     @Test fun `preparation separates latest exchange without duplicating bounded history`() {

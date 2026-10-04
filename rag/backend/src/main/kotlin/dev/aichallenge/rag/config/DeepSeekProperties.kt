@@ -12,4 +12,7 @@ class DeepSeekProperties(
     val supportModel: String = "deepseek-v4-pro",
     val supportReasoningEffort: String = "high",
     val supportTimeoutSeconds: Long = 180,
+    val preparationModel: String = "deepseek-v4-pro",
+    val preparationReasoningEffort: String = "high",
+    val preparationTimeoutSeconds: Long = 180,
 )
