@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {"title": "RAG с проверкой смысла и памятью задачи", "quality_profile": "showcase", "viewBox": [1390, 650]},
+  "components": [
+    {"id":"chat-ui","type":"frontend","label":"Чат Vue","sublabel":"Черновик и outbox на чат","pos":[40,100],"size":[250,90]},
+    {"id":"prepare-turn","type":"backend","label":"Подготовка диалога","sublabel":"Запрос и inventory памяти","pos":[400,100],"size":[250,90]},
+    {"id":"retrieve-book","type":"backend","label":"Поиск в книге","sublabel":"Embedding → cosine → фильтр","pos":[760,100],"size":[250,90]},
+    {"id":"generate-claims","type":"cloud","label":"Генерация ответа","sublabel":"DeepSeek → claims и quotes","pos":[1120,100],"size":[250,90]},
+    {"id":"verify-exact","type":"security","label":"Точность цитат","sublabel":"ID, substring и координаты","pos":[1120,400],"size":[250,90]},
+    {"id":"verify-support","type":"security","label":"Поддержка утверждений","sublabel":"Отдельный LLM-контроль","pos":[760,400],"size":[250,90]},
+    {"id":"finish-turn","type":"backend","label":"Завершение turn","sublabel":"Ответ или безопасный отказ","pos":[400,400],"size":[250,90]},
+    {"id":"durable-state","type":"database","label":"SQLite","sublabel":"История, память, traces","pos":[40,400],"size":[250,90]}
+  ],
+  "connections": [
+    {"from":"chat-ui","to":"prepare-turn","label":"HTTP","variant":"emphasis"},
+    {"from":"prepare-turn","to":"retrieve-book","label":"query"},
+    {"from":"retrieve-book","to":"generate-claims","label":"контекст"},
+    {"from":"generate-claims","to":"verify-exact","label":"JSON","labelAt":[1245,295]},
+    {"from":"verify-exact","to":"verify-support","label":"цитаты"},
+    {"from":"verify-support","to":"finish-turn","label":"вердикт"},
+    {"from":"finish-turn","to":"durable-state","label":"atomic SQL"}
+  ],
+  "cards": [
+    {"dot":"cyan","title":"До внешних вызовов","items":["ConversationService сохраняет PENDING в SQLite.","Повтор использует исходный requestId из outbox."]},
+    {"dot":"emerald","title":"Отдельные источники","items":["Память хранит факты пользователя с provenance.","Технические утверждения подтверждает только книга."]},
+    {"dot":"rose","title":"Граница доверия","items":["Невалидные цитаты не доходят до смысловой проверки.","До трёх LLM-стадий на turn, без скрытого retry."]}
+  ]
+}

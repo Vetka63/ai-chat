@@ -2,6 +2,12 @@
   {
     "id":"recovery", "title":"Отменить коммит и сохранить изменения", "goalContains":"сохран", "constraintContains":"терять",
     "queryExpectations":[{"position":4,"pattern":"reset"},{"position":7,"pattern":"stash"},{"position":8,"pattern":"stash"}],
+    "memoryExpectations":[
+      {"id":"preserve_changes","fromPosition":2,"layer":"CONSTRAINTS","pattern":"терять|сохран.*измен"},
+      {"id":"local_commit","fromPosition":1,"throughPosition":8,"layer":"CLARIFICATIONS","pattern":"локальн|не опубликован|не отправлен"},
+      {"id":"published_commit","fromPosition":9,"layer":"CLARIFICATIONS","pattern":"опубликован|отправлен"},
+      {"id":"shared_history","fromPosition":9,"layer":"CONSTRAINTS","pattern":"не перепис|нельзя перепис|перепис.*нельзя|запрет.*перепис|запрещ.*перепис"}
+    ],
     "questions":[
       "Моя цель — отменить ошибочный локальный коммит и сохранить изменения. Коммит пока не опубликован. Чем отличаются reset --soft, --mixed и --hard?",
       "Нельзя терять изменения в рабочем каталоге. Что станет с ними при --soft?",
@@ -20,6 +26,11 @@
   {
     "id":"collaboration", "title":"Отдельная ветка для командной работы", "goalContains":"ветк", "constraintContains":"force",
     "queryExpectations":[{"position":6,"pattern":"fetch.*pull|pull.*fetch"}],
+    "memoryExpectations":[
+      {"id":"working_branch","fromPosition":2,"layer":"TERMS","pattern":"feature-login","sourcePosition":2},
+      {"id":"force_push_ban","fromPosition":1,"layer":"CONSTRAINTS","pattern":"force"},
+      {"id":"shared_history","fromPosition":11,"layer":"CONSTRAINTS","pattern":"не перепис|нельзя перепис|перепис.*нельзя|запрет.*перепис|запрещ.*перепис"}
+    ],
     "questions":[
       "Моя цель — работать в отдельной ветке над исправлением, затем объединить изменения с командой. В общую ветку force push запрещён. Как создать ветку и переключиться на неё?",
       "Назовём эту рабочую ветку feature-login. Чем отличаются branch и checkout -b?",

@@ -86,7 +86,7 @@ class ConversationTest {
     @Test fun `preparation separates latest exchange without duplicating bounded history`() {
         val fake = object : LlmClient {
             override fun settings() = AnswerSettings(true, "deepseek-flash", 0.0, "disabled", 16000, null, "")
-            override fun complete(messages: List<LlmMessage>, maxOutputTokens: Int?) = LlmCompletion("id", "deepseek-flash", """{"query":"Как включить файл в временное сохранение?","updates":[],"removals":[]}""", "stop", 1, null)
+            override fun complete(messages: List<LlmMessage>, maxOutputTokens: Int?) = LlmCompletion("id", "deepseek-flash", """{"query":"Как включить файл в временное сохранение?","inventory":[],"updates":[],"removals":[]}""", "stop", 1, null)
         }
         val recent = listOf(DialogueItem("older", "Обсуждали другую операцию", "Старый ответ"), DialogueItem("latest", "Временное сохранение", "Последний ответ"))
         val trace = LlmDialoguePreparer(fake, mapper, patch, CostEstimator()).prepare(context("А как включить файл?").copy(recent = recent))

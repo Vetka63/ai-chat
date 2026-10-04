@@ -61,7 +61,7 @@ class ConversationService(private val repository: ConversationRepository, privat
         val total = if (attempts == measuredStages) sum(usages) else null
         val parts = listOfNotNull(prep?.estimatedCost, result?.estimatedCost)
         val costKnown = (if (prep?.estimatedCost != null) 1 else 0) + (if (result?.estimatedCost != null) result.llmStagesAttempted else 0)
-        val cost = if (costKnown == attempts && parts.isNotEmpty()) parts.first().copy(minimumUsd = parts.sumOf { it.minimumUsd }, maximumUsd = parts.sumOf { it.maximumUsd }, note = "Подготовка + ответ, без двойного учёта. Оценка, не списание.") else null
+        val cost = if (costKnown == attempts && parts.isNotEmpty()) parts.first().copy(minimumUsd = parts.sumOf { it.minimumUsd }, maximumUsd = parts.sumOf { it.maximumUsd }, note = "Подготовка + ответ + проверка смысла (если вызвана), без двойного учёта. Оценка, не списание.") else null
         return repository.finish(id, pending.copy(status = TurnStatus.COMPLETED, preparation = prep, result = result, issue = issue, memoryAfter = memory, includedHistoryTurnIds = recent.map { it.turnId }, omittedHistoryTurnCount = omitted, totalUsage = total, estimatedCost = cost, llmStagesAttempted = attempts), memory)
     }
     /** Полная история хранится; в модель входят последние целые обмены, выбор виден в каждом turn. */
