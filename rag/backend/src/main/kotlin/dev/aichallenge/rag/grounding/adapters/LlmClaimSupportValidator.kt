@@ -7,6 +7,8 @@ import dev.aichallenge.rag.grounding.enums.SupportCheckStatus
 import dev.aichallenge.rag.grounding.models.*
 import dev.aichallenge.rag.grounding.ports.ClaimSupportValidator
 import dev.aichallenge.rag.grounding.services.ClaimSupportPromptAssembler
+import dev.aichallenge.rag.grounding.services.ClaimScopePromptAssembler
+import dev.aichallenge.rag.answering.models.LlmMessage
 import dev.aichallenge.rag.retrieval.models.SearchHit
 import org.springframework.stereotype.Component
 import tools.jackson.databind.DeserializationFeature
@@ -17,9 +19,18 @@ import tools.jackson.databind.ObjectMapper
 @Component
 class LlmClaimSupportValidator(private val llm: LlmClient, private val prompt: ClaimSupportPromptAssembler, private val mapper: ObjectMapper, private val costs: CostEstimator) : ClaimSupportValidator {
     override fun validate(claims: List<GroundedClaim>, included: List<SearchHit>): ClaimSupportCheck {
-        val messages = prompt.assemble(claims, included)
+        return validateScoped(claims, included, null)
+    }
+    override fun validateScoped(claims: List<GroundedClaim>, included: List<SearchHit>, question: String?): ClaimSupportCheck {
+        val messages = prompt.assemble(claims, included, question)
+        return check(claims, included, messages)
+    }
+    override fun validateScope(claims: List<GroundedClaim>, included: List<SearchHit>, question: String?): ClaimSupportCheck =
+        check(claims, included, ClaimScopePromptAssembler.assemble(prompt.assemble(claims, included, question)), scopeOnly = true)
+
+    private fun check(claims: List<GroundedClaim>, included: List<SearchHit>, messages: List<LlmMessage>, scopeOnly: Boolean = false): ClaimSupportCheck {
         // Технический лимит только проверяющей модели; пользовательский лимит генерации не меняется.
-        val response = llm.completeVerifiedJson(messages, 16384)
+        val response = if (scopeOnly) llm.completeScopeJson(messages, 16384) else llm.completeVerifiedJson(messages, 16384)
         val generation = GroundingGeneration(response.model, response.finishReason, response.milliseconds, response.usage, costs.estimate(response.model, response.usage), messages, response.content)
         fun invalid(code: String, message: String) = ClaimSupportCheck(SupportCheckStatus.INVALID_RESPONSE, emptyList(), listOf(EvidenceIssue(code, message)), generation)
         if (response.finishReason != "stop") return invalid("truncated_support_check", "Проверка смысла не завершена. Ответ не опубликован; автоматического повтора нет.")

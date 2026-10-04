@@ -35,6 +35,11 @@ class DeepSeekLlmClient(private val properties: DeepSeekProperties, private val 
         model = properties.supportModel, thinkingEnabled = properties.supportThinkingEnabled, reasoningEffort = properties.supportReasoningEffort,
         timeoutSeconds = properties.supportTimeoutSeconds,
     )
+    override fun completeScopeJson(messages: List<LlmMessage>, maxOutputTokens: Int?) = execute(
+        messages, maxOutputTokens, true,
+        model = properties.supportModel, thinkingEnabled = properties.scopeThinkingEnabled, reasoningEffort = properties.supportReasoningEffort,
+        timeoutSeconds = properties.supportTimeoutSeconds,
+    )
 
     /** Один запрос; JSON object только для явно выбранных структурированных флоу, не старых текстовых ответов. */
     private fun execute(
