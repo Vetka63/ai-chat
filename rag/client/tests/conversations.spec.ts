@@ -49,11 +49,15 @@ async function fixture(page: Page, options: FixtureOptions = {}) {
   await page.route('**/api/v1/indexes/*/documents/doc', r => r.fulfill({ json: { id: 'doc', title: 'Git', text: quote, sections: [] } }))
   return state
 }
-async function start(page: Page, name = 'Моя задача') {
+async function start(page: Page, name = 'Моя задача', threshold?: number) {
   await page.goto('/'); await page.getByRole('button', { name: 'Чат с RAG и памятью' }).click()
   await expect(page.getByRole('button', { name: 'Новый чат' })).toBeEnabled()
   if (!await page.getByRole('textbox', { name: 'Название чата' }).isVisible()) await page.getByRole('button', { name: 'Новый чат' }).click()
   await page.getByRole('textbox', { name: 'Название чата' }).fill(name)
+  if (threshold !== undefined) {
+    await page.getByText('Настройки поиска и памяти', { exact: true }).click()
+    await page.getByRole('spinbutton', { name: 'Порог', exact: true }).fill(String(threshold))
+  }
   await page.getByRole('button', { name: 'Создать чат', exact: true }).click()
   await expect(page.locator('.rag-chat-heading h2')).toHaveText(name)
 }
@@ -314,4 +318,29 @@ test('live chat resolves followup keeps goal and opens snapshot source @live', a
   await page.screenshot({ path: 'test-results/day25-live-chat.png', fullPage: false })
   await page.locator('.rag-chat-turn').last().locator('.rag-chat-claim summary').first().click()
   await page.locator('.rag-chat-turn').last().getByRole('button', { name: 'Открыть цитату в книге' }).first().click(); await expect(page.getByRole('dialog')).toContainText('Цитата совпала')
+})
+
+test('live chat high threshold refuses without grounded generation @live', async ({ page }, testInfo) => {
+  test.skip(process.env.RAG_LIVE !== 'true', 'Opt-in: one paid preparation call; no answer generation expected')
+  test.setTimeout(300_000)
+  await start(page, `UI отказ день25 ${Date.now()}`, 1)
+  const responsePromise = page.waitForResponse(r => new URL(r.url()).pathname.endsWith('/turns') && r.request().method() === 'POST', { timeout: 240_000 })
+  await send(page, 'Какая погода будет в Самаре завтра?', 240_000)
+  const response = await responsePromise, trace = await response.json(), turn = trace.turns?.at(-1)
+  const tracePath = testInfo.outputPath(`day25-live-unknown-${Date.now()}.json`)
+  await writeFile(tracePath, JSON.stringify(trace, null, 2), 'utf8')
+  await testInfo.attach('day25-live-unknown', { path: tracePath, contentType: 'application/json' })
+  expect(response.status()).toBe(200)
+  expect(turn.preparation.issues).toEqual([])
+  expect(turn.result.status).toBe('UNKNOWN')
+  expect(turn.result.retrieval.included).toEqual([])
+  expect(turn.result.claims).toEqual([])
+  expect(turn.result.sources).toEqual([])
+  expect(turn.result.generation).toBeNull()
+  expect(turn.result.llmStagesAttempted).toBe(0)
+  expect(turn.llmStagesAttempted).toBe(1)
+  await expect(page.locator('.rag-chat-turn').last()).toHaveAttribute('data-status', 'UNKNOWN')
+  await expect(page.locator('.rag-chat-turn').last()).toContainText('Не знаю по найденным материалам')
+  await page.screenshot({ path: 'test-results/day25-live-unknown.png', fullPage: false })
+  console.log(`Day25 live UNKNOWN: ${turn.llmStagesAttempted} preparation call; grounded calls=${turn.result.llmStagesAttempted}`)
 })

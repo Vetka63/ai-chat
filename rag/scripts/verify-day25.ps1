@@ -98,6 +98,6 @@ else {
         if ($ragRate -lt $MinimumAnsweredRate) { $ragQualityFailures += $ragCase.id }
     }
     Save-RagReport
-    if ($ragQualityFailures.Count) { throw "Не достигнут порог полезных ответов: $($ragQualityFailures -join ', '). Отказы не маскируются как успешные ответы. Trace: $ragReportPath." }
+    if ($ragQualityFailures.Count) { throw "Не достигнут порог опубликованных ответов: $($ragQualityFailures -join ', '). Отказы не маскируются как успешные ответы. Trace: $ragReportPath." }
     "Завершены два диалога по 12 user turns. Trace: $ragReportPath. Provenance, смысловые вердикты, ожидаемая память и доля ответов проверены; оцените смысл и полноту также вручную."
 }
