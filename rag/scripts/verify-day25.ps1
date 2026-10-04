@@ -1,4 +1,4 @@
-param([string]$ApiUrl = 'http://localhost:8382/api/v1', [ValidateSet('Start','Continue','All')] [string]$Phase = 'All', [int]$MaxOutputTokens = 2400, [string]$ReportPath = '', [ValidateRange(0,1)][double]$MinimumAnsweredRate = 0.65)
+param([string]$ApiUrl = 'http://localhost:8382/api/v1', [ValidateSet('Start','Continue','All')] [string]$Phase = 'All', [int]$MaxOutputTokens = 16384, [string]$ReportPath = '', [ValidateRange(0,1)][double]$MinimumAnsweredRate = 0.8333333333)
 $ErrorActionPreference = 'Stop'
 $ragApi = $ApiUrl.TrimEnd('/')
 $ragReady = $false
@@ -24,7 +24,7 @@ else {
     $ragIndexList = Invoke-RestMethod "$ragApi/indexes"
     $ragIndex = $ragIndexList | Where-Object { $_.config.strategy -eq 'STRUCTURAL' -and $_.config.maxCharacters -eq 3000 -and $_.config.overlapCharacters -eq 300 } | Select-Object -First 1
     if (!$ragIndex) { throw 'Нужен STRUCTURAL индекс 3000/300.' }
-    $ragReport = @{ at = [DateTimeOffset]::UtcNow.ToString('o'); indexId = $ragIndex.id; note = '2 scenarios x 12 user turns; max 120 paid calls (preparation + answer + support check + at most one semantic revision/recheck), fewer for UNKNOWN. 2400 is answer test cap only. No HTTP retries. Exact quotes/provenance and expected memory checked automatically; review answer meaning separately.'; chats = @{}; results = @(); checks = @() }
+    $ragReport = @{ at = [DateTimeOffset]::UtcNow.ToString('o'); indexId = $ragIndex.id; note = '2 scenarios x 12 user turns; max 456 paid calls (preparation + answer + up to 8 isolated checks + at most one semantic revision/recheck), fewer in practice. Explicit answer test cap does not change UI default null. No HTTP retries. Exact quotes/provenance and expected memory checked automatically; review answer meaning separately.'; maxOutputTokens = $MaxOutputTokens; minimumAnsweredRate = $MinimumAnsweredRate; chats = @{}; results = @(); checks = @() }
     foreach ($ragCase in $ragCases) {
         $ragChat = Post-Rag '/conversations' @{ title = "День25 проверка $($ragCase.id) $([DateTime]::Now.ToString('HHmmss'))"; settings = @{ indexId = $ragIndex.id; historyTurns = 6; historyMaxCharacters = 10000; maxOutputTokens = $MaxOutputTokens } }
         $ragReport.chats[$ragCase.id] = $ragChat.conversation.id
@@ -64,8 +64,18 @@ foreach ($ragCase in $ragCases) {
         if ($ragTurn.result.status -eq 'ANSWERED') {
             if (!$ragTurn.result.sources.Count) { throw 'Технический ответ без источников.' }
             if ($ragTurn.result.supportCheck.status -ne 'PASSED' -or $ragTurn.result.supportCheck.claims.Count -ne $ragTurn.result.claims.Count -or @($ragTurn.result.supportCheck.claims | Where-Object { $_.verdict -ne 'SUPPORTED' }).Count) { throw 'Опубликован ответ без успешной смысловой проверки всех пунктов.' }
-            $ragExpectedStages = if ($ragTurn.result.repair) { 5 } else { 3 }
-            if ($ragTurn.llmStagesAttempted -ne $ragExpectedStages) { throw 'Не учтены подготовка, генерация, смысловая проверка и возможное исправление.' }
+            $ragGenerations = @($ragTurn.preparation, $ragTurn.result.generation, $ragTurn.result.supportCheck.generation) + @($ragTurn.result.supportCheck.additionalGenerations | Where-Object { $null -ne $_ })
+            if ($ragTurn.result.repair) {
+                $ragGenerations += @($ragTurn.result.repair.originalGeneration, $ragTurn.result.repair.originalSupportCheck.generation) + @($ragTurn.result.repair.originalSupportCheck.additionalGenerations | Where-Object { $null -ne $_ })
+            }
+            if ($ragTurn.llmStagesAttempted -ne $ragGenerations.Count) { throw 'Не учтены подготовка, генерация, все изолированные проверки и возможное исправление.' }
+            if ($ragTurn.totalUsage) {
+                if (@($ragGenerations | Where-Object { !$_.usage }).Count) { throw 'Общий usage известен при неизвестном расходе отдельной стадии.' }
+                foreach ($ragMetric in @('promptTokens','completionTokens','totalTokens')) {
+                    $ragSum = ($ragGenerations | ForEach-Object { $_.usage.$ragMetric } | Measure-Object -Sum).Sum
+                    if ($ragTurn.totalUsage.$ragMetric -ne $ragSum) { throw "Неверный суммарный usage: $ragMetric." }
+                }
+            }
             foreach ($ragClaim in $ragTurn.result.claims) { foreach ($ragCitation in $ragClaim.citations) {
                 $ragHit = $ragTurn.result.retrieval.included | Where-Object { $_.chunk.chunkId -ceq $ragCitation.source.chunkId } | Select-Object -First 1
                 if (!$ragHit -or !$ragHit.chunk.text.Contains($ragCitation.quote)) { throw 'Цитата не из нового контекста.' }

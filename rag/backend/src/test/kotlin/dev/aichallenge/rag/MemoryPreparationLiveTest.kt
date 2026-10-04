@@ -73,6 +73,8 @@ class MemoryPreparationLiveTest {
                 retained(trace, currentFact)
             },
             Case("conditional-C12-is-not-completed-merge", conditional) { trace ->
+                require(!trace.query.contains("feature-login")) { "Личное имя ветки не должно подменять предмет поиска в учебнике" }
+                require(trace.query.contains(Regex("удал|убрат", RegexOption.IGNORE_CASE))) { "Нормализация потеряла действие" }
                 val merged = Regex("успешн.*сли|слит|слиян.*заверш", RegexOption.IGNORE_CASE)
                 val condition = Regex("после|если|когда|услов|при успешн|план", RegexOption.IGNORE_CASE)
                 require(trace.changes.none { it.value != null && merged.containsMatchIn(it.value) && !condition.containsMatchIn(it.value) }) { "Условие будущего действия превращено в свершившееся слияние" }

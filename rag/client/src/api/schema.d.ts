@@ -349,13 +349,13 @@ export interface components {
         };
         ConversationSettings: {
             indexId: string;
-            /** @default 10 */
+            /** @default 20 */
             candidateTopK: number;
-            /** @default 5 */
+            /** @default 10 */
             finalTopK: number;
-            /** @default 0.65 */
+            /** @default 0.6 */
             similarityThreshold: number;
-            /** @default 16000 */
+            /** @default 32000 */
             contextMaxCharacters: number;
             /** @default 6 */
             historyTurns: number;

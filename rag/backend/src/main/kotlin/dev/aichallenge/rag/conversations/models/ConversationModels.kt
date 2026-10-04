@@ -9,10 +9,10 @@ import jakarta.validation.constraints.*
 /** Индекс и retrieval-настройки закрепляются при создании чата; history не переезжает в другой корпус. */
 data class ConversationSettings(
     @field:NotBlank @field:Size(max = 128) val indexId: String,
-    @field:Min(1) @field:Max(20) val candidateTopK: Int = 10,
-    @field:Min(1) @field:Max(10) val finalTopK: Int = 5,
-    @field:DecimalMin("-1") @field:DecimalMax("1") val similarityThreshold: Double = .65,
-    @field:Min(300) @field:Max(60000) val contextMaxCharacters: Int = 16000,
+    @field:Min(1) @field:Max(20) val candidateTopK: Int = 20,
+    @field:Min(1) @field:Max(10) val finalTopK: Int = 10,
+    @field:DecimalMin("-1") @field:DecimalMax("1") val similarityThreshold: Double = .60,
+    @field:Min(300) @field:Max(60000) val contextMaxCharacters: Int = 32000,
     @field:Min(1) @field:Max(12) val historyTurns: Int = 6,
     @field:Min(1000) @field:Max(20000) val historyMaxCharacters: Int = 10000,
     @field:Min(1) @field:Max(32768) val maxOutputTokens: Int? = null,
