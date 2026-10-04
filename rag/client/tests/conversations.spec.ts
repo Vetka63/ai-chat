@@ -105,7 +105,7 @@ test('invalid output remains quarantined and settings cannot mutate existing cha
 })
 test('chat repair preserves final-only answer and collapses rejected draft across reload', async ({ page }) => {
   await fixture(page, { repair: true }); await start(page); await send(page, 'Что делает add?')
-  await expect(page.locator('.rag-chat-composer')).toContainText('до 5 LLM-вызовов')
+  await expect(page.locator('.rag-chat-composer')).toContainText('до 21 LLM-вызовов')
   await expect(page.locator('.rag-chat-claim')).toContainText('Сохраняется подготовленная версия.')
   await expect(page.locator('.rag-chat-claim')).not.toContainText('ИСХОДНЫЙ ЛОЖНЫЙ ВЫВОД ЧАТА')
   const diagnostic = page.locator('.grounding-repair')
@@ -296,7 +296,7 @@ test('another tab editing its draft preserves in-flight receipt and both chat st
   } finally { release(); await other.close() }
 })
 test('live chat resolves followup keeps goal and opens snapshot source @live', async ({ page }, testInfo) => {
-  test.skip(process.env.RAG_LIVE !== 'true', 'Opt-in: up to 10 paid DeepSeek calls including bounded repairs')
+  test.skip(process.env.RAG_LIVE !== 'true', 'Opt-in: up to 42 paid DeepSeek calls including isolated checks and bounded repairs')
   test.setTimeout(1_800_000)
   await start(page, `UI день25 ${Date.now()}`)
   const questions = ['Моя цель — отменить локальный коммит и сохранить изменения. Что делает git reset --soft?', 'А что станет с индексом?']

@@ -165,6 +165,17 @@ class ConversationTest {
         fun create(history: Int = 6, historyMaxCharacters: Int = 10000) = service.create(CreateConversation("Chat", ConversationSettings("index", historyTurns = history, historyMaxCharacters = historyMaxCharacters)))
         fun send(d: ConversationDetail, q: String) = service.send(d.conversation.id, SendTurn("r${d.conversation.revision}", q, d.conversation.revision))
     }
+    @Test fun `new conversation uses calibrated retrieval and persisted older settings remain unchanged`() {
+        val defaults = ConversationSettings("index")
+        assertEquals(20, defaults.candidateTopK)
+        assertEquals(10, defaults.finalTopK)
+        assertEquals(.60, defaults.similarityThreshold)
+        assertEquals(32000, defaults.contextMaxCharacters)
+        assertNull(defaults.maxOutputTokens)
+        val old = defaults.copy(candidateTopK = 10, finalTopK = 5, similarityThreshold = .65, contextMaxCharacters = 16000)
+        val r = repo(); r.create(chat("old").copy(settings = old))
+        assertEquals(old, repo().detail("old").conversation.settings)
+    }
     @Test fun `every turn resolves history retains goal fresh grounding and accounts prep once`() {
         val f = Fixture(); var d = f.create(); d = f.send(d, "Цель: сохранить изменения"); d = f.send(d, "А если он отправлен?")
         assertEquals(1, f.received.last().recent.size); assertEquals("Цель: сохранить изменения", f.received.last().memory.facts.single().value)

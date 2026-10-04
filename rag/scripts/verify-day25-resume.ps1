@@ -27,7 +27,7 @@ foreach ($ragCase in $ragCases) {
 }
 $ragPath = Join-Path $PSScriptRoot "../data/day25-resume-live-$([DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfff')).json"
 Assert-Rag (!(Test-Path -LiteralPath $ragPath)) 'Report already exists.'
-$ragReport = @{ at = [DateTimeOffset]::UtcNow.ToString('o'); baseReport = [IO.Path]::GetFileName($ragBasePath); status = 'RUNNING'; maxCalls = 35; results = @(); checks = @(); scenarios = @(); note = 'Explicit post-fix recovery of public synthetic chats only: keep failed R12, append intentional R13 repeat, then finish C7..12. Seven new turns maximum; no HTTP retry or hidden replacement of failure. Read baseReport for the first 18 turns.' }
+$ragReport = @{ at = [DateTimeOffset]::UtcNow.ToString('o'); baseReport = [IO.Path]::GetFileName($ragBasePath); status = 'RUNNING'; maxCalls = 147; results = @(); checks = @(); scenarios = @(); note = 'Explicit post-fix recovery of public synthetic chats only: keep failed R12, append intentional R13 repeat, then finish C7..12. Seven new turns maximum; no HTTP retry or hidden replacement of failure. Read baseReport for the first 18 turns.' }
 function Save-RagReport { [IO.File]::WriteAllText($ragPath, ($ragReport | ConvertTo-Json -Depth 90), [Text.UTF8Encoding]::new($false)) }
 $ragDocuments = @{}
 Save-RagReport
@@ -57,7 +57,7 @@ try {
             if ($ragTurn.result.status -ceq 'ANSWERED') {
                 Assert-Rag ($ragTurn.result.claims.Count -gt 0 -and $ragTurn.result.sources.Count -gt 0) 'Published answer lacks evidence.'
                 Assert-Rag ($ragTurn.result.supportCheck.status -ceq 'PASSED' -and $ragTurn.result.supportCheck.claims.Count -eq $ragTurn.result.claims.Count -and @($ragTurn.result.supportCheck.claims | Where-Object { $_.verdict -cne 'SUPPORTED' }).Count -eq 0) 'Incomplete support verdict.'
-                $ragExpectedStages = if ($ragTurn.result.repair) { 5 } else { 3 }
+                $ragExpectedStages = 1 + $ragTurn.result.llmStagesAttempted
                 Assert-Rag ($ragTurn.llmStagesAttempted -eq $ragExpectedStages) 'Stage accounting mismatch.'
                 foreach ($ragClaim in $ragTurn.result.claims) { foreach ($ragCitation in $ragClaim.citations) {
                     $ragHit = $ragTurn.result.retrieval.included | Where-Object { $_.chunk.chunkId -ceq $ragCitation.source.chunkId } | Select-Object -First 1

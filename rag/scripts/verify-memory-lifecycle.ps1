@@ -1,21 +1,21 @@
 # Optional standalone paid regression; never part of the ordinary test suite.
 # Run explicitly: pwsh -File ./scripts/verify-memory-lifecycle.ps1 -RunLive
-# Four user turns, at most 20 LLM calls. One bounded semantic revision is visible; no HTTP retries, Git operations or chat deletion.
+# Four user turns, at most 84 LLM calls. One bounded semantic revision is visible; no HTTP retries, Git operations or chat deletion.
 # Long-tail retention/restart are covered separately by verify-day25.ps1 (2 x 12 turns).
 param(
     [switch]$RunLive,
     [string]$ApiUrl = 'http://localhost:8382/api/v1',
-    [ValidateRange(1,32768)][int]$MaxOutputTokens = 2400
+    [ValidateRange(1,32768)][int]$MaxOutputTokens = 16384
 )
 $ErrorActionPreference = 'Stop'
-if (!$RunLive) { throw 'Опциональный платный тест: укажите -RunLive для 4 сообщений, до 20 LLM-вызовов. Без флага API не вызывается.' }
+if (!$RunLive) { throw 'Опциональный платный тест: укажите -RunLive для 4 сообщений, до 84 LLM-вызовов. Без флага API не вызывается.' }
 $ragApi = $ApiUrl.TrimEnd('/')
 $ragRunId = '{0}-{1}' -f [DateTimeOffset]::UtcNow.ToString('yyyyMMdd-HHmmss-fff'), [Guid]::NewGuid().ToString('N').Substring(0,8)
 $ragData = Join-Path $PSScriptRoot '../data'
 New-Item -ItemType Directory -Path $ragData -Force | Out-Null
 $ragReportPath = Join-Path $ragData "memory-lifecycle-live-$ragRunId.json"
 if (Test-Path -LiteralPath $ragReportPath) { throw 'Уникальный путь отчёта уже занят; существующий файл не заменяется.' }
-$ragReport = @{ at = [DateTimeOffset]::UtcNow.ToString('o'); runId = $ragRunId; status = 'RUNNING'; indexId = $null; maxOutputTokens = $MaxOutputTokens; chats = @{}; attempts = @(); results = @(); isolation = @(); checks = @(); note = 'Optional standalone memory lifecycle test: 4 turns, at most 20 paid calls, at most one visible semantic revision, no HTTP retries. Fictional task; no Git operations. Memory preparation/provenance and lifecycle are asserted. Book answer status is recorded separately; this is not a usefulness or long-tail benchmark.' }
+$ragReport = @{ at = [DateTimeOffset]::UtcNow.ToString('o'); runId = $ragRunId; status = 'RUNNING'; indexId = $null; maxOutputTokens = $MaxOutputTokens; chats = @{}; attempts = @(); results = @(); isolation = @(); checks = @(); note = 'Optional standalone memory lifecycle test: 4 turns, at most 84 paid calls, at most one visible semantic revision, no HTTP retries. Fictional task; no Git operations. Memory preparation/provenance and lifecycle are asserted. Book answer status is recorded separately; this is not a usefulness or long-tail benchmark.' }
 $ragDocuments = @{}
 function Save-RagReport { [IO.File]::WriteAllText($ragReportPath, ($ragReport | ConvertTo-Json -Depth 90), [Text.UTF8Encoding]::new($false)) }
 function Assert-Rag([bool]$Condition, [string]$Message) { if (!$Condition) { throw $Message } }
@@ -61,7 +61,7 @@ function Check-Provenance($Chat, $Turn) {
     }
 }
 Save-RagReport
-"Новый отчёт: $ragReportPath. Четыре сообщения, до 20 платных LLM-вызовов; чаты сохраняются."
+"Новый отчёт: $ragReportPath. Четыре сообщения, до 84 платных LLM-вызовов; чаты сохраняются."
 try {
     $ragSettings = Invoke-RestMethod "$ragApi/answer-settings" -TimeoutSec 30
     Assert-Rag $ragSettings.configured 'Нужен настроенный серверный ключ.'
@@ -90,7 +90,7 @@ try {
         Assert-Rag ($ragChat.turns.Count -eq $ragN + 1 -and $ragTurn.requestId -ceq $ragRequest.requestId -and $ragTurn.question -ceq $ragRequest.question) 'Сохранённая история не совпадает с отправленным шагом.'
         Assert-Rag ($ragTurn.status -ceq 'COMPLETED' -and $null -ne $ragTurn.preparation -and $ragTurn.preparation.issues.Count -eq 0) 'Подготовка памяти не завершена или не прошла проверку.'
         Assert-Rag (!$ragTurn.issue -and $null -ne $ragTurn.result.retrieval -and $ragTurn.result.status -cin @('ANSWERED','UNKNOWN','INVALID_EVIDENCE')) 'Техническая ошибка обработки; это не успешная проверка памяти.'
-        Assert-Rag ($ragTurn.llmStagesAttempted -ge 1 -and $ragTurn.llmStagesAttempted -le 5) 'Неожиданное число LLM-стадий.'
+        Assert-Rag ($ragTurn.llmStagesAttempted -ge 1 -and $ragTurn.llmStagesAttempted -le 21) 'Неожиданное число LLM-стадий.'
         Check-Provenance $ragChat $ragTurn
         $ragGoals = @($ragChat.memory.facts | Where-Object { $_.layer -ceq 'GOAL' })
         Assert-Rag ($ragGoals.Count -eq 1) 'В памяти должна быть ровно одна общая цель.'

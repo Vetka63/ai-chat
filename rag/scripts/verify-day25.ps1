@@ -1,4 +1,4 @@
-param([string]$ApiUrl = 'http://localhost:8382/api/v1', [ValidateSet('Start','Continue','All')] [string]$Phase = 'All', [int]$MaxOutputTokens = 16384, [string]$ReportPath = '', [ValidateRange(0,1)][double]$MinimumAnsweredRate = 0.8333333333)
+param([string]$ApiUrl = 'http://localhost:8382/api/v1', [ValidateSet('Start','Continue','All')] [string]$Phase = 'All', [int]$MaxOutputTokens = 16384, [string]$ReportPath = '', [ValidateRange(0,1)][double]$MinimumAnsweredRate = 0.8333333333, [ValidateSet('all','recovery','collaboration')][string]$Scenario = 'all')
 $ErrorActionPreference = 'Stop'
 $ragApi = $ApiUrl.TrimEnd('/')
 $ragReady = $false
@@ -7,6 +7,7 @@ for ($ragHealthAttempt = 0; $ragHealthAttempt -lt 30; $ragHealthAttempt++) {
 }
 if (!$ragReady) { throw 'Backend не готов. Health/readiness не восстановились за bounded wait.' }
 $ragCases = Get-Content -LiteralPath (Join-Path $PSScriptRoot '../evaluation/day25-scenarios.json') -Raw | ConvertFrom-Json
+if ($Scenario -ne 'all') { $ragCases = @($ragCases | Where-Object id -eq $Scenario) }
 $ragData = Join-Path $PSScriptRoot '../data'
 New-Item -ItemType Directory -Path $ragData -Force | Out-Null
 if ($ReportPath) { $ragReportPath = [IO.Path]::GetFullPath($ReportPath) }
@@ -19,12 +20,15 @@ if ($Phase -ne 'Continue' -and (Test-Path -LiteralPath $ragReportPath)) { throw 
 $ragDocuments = @{}
 function Post-Rag([string]$Path, $Body) { Invoke-RestMethod "$ragApi$Path" -Method Post -ContentType 'application/json; charset=utf-8' -Body ([Text.Encoding]::UTF8.GetBytes(($Body | ConvertTo-Json -Depth 20))) -TimeoutSec 900 }
 function Save-RagReport { [IO.File]::WriteAllText($ragReportPath, ($ragReport | ConvertTo-Json -Depth 90), [Text.UTF8Encoding]::new($false)) }
-if ($Phase -eq 'Continue') { $ragReport = Get-Content -LiteralPath $ragReportPath -Raw | ConvertFrom-Json -AsHashtable }
+if ($Phase -eq 'Continue') {
+    $ragReport = Get-Content -LiteralPath $ragReportPath -Raw | ConvertFrom-Json -AsHashtable
+    if ((@($ragReport.chats.Keys | Sort-Object) -join ',') -ne (@($ragCases.id | Sort-Object) -join ',')) { throw 'Состав сценариев отличается от отчёта. Укажите тот же -Scenario.' }
+}
 else {
     $ragIndexList = Invoke-RestMethod "$ragApi/indexes"
     $ragIndex = $ragIndexList | Where-Object { $_.config.strategy -eq 'STRUCTURAL' -and $_.config.maxCharacters -eq 3000 -and $_.config.overlapCharacters -eq 300 } | Select-Object -First 1
     if (!$ragIndex) { throw 'Нужен STRUCTURAL индекс 3000/300.' }
-    $ragReport = @{ at = [DateTimeOffset]::UtcNow.ToString('o'); indexId = $ragIndex.id; note = '2 scenarios x 12 user turns; max 456 paid calls (preparation + answer + up to 8 isolated checks + at most one semantic revision/recheck), fewer in practice. Explicit answer test cap does not change UI default null. No HTTP retries. Exact quotes/provenance and expected memory checked automatically; review answer meaning separately.'; maxOutputTokens = $MaxOutputTokens; minimumAnsweredRate = $MinimumAnsweredRate; chats = @{}; results = @(); checks = @() }
+    $ragReport = @{ at = [DateTimeOffset]::UtcNow.ToString('o'); indexId = $ragIndex.id; note = '2 scenarios x 12 user turns; max 504 paid calls (preparation + answer + up to 8 isolated checks + at most one semantic revision/recheck), fewer in practice. Explicit answer test cap does not change UI default null. No HTTP retries. Exact quotes/provenance and expected memory checked automatically; review answer meaning separately.'; maxOutputTokens = $MaxOutputTokens; minimumAnsweredRate = $MinimumAnsweredRate; chats = @{}; results = @(); checks = @() }
     foreach ($ragCase in $ragCases) {
         $ragChat = Post-Rag '/conversations' @{ title = "День25 проверка $($ragCase.id) $([DateTime]::Now.ToString('HHmmss'))"; settings = @{ indexId = $ragIndex.id; historyTurns = 6; historyMaxCharacters = 10000; maxOutputTokens = $MaxOutputTokens } }
         $ragReport.chats[$ragCase.id] = $ragChat.conversation.id
@@ -109,5 +113,5 @@ else {
     }
     Save-RagReport
     if ($ragQualityFailures.Count) { throw "Не достигнут порог опубликованных ответов: $($ragQualityFailures -join ', '). Отказы не маскируются как успешные ответы. Trace: $ragReportPath." }
-    "Завершены два диалога по 12 user turns. Trace: $ragReportPath. Provenance, смысловые вердикты, ожидаемая память и доля ответов проверены; оцените смысл и полноту также вручную."
+    "Завершено сценариев: $(@($ragCases).Count), по 12 user turns. Trace: $ragReportPath. Provenance, смысловые вердикты, ожидаемая память и доля ответов проверены; оцените смысл и полноту также вручную."
 }
