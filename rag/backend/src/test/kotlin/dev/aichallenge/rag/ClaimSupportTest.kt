@@ -22,6 +22,22 @@ class ClaimSupportTest {
     private val prompt = ClaimSupportPromptAssembler(mapper)
     private val usage = TokenUsage(20, 10, 30, 0, 20)
 
+    /** Доказывает только целостность fixture: точная цитата не является доказательством правильного обобщения. */
+    @Test fun `latest semantic failure keeps exact quotes and original premise for future review`() {
+        val root = javaClass.getResourceAsStream("/grounding/merge-missing-divergence-regression.json").use { mapper.readTree(it) }
+        val claims = root.path("claims").toList().map { mapper.treeToValue(it, GroundedClaim::class.java) }
+        val included = root.path("included").toList().map { mapper.treeToValue(it, SearchHit::class.java) }
+        assertEquals(1, claims.size)
+        for (citation in claims.single().citations) {
+            val chunk = included.single { it.chunk.chunkId == citation.source.chunkId }.chunk
+            assertTrue(chunk.text.contains(citation.quote))
+            assertTrue(chunk.text.contains("сделали коммиты в две разные ветки"))
+        }
+        val sent = mapper.readTree(prompt.assemble(claims, included, root.path("question").asText()).last().content)
+        assertEquals(root.path("question").asText(), sent.path("question").asText())
+        assertEquals(claims.single().text, sent.path("items")[0].path("statement").asText())
+    }
+
     private fun hit(id: String, text: String, section: String = "Книжный пример") = SearchHit(1, .8, Chunk(id, "doc", "book.asc", "Git", section, listOf(section), 0, 0, text.length, 1, 2, text, "sha"))
     private fun claim(text: String, quote: String, hit: SearchHit): GroundedClaim {
         val json = mapper.writeValueAsString(mapOf("status" to "known", "claims" to listOf(mapOf("text" to text, "citations" to listOf(mapOf("chunk_id" to hit.chunk.chunkId, "quote" to quote))))))
