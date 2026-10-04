@@ -3,6 +3,7 @@
 !.env.example
 data/
 backend/.gradle/
+backend/.kotlin/
 backend/build/
 client/node_modules/
 client/dist/
