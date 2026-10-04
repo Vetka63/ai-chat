@@ -1,8 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import type { Schema } from '../../api/client'
-import { groundedMarkdown } from './report'
+import { groundedMarkdown, supportGenerations, supportTokens } from './report'
 
 describe('grounded report', () => {
+  it('counts isolated checker calls without double counting first or hiding missing usage', () => {
+    const g: Schema<'GroundingGeneration'> = { model: 'fixture', finishReason: 'stop', milliseconds: 1, usage: { promptTokens: 2, completionTokens: 3, totalTokens: 5, cacheHitTokens: null, cacheMissTokens: null }, estimatedCost: null, messages: [], rawJson: '{}' }
+    const check: Schema<'ClaimSupportCheck'> = { status: 'PASSED', claims: [], issues: [], generation: g, additionalGenerations: [g, g] }
+    expect(supportGenerations(check)).toHaveLength(3)
+    expect(supportTokens(check)).toBe(15)
+    expect(supportTokens({ ...check, additionalGenerations: [] })).toBe(5)
+    expect(supportTokens({ ...check, additionalGenerations: [{ ...g, usage: null }] })).toBe('неизвестно')
+  })
   it('exports only public validated content and preserves unknown metrics', () => {
     const r: Schema<'GroundedResult'> = {
       request: { question: 'Вопрос', indexId: 'idx', candidateTopK: 10, finalTopK: 5, similarityThreshold: .65, contextMaxCharacters: 16000, useRewrite: false, maxOutputTokens: null },

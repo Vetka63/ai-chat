@@ -66,9 +66,9 @@ test('one repaired draft stays collapsed while only final evidence is public', a
     supportCheck: { status: 'PASSED', claims: [{ claimIndex: 0, verdict: 'SUPPORTED', reason: 'Подтверждено.' }], issues: [], generation: { ...generation, rawJson: '{}' } },
   } }))
   await page.goto('/'); await page.getByRole('button', { name: 'Источники и цитаты' }).click()
-  await expect(page.getByRole('button', { name: 'Ответить с цитатами · до 4 API-вызовов', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Ответить с цитатами · до 18 API-вызовов', exact: true })).toBeVisible()
   await page.getByRole('checkbox', { name: /Переформулировать запрос поиска/ }).check()
-  await expect(page.getByRole('button', { name: 'Ответить с цитатами · до 5 API-вызовов', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Ответить с цитатами · до 19 API-вызовов', exact: true })).toBeVisible()
   await page.getByRole('button', { name: /^Ответить с цитатами/ }).click()
   await expect(page.locator('.grounded-claim')).toContainText('Используйте -u.')
   await expect(page.locator('.grounded-claim')).not.toContainText(rejected)
@@ -96,7 +96,7 @@ test('one repaired draft stays collapsed while only final evidence is public', a
 })
 
 test('live grounded quote opens correct immutable document @live', async ({ page }, testInfo) => {
-  test.skip(process.env.RAG_LIVE !== 'true', 'Opt-in: up to 4 paid DeepSeek calls including one bounded repair')
+  test.skip(process.env.RAG_LIVE !== 'true', 'Opt-in: up to 18 paid DeepSeek calls including one bounded repair')
   test.setTimeout(900_000)
   await page.goto('/'); await page.getByRole('button', { name: 'Источники и цитаты' }).click()
   const responsePromise = page.waitForResponse(r => new URL(r.url()).pathname.endsWith('/grounded-answers') && r.request().method() === 'POST', { timeout: 840_000 })

@@ -18,7 +18,7 @@ class DeepSeekAdapterTest {
     private val valid = """{"id":"request","model":"deepseek-flash","choices":[{"finish_reason":"stop","message":{"content":"Ответ"}}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15,"prompt_cache_hit_tokens":4,"prompt_cache_miss_tokens":6}}"""
     private fun withServer(
         body: String, status: Int = 200,
-        supportModel: String = "deepseek-v4-pro", supportReasoningEffort: String = "high",
+        supportModel: String = "deepseek-v4-pro", supportReasoningEffort: String = "high", supportThinking: Boolean = true, groundingThinking: Boolean = false,
         preparationModel: String = "deepseek-v4-pro", preparationReasoningEffort: String = "high",
         action: (DeepSeekLlmClient, MutableList<String>) -> Unit,
     ) {
@@ -32,7 +32,7 @@ class DeepSeekAdapterTest {
         }
         server.start()
         try {
-            val properties = DeepSeekProperties("test-only", "http://127.0.0.1:${server.address.port}", supportModel = supportModel, supportReasoningEffort = supportReasoningEffort, preparationModel = preparationModel, preparationReasoningEffort = preparationReasoningEffort)
+            val properties = DeepSeekProperties("test-only", "http://127.0.0.1:${server.address.port}", supportModel = supportModel, supportReasoningEffort = supportReasoningEffort, supportThinkingEnabled = supportThinking, groundingThinkingEnabled = groundingThinking, preparationModel = preparationModel, preparationReasoningEffort = preparationReasoningEffort)
             action(DeepSeekLlmClient(properties, jacksonObjectMapper()), requests)
         }
         finally { server.stop(0) }
@@ -67,6 +67,15 @@ class DeepSeekAdapterTest {
         withServer("secret test-only raw echoed body", 401) { client, requests ->
             val error = assertThrows(LabException::class.java) { client.complete(listOf(LlmMessage("user", "Вопрос")), null) }
             assertFalse(error.message!!.contains("test-only"))
+            assertEquals(1, requests.size)
+        }
+    }
+    @Test fun `empty structured completion preserves measured usage for fail closed validators`() {
+        withServer(valid.replace("Ответ", "").replace("\"stop\"", "\"length\"")) { client, requests ->
+            val result = client.completeVerifiedJson(listOf(LlmMessage("user", "JSON")), 8192)
+            assertEquals("", result.content)
+            assertEquals("length", result.finishReason)
+            assertEquals(15L, result.usage!!.totalTokens)
             assertEquals(1, requests.size)
         }
     }
@@ -117,6 +126,25 @@ class DeepSeekAdapterTest {
             assertFalse(result.toString().contains("test-only"))
             assertEquals("deepseek-flash", client.settings().model)
             assertEquals("disabled", client.settings().thinking)
+        }
+    }
+    @Test fun `grounded generator uses Pro without changing comparison model or imposing output cap`() {
+        withServer(valid) { client, requests ->
+            val messages = listOf(LlmMessage("user", "Ответ с цитатами JSON"))
+            client.completeGroundedJson(messages, null)
+            client.completeGroundedJson(messages, 2400)
+            client.completeJson(messages, null)
+            val grounded = requests.take(2).map { jacksonObjectMapper().readTree(it) }
+            grounded.forEach {
+                assertEquals("deepseek-v4-pro", it.path("model").asText())
+                assertEquals("disabled", it.path("thinking").path("type").asText())
+                assertEquals("json_object", it.path("response_format").path("type").asText())
+                assertFalse(it.has("reasoning_effort"))
+            }
+            assertFalse(grounded[0].has("max_tokens"))
+            assertEquals(2400, grounded[1].path("max_tokens").asInt())
+            assertEquals("deepseek-flash", jacksonObjectMapper().readTree(requests[2]).path("model").asText())
+            assertEquals("deepseek-flash", client.settings().model)
         }
     }
     @Test fun `support configuration and optional cap do not leak into regular requests`() {
@@ -197,5 +225,27 @@ class DeepSeekAdapterTest {
         }
         assertSame(expected, client.completePreparationJson(messages, 16384))
         assertEquals(listOf(messages to 16384), calls)
+    }
+    @Test fun `non thinking support remains Pro but omits reasoning effort`() {
+        withServer(valid, supportThinking = false) { client, requests ->
+            client.completeVerifiedJson(listOf(LlmMessage("user", "JSON")), 16384)
+            val request = jacksonObjectMapper().readTree(requests.single())
+            assertEquals("deepseek-v4-pro", request.path("model").asText())
+            assertEquals("disabled", request.path("thinking").path("type").asText())
+            assertFalse(request.has("reasoning_effort"))
+        }
+    }
+    @Test fun `grounded reasoning is explicit and never enables thinking in baseline comparison`() {
+        withServer(valid, groundingThinking = true) { client, requests ->
+            client.completeGroundedJson(listOf(LlmMessage("user", "JSON")), null)
+            client.completeJson(listOf(LlmMessage("user", "JSON")), null)
+            val grounded = jacksonObjectMapper().readTree(requests[0])
+            assertEquals("enabled", grounded.path("thinking").path("type").asText())
+            assertEquals("high", grounded.path("reasoning_effort").asText())
+            assertFalse(grounded.has("max_tokens"))
+            val baseline = jacksonObjectMapper().readTree(requests[1])
+            assertEquals("disabled", baseline.path("thinking").path("type").asText())
+            assertFalse(baseline.has("reasoning_effort"))
+        }
     }
 }

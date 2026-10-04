@@ -407,13 +407,13 @@ export interface components {
         GroundingRequest: {
             question: string;
             indexId: string;
-            /** @default 10 */
+            /** @default 20 */
             candidateTopK: number;
-            /** @default 5 */
+            /** @default 10 */
             finalTopK: number;
-            /** @default 0.65 */
+            /** @default 0.6 */
             similarityThreshold: number;
-            /** @default 16000 */
+            /** @default 32000 */
             contextMaxCharacters: number;
             /** @default false */
             useRewrite: boolean;
@@ -480,6 +480,8 @@ export interface components {
             claims: components["schemas"]["ClaimSupportAssessment"][];
             issues: components["schemas"]["EvidenceIssue"][];
             generation: components["schemas"]["GroundingGeneration"];
+            /** @description Additional isolated per-claim calls; absent in historical results. Every entry counts as one attempted LLM stage. */
+            additionalGenerations?: components["schemas"]["GroundingGeneration"][];
         };
         /** @description One bounded semantic refinement. The rejected original draft and its judge remain unverified diagnostics; GroundedResult.generation/supportCheck describe the latest attempt. */
         GroundingRepair: {

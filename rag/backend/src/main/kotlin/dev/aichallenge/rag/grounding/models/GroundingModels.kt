@@ -16,10 +16,10 @@ data class GroundingDialogue(val resolvedQuestion: String, val memory: TaskMemor
 data class GroundingRequest(
     @field:NotBlank @field:Size(max = 2000) val question: String,
     @field:NotBlank @field:Size(max = 128) val indexId: String,
-    @field:Min(1) @field:Max(20) val candidateTopK: Int = 10,
-    @field:Min(1) @field:Max(10) val finalTopK: Int = 5,
-    @field:DecimalMin("-1") @field:DecimalMax("1") val similarityThreshold: Double = .65,
-    @field:Min(300) @field:Max(60000) val contextMaxCharacters: Int = 16000,
+    @field:Min(1) @field:Max(20) val candidateTopK: Int = 20,
+    @field:Min(1) @field:Max(10) val finalTopK: Int = 10,
+    @field:DecimalMin("-1") @field:DecimalMax("1") val similarityThreshold: Double = .60,
+    @field:Min(300) @field:Max(60000) val contextMaxCharacters: Int = 32000,
     val useRewrite: Boolean = false,
     @field:Min(1) @field:Max(32768) val maxOutputTokens: Int? = null,
 )

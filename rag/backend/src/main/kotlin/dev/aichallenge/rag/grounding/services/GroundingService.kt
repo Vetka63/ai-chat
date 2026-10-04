@@ -37,9 +37,10 @@ class GroundingService(private val repository: IndexRepository, private val sear
         var repair: GroundingRepair? = null
         var attempts = 0
         fun result(checked: EvidenceValidation): GroundedResult {
-            val usages = listOfNotNull(rewrite?.usage, repair?.originalGeneration?.usage, repair?.originalSupportCheck?.generation?.usage, generation?.usage, supportCheck?.generation?.usage)
+            val checks = repair?.originalSupportCheck?.generations().orEmpty() + supportCheck?.generations().orEmpty()
+            val usages = listOfNotNull(rewrite?.usage, repair?.originalGeneration?.usage, generation?.usage) + checks.mapNotNull { it.usage }
             val complete = attempts > 0 && usages.size == attempts
-            val costParts = listOfNotNull(rewrite?.estimatedCost, repair?.originalGeneration?.estimatedCost, repair?.originalSupportCheck?.generation?.estimatedCost, generation?.estimatedCost, supportCheck?.generation?.estimatedCost)
+            val costParts = listOfNotNull(rewrite?.estimatedCost, repair?.originalGeneration?.estimatedCost, generation?.estimatedCost) + checks.mapNotNull { it.estimatedCost }
             val cost = if (attempts > 0 && costParts.size == attempts) costParts.first().copy(minimumUsd = costParts.sumOf { it.minimumUsd }, maximumUsd = costParts.sumOf { it.maximumUsd }, note = "Сумма всех выполненных стадий, включая одно исправление при наличии; rewrite один раз; не фактическое списание.") else null
             val answer = when (checked.status) {
                 GroundedStatus.ANSWERED -> checked.claims.joinToString("\n\n") { it.text }
@@ -63,12 +64,13 @@ class GroundingService(private val repository: IndexRepository, private val sear
             if (included.isEmpty()) return result(EvidenceValidation(GroundedStatus.ERROR, issues = listOf(EvidenceIssue("context_budget_too_small", "Целые чанки не помещаются в бюджет. Увеличьте его; LLM не вызывалась."))))
             val messages = prompt.assemble(clean.question, included, dialogue)
             attempts++
-            val response = llm.completeJson(messages, clean.maxOutputTokens)
+            val response = llm.completeGroundedJson(messages, clean.maxOutputTokens)
             generation = GroundingGeneration(response.model, response.finishReason, response.milliseconds, response.usage, costs.estimate(response.model, response.usage), messages, response.content)
             var checked = validator.validate(response.content, response.finishReason, included)
             if (checked.status == GroundedStatus.ANSWERED) {
                 attempts++
                 val support = supportValidator.validate(checked.claims, included)
+                attempts += support.additionalGenerations.size
                 supportCheck = support
                 if (support.status == SupportCheckStatus.REJECTED) {
                     val original = requireNotNull(generation)
@@ -78,12 +80,13 @@ class GroundingService(private val repository: IndexRepository, private val sear
                     generation = null
                     supportCheck = null
                     attempts++
-                    val repaired = llm.completeJson(repairMessages, clean.maxOutputTokens)
+                    val repaired = llm.completeGroundedJson(repairMessages, clean.maxOutputTokens)
                     generation = GroundingGeneration(repaired.model, repaired.finishReason, repaired.milliseconds, repaired.usage, costs.estimate(repaired.model, repaired.usage), repairMessages, repaired.content)
                     checked = validator.validate(repaired.content, repaired.finishReason, included)
                     if (checked.status == GroundedStatus.ANSWERED) {
                         attempts++
                         val repairedSupport = supportValidator.validate(checked.claims, included)
+                        attempts += repairedSupport.additionalGenerations.size
                         supportCheck = repairedSupport
                         if (repairedSupport.status != SupportCheckStatus.PASSED) checked = EvidenceValidation(GroundedStatus.INVALID_EVIDENCE, issues = repairedSupport.issues)
                     }

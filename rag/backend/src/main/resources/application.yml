@@ -25,7 +25,12 @@ deepseek:
   timeout-seconds: ${DEEPSEEK_TIMEOUT_SECONDS:120}
   support-model: ${DEEPSEEK_SUPPORT_MODEL:deepseek-v4-pro}
   support-reasoning-effort: ${DEEPSEEK_SUPPORT_REASONING_EFFORT:high}
+  support-thinking-enabled: ${DEEPSEEK_SUPPORT_THINKING_ENABLED:false}
   support-timeout-seconds: ${DEEPSEEK_SUPPORT_TIMEOUT_SECONDS:180}
   preparation-model: ${DEEPSEEK_PREPARATION_MODEL:deepseek-v4-pro}
   preparation-reasoning-effort: ${DEEPSEEK_PREPARATION_REASONING_EFFORT:high}
   preparation-timeout-seconds: ${DEEPSEEK_PREPARATION_TIMEOUT_SECONDS:180}
+  grounding-model: ${DEEPSEEK_GROUNDING_MODEL:deepseek-v4-pro}
+  grounding-thinking-enabled: ${DEEPSEEK_GROUNDING_THINKING_ENABLED:false}
+  grounding-reasoning-effort: ${DEEPSEEK_GROUNDING_REASONING_EFFORT:high}
+  grounding-timeout-seconds: ${DEEPSEEK_GROUNDING_TIMEOUT_SECONDS:180}
