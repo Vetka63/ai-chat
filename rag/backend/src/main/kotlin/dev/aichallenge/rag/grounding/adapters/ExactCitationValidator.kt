@@ -4,6 +4,7 @@ import dev.aichallenge.rag.grounding.enums.GroundedStatus
 import dev.aichallenge.rag.grounding.models.*
 import dev.aichallenge.rag.grounding.ports.CitationValidator
 import dev.aichallenge.rag.grounding.services.EvidencePassages
+import dev.aichallenge.rag.grounding.services.EvidenceCatalog
 import dev.aichallenge.rag.retrieval.models.SearchHit
 import org.springframework.stereotype.Component
 import tools.jackson.databind.JsonNode
@@ -29,6 +30,7 @@ class ExactCitationValidator(private val mapper: ObjectMapper) : CitationValidat
         // Отсутствующее nullable поле при known не меняет evidence; unknown выше требует строку.
         if (status != "known" || nodes.size !in 1..8 || root.has("clarification") && !root.path("clarification").isNull) return invalid("invalid_evidence_shape", "Для known нужны 1–8 пунктов; clarification, если задано, должно быть null.")
         val actual = included.associateBy { it.chunk.chunkId }
+        val catalog = EvidenceCatalog.entries(included).associateBy { it.id }
         val claims = mutableListOf<GroundedClaim>()
         val issues = mutableListOf<EvidenceIssue>()
         nodes.forEachIndexed { i, node ->
@@ -39,17 +41,19 @@ class ExactCitationValidator(private val mapper: ObjectMapper) : CitationValidat
             }
             val citations = mutableListOf<VerifiedCitation>()
             refs.forEachIndexed { j, ref ->
-                val id = ref.path("chunk_id").takeIf { it.isString }?.asText()
+                val byAlias = shape(ref, "evidence_id")
+                val entry = if (byAlias && ref.path("evidence_id").isString) catalog[ref.path("evidence_id").asText()] else null
+                val id = if (byAlias) entry?.hit?.chunk?.chunkId else ref.path("chunk_id").takeIf { it.isString }?.asText()
                 val hit = actual[id]
                 val span = ref.path("span_index")
-                val byReference = shape(ref, "chunk_id", "span_index")
-                val passage = if (byReference && span.isIntegralNumber && span.canConvertToInt() && hit != null) EvidencePassages.split(hit.chunk.text).getOrNull(span.asInt()) else null
+                val byReference = byAlias || shape(ref, "chunk_id", "span_index")
+                val passage = if (byAlias) entry?.passage else if (byReference && span.isIntegralNumber && span.canConvertToInt() && hit != null) EvidencePassages.split(hit.chunk.text).getOrNull(span.asInt()) else null
                 // Legacy quote поддержан для сохранённых проверочных fixtures; новый генератор выбирает span_index.
                 val quote = if (byReference) passage?.text else ref.path("quote").takeIf { it.isString }?.asText()
                 if (hit == null && (byReference || shape(ref, "chunk_id", "quote"))) {
                     issues.add(EvidenceIssue("unknown_evidence_id", "Цитата ссылается не на фактически переданный чанк.", i, j))
                 } else if (quote == null || quote.isBlank() || (!byReference && (!shape(ref, "chunk_id", "quote") || quote.length !in 20..600))) {
-                    issues.add(EvidenceIssue("invalid_citation_shape", "Нужен существующий целочисленный span_index или 20–600 точных символов legacy quote; поля нельзя смешивать.", i, j))
+                    issues.add(EvidenceIssue("invalid_citation_shape", "Нужен точный evidence_id из запроса или корректная legacy ссылка; поля нельзя смешивать.", i, j))
                 } else if (hit == null) {
                     issues.add(EvidenceIssue("unknown_evidence_id", "Цитата ссылается не на фактически переданный чанк.", i, j))
                 } else {
