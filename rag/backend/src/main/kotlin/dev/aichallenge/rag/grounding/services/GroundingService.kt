@@ -63,7 +63,7 @@ class GroundingService(private val repository: IndexRepository, private val sear
             if (included.isEmpty()) return result(EvidenceValidation(GroundedStatus.ERROR, issues = listOf(EvidenceIssue("context_budget_too_small", "Целые чанки не помещаются в бюджет. Увеличьте его; LLM не вызывалась."))))
             val messages = prompt.assemble(clean.question, included)
             attempts++
-            val response = llm.completeJson(messages, clean.maxOutputTokens)
+            val response = llm.completeGroundedJson(messages, clean.maxOutputTokens)
             generation = GroundingGeneration(response.model, response.finishReason, response.milliseconds, response.usage, costs.estimate(response.model, response.usage), messages, response.content)
             var checked = validator.validate(response.content, response.finishReason, included)
             if (checked.status == GroundedStatus.ANSWERED) {
@@ -78,7 +78,7 @@ class GroundingService(private val repository: IndexRepository, private val sear
                     generation = null
                     supportCheck = null
                     attempts++
-                    val repaired = llm.completeJson(repairMessages, clean.maxOutputTokens)
+                    val repaired = llm.completeGroundedJson(repairMessages, clean.maxOutputTokens)
                     generation = GroundingGeneration(repaired.model, repaired.finishReason, repaired.milliseconds, repaired.usage, costs.estimate(repaired.model, repaired.usage), repairMessages, repaired.content)
                     checked = validator.validate(repaired.content, repaired.finishReason, included)
                     if (checked.status == GroundedStatus.ANSWERED) {

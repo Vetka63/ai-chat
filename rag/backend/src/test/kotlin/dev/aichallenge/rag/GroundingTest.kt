@@ -24,12 +24,22 @@ import tools.jackson.module.kotlin.jacksonObjectMapper
 
 /** Проверяет дословность, смысловой этап и учёт стадий; качество модели требует отдельной живой оценки. */
 class GroundingTest {
+    @Test fun `duplicate JSON keys and trailing JSON are rejected before evidence publication`() {
+        val validator = ExactCitationValidator(jacksonObjectMapper())
+        val unknown = """{"status":"unknown","claims":[],"clarification":"Уточните вопрос о Git."}"""
+        for (raw in listOf(unknown + " {}", unknown.replace("\"status\":\"unknown\"", "\"status\":\"known\",\"status\":\"unknown\""), unknown.replace("\"claims\":[]", "\"claims\":[{}],\"claims\":[]"))) {
+            val checked = validator.validate(raw, "stop", emptyList())
+            assertEquals(GroundedStatus.INVALID_EVIDENCE, checked.status)
+            assertEquals("invalid_evidence_json", checked.issues.single().code)
+            assertTrue(checked.claims.isEmpty())
+        }
+    }
     private val mapper = jacksonObjectMapper()
     private val quote = "Git сохраняет состояние файла на момент git add."
     private val hit = SearchHit(1, .8, Chunk("c1", "doc", "book.asc", "Git", "Индекс", listOf("Индекс"), 0, 100, 100 + quote.length + 3, 1, 2, "До $quote", "sha"))
     private val validator = ExactCitationValidator(mapper)
     private fun json(id: String = "c1", q: String = quote, text: String = "В коммит идёт подготовленная версия.") = mapper.writeValueAsString(mapOf("status" to "known", "claims" to listOf(mapOf("text" to text, "citations" to listOf(mapOf("chunk_id" to id, "quote" to q)))), "clarification" to null))
-    private fun supportJson(verdict: String = "supported") = """{"claims":[{"claim_index":0,"verdict":"$verdict","reason":"Проверена связь утверждения с его цитатой.","evidence_scope":"general","claim_scope":"general"}]}"""
+    private fun supportJson(verdict: String = "supported") = """{"claims":[{"claim_index":0,"verdict":"$verdict","reason":"Проверена связь утверждения с его цитатой.","conditions":[],"evidence_scope":"general","claim_scope":"general"}]}"""
 
     @Test fun `valid quote gets server metadata and canonical offsets`() {
         val r = validator.validate(json(), "stop", listOf(hit))
@@ -111,7 +121,7 @@ class GroundingTest {
             `when`(search.search(eq("index") ?: "index", any(SearchRequest::class.java) ?: SearchRequest("fixture"))).thenReturn(SearchResult("index", "original", 1, 2, listOf(hit)))
             service = GroundingService(repository, search, SimilarityCandidateSelector(), rewriter, PromptAssembler(mapper), GroundingPromptAssembler(mapper), llm, validator, CostEstimator(), LlmClaimSupportValidator(llm, supportPrompt, mapper, CostEstimator()))
         }
-        fun request() = GroundingRequest("original", "index")
+        fun request() = GroundingRequest("original", "index", candidateTopK = 10)
     }
     @Test fun `weak context refuses without paid generation`() {
         val f = Fixture(); val r = f.service.answer(f.request().copy(similarityThreshold = .9))

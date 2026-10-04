@@ -1,4 +1,4 @@
-param([string]$ApiUrl = 'http://localhost:8382/api/v1', [int]$MaxOutputTokens = 2400)
+param([string]$ApiUrl = 'http://localhost:8382/api/v1', [int]$MaxOutputTokens = 6000, [double]$SimilarityThreshold = .60, [int]$CandidateTopK = 20, [int]$FinalTopK = 10, [int]$ContextMaxCharacters = 32000)
 $ErrorActionPreference = 'Stop'
 $ragApi = $ApiUrl.TrimEnd('/')
 $ragSettings = Invoke-RestMethod "$ragApi/answer-settings"
@@ -9,7 +9,7 @@ if (!$ragIndex) { throw 'Нужен готовый STRUCTURAL индекс 3000/
 $ragQuestions = Invoke-RestMethod "$ragApi/evaluation/questions"
 if ($ragQuestions.Count -ne 10) { throw 'Ожидалось 10 вопросов.' }
 $ragRunId = '{0}-{1}' -f [DateTimeOffset]::UtcNow.ToString('yyyyMMdd-HHmmss-fff'), [Guid]::NewGuid().ToString('N').Substring(0, 8)
-$ragReport = @{ at = [DateTimeOffset]::UtcNow.ToString('o'); runId = $ragRunId; indexId = $ragIndex.id; model = $ragSettings.model; generationTestMaxOutputTokens = $MaxOutputTokens; supportCheckMaxOutputTokens = 16384; note = 'До 40 LLM-вызовов для 10 вопросов: генерация и проверка, при смысловом отказе одно видимое исправление и повторная проверка. HTTP retry и rewrite отсутствуют. Судья Pro thinking high; модель и usage сохранены. Тестовый лимит генерации не меняет default null в UI. Проверяются PASSED, дословность и provenance; смысл оценивается также вручную.'; cases = @(); negative = @() }
+$ragReport = @{ at = [DateTimeOffset]::UtcNow.ToString('o'); runId = $ragRunId; indexId = $ragIndex.id; comparisonModelNotGrounded = $ragSettings.model; generationTestMaxOutputTokens = $MaxOutputTokens; supportCheckMaxOutputTokens = 16384; note = 'До 40 LLM-вызовов для 10 вопросов: генерация и проверка, при смысловом отказе одно видимое исправление и повторная проверка. HTTP retry и rewrite отсутствуют. Grounded-генератор Pro без thinking, судья Pro thinking disabled; фактические модели и usage каждой стадии сохранены. Тестовый лимит генерации не меняет default null в UI. Проверяются PASSED, дословность и provenance; смысл оценивается также вручную.'; cases = @(); negative = @() }
 $ragDocuments = @{}
 $ragFailedCases = @()
 $ragDataDirectory = Join-Path $PSScriptRoot '../data'
@@ -20,8 +20,8 @@ function Save-RagReport {
 }
 Save-RagReport
 "Новый trace: $ragReportPath. До 40 платных LLM-вызовов; старые прогоны сохраняются."
-function Invoke-Grounded([string]$Question, [double]$Threshold = 0.65) {
-    $ragBody = @{ question = $Question; indexId = $ragIndex.id; candidateTopK = 10; finalTopK = 5; similarityThreshold = $Threshold; contextMaxCharacters = 16000; maxOutputTokens = $MaxOutputTokens; useRewrite = $false } | ConvertTo-Json
+function Invoke-Grounded([string]$Question, [double]$Threshold = $SimilarityThreshold) {
+    $ragBody = @{ question = $Question; indexId = $ragIndex.id; candidateTopK = $CandidateTopK; finalTopK = $FinalTopK; similarityThreshold = $Threshold; contextMaxCharacters = $ContextMaxCharacters; maxOutputTokens = $MaxOutputTokens; useRewrite = $false } | ConvertTo-Json
     Invoke-RestMethod "$ragApi/grounded-answers" -Method Post -ContentType 'application/json; charset=utf-8' -Body ([Text.Encoding]::UTF8.GetBytes($ragBody)) -TimeoutSec 900
 }
 foreach ($ragCase in $ragQuestions) {

@@ -29,7 +29,7 @@ class ClaimSupportTest {
         assertEquals(GroundedStatus.ANSWERED, exact.status)
         return exact.claims.single()
     }
-    private fun response(vararg verdicts: String) = mapper.writeValueAsString(mapOf("claims" to verdicts.mapIndexed { index, verdict -> mapOf("claim_index" to index, "verdict" to verdict, "reason" to "Проверены смысл и границы цитаты.", "evidence_scope" to "general", "claim_scope" to "general") }))
+    private fun response(vararg verdicts: String) = mapper.writeValueAsString(mapOf("claims" to verdicts.mapIndexed { index, verdict -> mapOf("claim_index" to index, "verdict" to verdict, "reason" to "Проверены смысл и границы цитаты.", "conditions" to emptyList<Any>(), "evidence_scope" to "general", "claim_scope" to "general") }))
 
     private inner class Fixture(val raw: String, val finish: String = "stop") {
         var calls = 0
@@ -77,7 +77,7 @@ class ClaimSupportTest {
         assertTrue(payload.has("claims")); assertTrue(payload.has("cited_context"))
         assertEquals(1, payload.path("cited_context").size())
         assertEquals("mixed", payload.path("cited_context")[0].path("chunk_id").asText())
-        assertEquals(cited.chunk.text, payload.path("cited_context")[0].path("surrounding_context").asText())
+        assertEquals(ClaimSupportPromptAssembler.passages(cited.chunk.text), payload.path("cited_context")[0].path("passages").toList().map { it.path("text").asText() })
         assertFalse(f.sent[1].content.contains(omittedProof.chunk.text))
     }
 
@@ -91,12 +91,36 @@ class ClaimSupportTest {
         assertEquals(ClaimSupportVerdict.SUPPORTED, checked.claims.first().verdict)
         assertEquals(SupportCheckStatus.PASSED, Fixture(response("supported")).validator.validate(claims.take(1), listOf(evidence)).status)
     }
+    @Test fun `condition evidence is exact own source and missing premise overrides model approval`() {
+        val quote = "При активном флаге X обработчик повторяет запрос."
+        val evidence = hit("c", quote)
+        val claims = listOf(claim("Обработчик повторяет запрос.", quote, evidence))
+        fun raw(conditions: Any?) = mapper.writeValueAsString(mapOf("claims" to listOf(mapOf(
+            "claim_index" to 0, "conditions" to conditions, "verdict" to "supported", "reason" to "Условие проверено.",
+            "evidence_scope" to "general", "claim_scope" to "general",
+        ))))
+        val condition = mapOf("chunk_id" to "c", "span_index" to 0, "preserved" to false)
+        val rejected = Fixture(raw(listOf(condition))).validator.validate(claims, listOf(evidence))
+        assertEquals(SupportCheckStatus.REJECTED, rejected.status)
+        assertEquals(ClaimSupportVerdict.UNSUPPORTED, rejected.claims.single().verdict)
+        assertTrue(rejected.claims.single().reason.startsWith("Потеряно условие источника."))
+        assertEquals(SupportCheckStatus.PASSED, Fixture(raw(listOf(condition + ("preserved" to true)))).validator.validate(claims, listOf(evidence)).status)
+        val bad = listOf(null, "none", emptyMap<String, Any>(), List(9) { condition }, listOf(condition - "preserved"),
+            listOf(condition + ("preserved" to "false")), listOf(condition + ("span_index" to 1)), listOf(condition + ("span_index" to -1)),
+            listOf(condition + ("span_index" to 0.0)), listOf(condition + ("span_index" to "0")), listOf(condition, condition),
+            listOf(condition + ("chunk_id" to "foreign")), listOf(condition + ("extra" to 1)))
+        for (conditions in bad) {
+            assertEquals(SupportCheckStatus.INVALID_RESPONSE, Fixture(raw(conditions)).validator.validate(claims, listOf(evidence, hit("foreign", quote))).status)
+        }
+        val missing = response("supported").replace("\"conditions\":[],", "")
+        assertEquals(SupportCheckStatus.INVALID_RESPONSE, Fixture(missing).validator.validate(claims, listOf(evidence)).status)
+    }
 
     @Test fun `example evidence cannot approve a general claim even when model verdict is supported`() {
         val quote = "В этом примере синхронизация создала конфликт."
         val evidence = hit("c", "Два пользователя одновременно изменили документ. $quote")
         val claims = listOf(claim("Синхронизация создаёт конфликт.", quote, evidence))
-        val raw = mapper.writeValueAsString(mapOf("claims" to listOf(mapOf("claim_index" to 0, "verdict" to "supported", "reason" to "x".repeat(300), "evidence_scope" to "example", "claim_scope" to "general", "text" to claims.single().text))))
+        val raw = mapper.writeValueAsString(mapOf("claims" to listOf(mapOf("claim_index" to 0, "verdict" to "supported", "reason" to "x".repeat(300), "conditions" to emptyList<Any>(), "evidence_scope" to "example", "claim_scope" to "general", "text" to claims.single().text))))
         val f = Fixture(raw)
         val checked = f.validator.validate(claims, listOf(evidence))
         assertEquals(SupportCheckStatus.REJECTED, checked.status)
@@ -130,7 +154,7 @@ class ClaimSupportTest {
         val quote = "В этом примере синхронизация создала конфликт."
         val evidence = hit("c", quote)
         val claims = listOf(claim("В описанном примере синхронизация создала конфликт.", quote, evidence))
-        val valid = mapOf<String, Any?>("claim_index" to 0, "verdict" to "supported", "reason" to "Проверен исходный пункт.", "evidence_scope" to "general", "claim_scope" to "general")
+        val valid = mapOf<String, Any?>("claim_index" to 0, "verdict" to "supported", "reason" to "Проверен исходный пункт.", "conditions" to emptyList<Any>(), "evidence_scope" to "general", "claim_scope" to "general")
         for (field in listOf("evidence_scope", "claim_scope")) {
             val badNodes = listOf(valid - field) + listOf<Any?>(null, true, 1, "", "General", "general ", "unknown", listOf("general"), mapOf("value" to "general")).map { valid + (field to it) }
             for (node in badNodes) {
@@ -178,7 +202,7 @@ class ClaimSupportTest {
         val evidence = hit("c", quote)
         val claims = listOf(claim("Версия сохраняется в индексе.", quote, evidence))
         for (verdict in listOf("supported", "unsupported")) {
-            val raw = mapper.writeValueAsString(mapOf("claims" to listOf(mapOf("claim_index" to 0, "text" to claims.single().text, "verdict" to verdict, "reason" to "Проверен исходный пункт.", "evidence_scope" to "general", "claim_scope" to "general"))))
+            val raw = mapper.writeValueAsString(mapOf("claims" to listOf(mapOf("claim_index" to 0, "text" to claims.single().text, "verdict" to verdict, "reason" to "Проверен исходный пункт.", "conditions" to emptyList<Any>(), "evidence_scope" to "general", "claim_scope" to "general"))))
             val f = Fixture(raw)
             val checked = f.validator.validate(claims, listOf(evidence))
             assertEquals(if (verdict == "supported") SupportCheckStatus.PASSED else SupportCheckStatus.REJECTED, checked.status)
@@ -192,7 +216,7 @@ class ClaimSupportTest {
         val quote = "Git сохраняет проиндексированную версию файла."
         val evidence = hit("c", quote)
         val claims = listOf(claim("Версия сохраняется в индексе.", quote, evidence), claim("Индекс хранит подготовленную версию.", quote, evidence))
-        fun echoed(index: Int, text: String) = mapOf("claim_index" to index, "text" to text, "verdict" to "supported", "reason" to "Проверен исходный пункт.", "evidence_scope" to "general", "claim_scope" to "general")
+        fun echoed(index: Int, text: String) = mapOf("claim_index" to index, "text" to text, "verdict" to "supported", "reason" to "Проверен исходный пункт.", "conditions" to emptyList<Any>(), "evidence_scope" to "general", "claim_scope" to "general")
         val reordered = mapper.writeValueAsString(mapOf("claims" to listOf(echoed(1, claims[1].text), echoed(0, claims[0].text))))
         assertEquals(SupportCheckStatus.PASSED, Fixture(reordered).validator.validate(claims, listOf(evidence)).status)
         val mismatched = mapper.writeValueAsString(mapOf("claims" to listOf(echoed(1, claims[0].text), echoed(0, claims[1].text))))
@@ -203,7 +227,7 @@ class ClaimSupportTest {
         val quote = "Git сохраняет проиндексированную версию файла."
         val evidence = hit("c", quote)
         val claims = listOf(claim("Версия сохраняется в индексе.", quote, evidence))
-        val valid = mapOf<String, Any?>("claim_index" to 0, "text" to claims.single().text, "verdict" to "supported", "reason" to "Проверен исходный пункт.", "evidence_scope" to "general", "claim_scope" to "general")
+        val valid = mapOf<String, Any?>("claim_index" to 0, "text" to claims.single().text, "verdict" to "supported", "reason" to "Проверен исходный пункт.", "conditions" to emptyList<Any>(), "evidence_scope" to "general", "claim_scope" to "general")
         val badNodes = listOf(
             valid + ("text" to "Другая версия."),
             valid + ("text" to " ${claims.single().text}"),
@@ -234,7 +258,7 @@ class ClaimSupportTest {
         val quote = "Git сохраняет проиндексированную версию файла."
         val evidence = hit("c", quote)
         val claims = listOf(claim("Версия сохраняется в индексе.", quote, evidence), claim("Индекс хранит версию.", quote, evidence))
-        val reversed = """{"claims":[{"claim_index":1,"verdict":"supported","reason":"Второй подтверждён.","evidence_scope":"general","claim_scope":"general"},{"claim_index":0,"verdict":"supported","reason":"Первый подтверждён.","evidence_scope":"general","claim_scope":"general"}]}"""
+        val reversed = """{"claims":[{"claim_index":1,"verdict":"supported","reason":"Второй подтверждён.","conditions":[],"evidence_scope":"general","claim_scope":"general"},{"claim_index":0,"verdict":"supported","reason":"Первый подтверждён.","conditions":[],"evidence_scope":"general","claim_scope":"general"}]}"""
         val result = Fixture(reversed).validator.validate(claims, listOf(evidence))
         assertEquals(SupportCheckStatus.PASSED, result.status); assertEquals(listOf(0, 1), result.claims.map { it.claimIndex })
         val truncated = Fixture(reversed, "length").validator.validate(claims, listOf(evidence))

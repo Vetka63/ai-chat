@@ -25,9 +25,13 @@ class DeepSeekLlmClient(private val properties: DeepSeekProperties, private val 
         return execute(messages, maxOutputTokens, false)
     }
     override fun completeJson(messages: List<LlmMessage>, maxOutputTokens: Int?) = execute(messages, maxOutputTokens, true)
+    override fun completeGroundedJson(messages: List<LlmMessage>, maxOutputTokens: Int?) = execute(
+        messages, maxOutputTokens, true, model = properties.groundingModel,
+        timeoutSeconds = properties.groundingTimeoutSeconds,
+    )
     override fun completeVerifiedJson(messages: List<LlmMessage>, maxOutputTokens: Int?) = execute(
         messages, maxOutputTokens, true,
-        model = properties.supportModel, thinkingEnabled = true, reasoningEffort = properties.supportReasoningEffort,
+        model = properties.supportModel, thinkingEnabled = properties.supportThinkingEnabled, reasoningEffort = properties.supportReasoningEffort,
         timeoutSeconds = properties.supportTimeoutSeconds,
     )
 
@@ -59,7 +63,8 @@ class DeepSeekLlmClient(private val properties: DeepSeekProperties, private val 
         val json = try { mapper.readTree(response.body()) } catch (_: Exception) { throw invalid("Некорректный JSON провайдера.") }
         val choice = json.path("choices").firstOrNull() ?: throw invalid("Провайдер не вернул choices.")
         val content = choice.path("message").path("content").takeIf { it.isString }?.asText()?.trim().orEmpty()
-        if (content.isBlank()) throw LabException("llm_empty_response", "DeepSeek вернул пустой финальный ответ. Попробуйте повторить или увеличить явный лимит ответа.", HttpStatus.BAD_GATEWAY)
+        // JSON-валидатор отвергнет пустой ответ, сохранив finish_reason и известный usage в trace.
+        if (content.isBlank() && !jsonObject) throw LabException("llm_empty_response", "DeepSeek вернул пустой финальный ответ. Попробуйте повторить или увеличить явный лимит ответа.", HttpStatus.BAD_GATEWAY)
         val responseModel = json.path("model").takeIf { it.isString }?.asText()?.takeIf { it.isNotBlank() } ?: throw invalid("Нет имени фактически ответившей модели.")
         val finish = choice.path("finish_reason").takeIf { it.isString }?.asText() ?: throw invalid("Нет finish_reason.")
         if (finish !in setOf("stop", "length")) throw invalid("Неожиданный тип завершения: $finish.")

@@ -3,9 +3,11 @@ package dev.aichallenge.rag.grounding.adapters
 import dev.aichallenge.rag.grounding.enums.GroundedStatus
 import dev.aichallenge.rag.grounding.models.*
 import dev.aichallenge.rag.grounding.ports.CitationValidator
+import dev.aichallenge.rag.grounding.services.EvidencePassages
 import dev.aichallenge.rag.retrieval.models.SearchHit
 import org.springframework.stereotype.Component
 import tools.jackson.databind.JsonNode
+import tools.jackson.databind.DeserializationFeature
 import tools.jackson.databind.ObjectMapper
 
 /** Fail-closed проверка всей структуры и точных цитат; metadata и координаты не доверяются модели. */
@@ -15,7 +17,7 @@ class ExactCitationValidator(private val mapper: ObjectMapper) : CitationValidat
     override fun validate(content: String, finishReason: String, included: List<SearchHit>): EvidenceValidation {
         if (finishReason != "stop") return invalid("truncated_evidence", "Структурированный ответ не завершён. Увеличьте лимит ответа или оставьте его пустым.")
         if (content.length > 100000) return invalid("invalid_evidence_shape", "Структурированный ответ слишком большой.")
-        val root = try { mapper.readTree(content) } catch (_: Exception) { return invalid("invalid_evidence_json", "Модель вернула некорректный JSON.") }
+        val root = try { mapper.reader().with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS, DeserializationFeature.FAIL_ON_READING_DUP_TREE_KEY).readTree(content) } catch (_: Exception) { return invalid("invalid_evidence_json", "Модель вернула некорректный или неоднозначный JSON.") }
         if (root == null || !(shape(root, "status", "claims", "clarification") || shape(root, "status", "claims")) || !root.path("claims").isArray) return invalid("invalid_evidence_shape", "Нужны status и claims, только допустимое поле clarification, без дополнительных полей.")
         val status = root.path("status").takeIf { it.isString }?.asText()
         val nodes = root.path("claims").toList()
@@ -38,14 +40,20 @@ class ExactCitationValidator(private val mapper: ObjectMapper) : CitationValidat
             val citations = mutableListOf<VerifiedCitation>()
             refs.forEachIndexed { j, ref ->
                 val id = ref.path("chunk_id").takeIf { it.isString }?.asText()
-                val quote = ref.path("quote").takeIf { it.isString }?.asText()
                 val hit = actual[id]
-                if (!shape(ref, "chunk_id", "quote") || quote == null || quote.isBlank() || quote.length !in 20..600) {
-                    issues.add(EvidenceIssue("invalid_citation_shape", "Цитата должна содержать chunk_id и 20–600 точных символов текста.", i, j))
+                val span = ref.path("span_index")
+                val byReference = shape(ref, "chunk_id", "span_index")
+                val passage = if (byReference && span.isIntegralNumber && span.canConvertToInt() && hit != null) EvidencePassages.split(hit.chunk.text).getOrNull(span.asInt()) else null
+                // Legacy quote поддержан для сохранённых проверочных fixtures; новый генератор выбирает span_index.
+                val quote = if (byReference) passage?.text else ref.path("quote").takeIf { it.isString }?.asText()
+                if (hit == null && (byReference || shape(ref, "chunk_id", "quote"))) {
+                    issues.add(EvidenceIssue("unknown_evidence_id", "Цитата ссылается не на фактически переданный чанк.", i, j))
+                } else if (quote == null || quote.isBlank() || (!byReference && (!shape(ref, "chunk_id", "quote") || quote.length !in 20..600))) {
+                    issues.add(EvidenceIssue("invalid_citation_shape", "Нужен существующий целочисленный span_index или 20–600 точных символов legacy quote; поля нельзя смешивать.", i, j))
                 } else if (hit == null) {
                     issues.add(EvidenceIssue("unknown_evidence_id", "Цитата ссылается не на фактически переданный чанк.", i, j))
                 } else {
-                    val offset = hit.chunk.text.indexOf(quote)
+                    val offset = passage?.start ?: hit.chunk.text.indexOf(quote)
                     if (offset < 0) issues.add(EvidenceIssue("quote_not_exact", "Цитата не является точным непрерывным фрагментом чанка.", i, j))
                     else {
                         val c = hit.chunk
