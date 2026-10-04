@@ -15,6 +15,7 @@ class SearchService(private val repository: IndexRepository, private val embeddi
         val identity = embeddings.identity()
         if (index.embedding != identity) throw LabException("embedding_space_mismatch", "Модель/digest/размерность отличаются от сохранённого индекса. Используйте прежнюю модель или постройте новый индекс.")
         val result = embeddings.embed(listOf("Instruct: Найди фрагменты русской книги Pro Git, отвечающие на вопрос.\nQuery: ${request.query}"))
+        if (embeddings.identity() != identity) throw LabException("embedding_space_mismatch", "Embedding-модель изменилась во время поиска. Результаты разных пространств не сравниваются; повторите с моделью индекса.")
         val query = result.vectors.single()
         require(query.size == identity.dimension)
         val hits = repository.vectors(indexId).map { (chunk, vector) -> chunk to VectorMath.cosine(query, vector) }

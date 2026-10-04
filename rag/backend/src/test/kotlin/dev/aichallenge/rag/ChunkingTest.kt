@@ -59,4 +59,22 @@ class ChunkingTest {
         assertEquals(1, p.metrics.splitCodeBlocks)
         assertTrue(p.chunks.all { it.text.length <= 500 })
     }
+    @Test fun `short semantic boundaries cannot cause one character progress with legal overlap`() {
+        val s = snapshot("=== Короткие блоки\n\n" + (1..80).joinToString("\n\n") { "Абзац $it " + "текст ".repeat(22) })
+        for (overlap in listOf(0, 100, 149)) {
+            val p = service.preview(s, ChunkConfig(ChunkStrategy.STRUCTURAL, 300, overlap))
+            assertEquals(100.0, p.metrics.coveragePercent)
+            assertTrue(p.chunks.size < s.documents.single().text.length / 50)
+            p.chunks.zipWithNext().forEach { (left, right) ->
+                assertTrue(right.start - left.start >= (left.text.length + 1) / 2)
+                assertTrue(right.start <= left.endExclusive)
+            }
+            assertTrue(p.chunks.groupBy { it.endExclusive }.values.all { it.size <= 2 })
+            assertTrue(p.chunks.all { it.text.length <= 300 && it.sections.size == 1 })
+        }
+    }
+    @Test fun `fixed normal windows preserve requested overlap`() {
+        val ranges = windows(0, 2000, ChunkConfig(ChunkStrategy.FIXED, 300, 149))
+        ranges.zipWithNext().forEach { (a, b) -> assertEquals(149, a.last + 1 - b.first) }
+    }
 }
