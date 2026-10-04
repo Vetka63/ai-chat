@@ -56,12 +56,54 @@ test('semantic verdict is visible and unsupported claim stays quarantined', asyn
   await expect(page.getByText('Цитата относится к другой опции.', { exact: false })).toBeVisible()
 })
 
-test('live grounded quote opens correct immutable document @live', async ({ page }) => {
-  test.skip(process.env.RAG_LIVE !== 'true', 'Opt-in: up to 2 paid DeepSeek calls')
-  test.setTimeout(180_000)
+test('one repaired draft stays collapsed while only final evidence is public', async ({ page }) => {
+  const rejected = 'ИСХОДНЫЙ ЛОЖНЫЙ ВЫВОД'
+  const generation = { model: 'draft-fixture', finishReason: 'stop', milliseconds: 1, usage: null, estimatedCost: null, messages: [], rawJson: JSON.stringify({ claims: [{ text: rejected }] }) }
+  await page.route('**/api/v1/grounded-answers', r => r.fulfill({ json: {
+    ...result(r.request().postDataJSON()), llmStagesAttempted: 4,
+    repair: { originalGeneration: generation, originalSupportCheck: { status: 'REJECTED', claims: [{ claimIndex: 0, verdict: 'UNSUPPORTED', reason: 'Утверждение не подтверждено цитатой.' }], issues: [], generation: { ...generation, model: 'judge-fixture', rawJson: '{}' } } },
+    supportCheck: { status: 'PASSED', claims: [{ claimIndex: 0, verdict: 'SUPPORTED', reason: 'Подтверждено.' }], issues: [], generation: { ...generation, rawJson: '{}' } },
+  } }))
   await page.goto('/'); await page.getByRole('button', { name: 'Источники и цитаты' }).click()
+  await expect(page.getByRole('button', { name: 'Ответить с цитатами · до 4 API-вызовов', exact: true })).toBeVisible()
+  await page.getByRole('checkbox', { name: /Переформулировать запрос поиска/ }).check()
+  await expect(page.getByRole('button', { name: 'Ответить с цитатами · до 5 API-вызовов', exact: true })).toBeVisible()
   await page.getByRole('button', { name: /^Ответить с цитатами/ }).click()
-  await expect(page.locator('.grounded-result')).toHaveAttribute('data-status', 'ANSWERED', { timeout: 150_000 })
+  await expect(page.locator('.grounded-claim')).toContainText('Используйте -u.')
+  await expect(page.locator('.grounded-claim')).not.toContainText(rejected)
+  const diagnostic = page.locator('.grounding-repair')
+  await expect(diagnostic.locator('> summary')).toHaveText('Исправление черновика · 1 попытка')
+  await expect(diagnostic).not.toHaveAttribute('open', '')
+  for (const text of await page.getByText(rejected, { exact: false }).all()) await expect(text).not.toBeVisible()
+  await diagnostic.locator('> summary').click()
+  await expect(diagnostic.locator('.rejected-draft-claim')).toContainText(rejected)
+  await expect(diagnostic).toContainText('Утверждение не подтверждено цитатой.')
+  await expect(diagnostic).toContainText('judge-fixture')
+  await diagnostic.locator('> summary').click()
+  const mdDownload = page.waitForEvent('download'); await page.getByRole('button', { name: 'Скачать ответ с цитатами MD' }).click()
+  const stream = await (await mdDownload).createReadStream(); const chunks: Buffer[] = []
+  for await (const chunk of stream!) chunks.push(Buffer.from(chunk))
+  const md = Buffer.concat(chunks).toString('utf8')
+  expect(md).toContain('Исправление черновика · 1 попытка'); expect(md).not.toContain(rejected)
+  const jsonDownload = page.waitForEvent('download'); await page.getByRole('button', { name: 'Скачать ответ с цитатами JSON' }).click()
+  const jsonStream = await (await jsonDownload).createReadStream(); const jsonChunks: Buffer[] = []
+  for await (const chunk of jsonStream!) jsonChunks.push(Buffer.from(chunk))
+  const exported = JSON.parse(Buffer.concat(jsonChunks).toString('utf8'))
+  expect(exported.repair.originalGeneration.rawJson).toContain(rejected)
+  expect(exported.supportCheck.status).toBe('PASSED')
+  expect(exported.claims[0].text).toBe('Используйте -u.')
+})
+
+test('live grounded quote opens correct immutable document @live', async ({ page }, testInfo) => {
+  test.skip(process.env.RAG_LIVE !== 'true', 'Opt-in: up to 4 paid DeepSeek calls including one bounded repair')
+  test.setTimeout(900_000)
+  await page.goto('/'); await page.getByRole('button', { name: 'Источники и цитаты' }).click()
+  const responsePromise = page.waitForResponse(r => new URL(r.url()).pathname.endsWith('/grounded-answers') && r.request().method() === 'POST', { timeout: 840_000 })
+  await page.getByRole('button', { name: /^Ответить с цитатами/ }).click()
+  const response = await responsePromise, trace = await response.json()
+  await testInfo.attach(`day24-live-response-${Date.now()}.json`, { body: JSON.stringify(trace, null, 2), contentType: 'application/json' })
+  console.log(`Day24 live: HTTP ${response.status()}, status=${trace.status}, llmStagesAttempted=${trace.llmStagesAttempted ?? 'unknown'}, repair=${!!trace.repair}`)
+  await expect(page.locator('.grounded-result')).toHaveAttribute('data-status', 'ANSWERED', { timeout: 840_000 })
   await expect(page.locator('.grounded-result')).toContainText(/-u|include-untracked/)
   await page.getByRole('button', { name: 'Открыть цитату в источнике' }).first().click()
   await expect(page.getByRole('dialog')).toContainText('Цитата совпала с snapshot')

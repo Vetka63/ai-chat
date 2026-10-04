@@ -9,7 +9,7 @@ if (!$ragIndex) { throw 'Нужен готовый STRUCTURAL индекс 3000/
 $ragQuestions = Invoke-RestMethod "$ragApi/evaluation/questions"
 if ($ragQuestions.Count -ne 10) { throw 'Ожидалось 10 вопросов.' }
 $ragRunId = '{0}-{1}' -f [DateTimeOffset]::UtcNow.ToString('yyyyMMdd-HHmmss-fff'), [Guid]::NewGuid().ToString('N').Substring(0, 8)
-$ragReport = @{ at = [DateTimeOffset]::UtcNow.ToString('o'); runId = $ragRunId; indexId = $ragIndex.id; model = $ragSettings.model; generationTestMaxOutputTokens = $MaxOutputTokens; supportCheckMaxOutputTokens = 2048; note = 'До 20 LLM-вызовов для 10 вопросов: генерация и отдельная проверка смысла, без rewrite/retry. Тестовый лимит генерации не меняет default null в UI. Проверяются PASSED, дословность и provenance; правильность модельных вердиктов оценивается также вручную.'; cases = @(); negative = @() }
+$ragReport = @{ at = [DateTimeOffset]::UtcNow.ToString('o'); runId = $ragRunId; indexId = $ragIndex.id; model = $ragSettings.model; generationTestMaxOutputTokens = $MaxOutputTokens; supportCheckMaxOutputTokens = 16384; note = 'До 40 LLM-вызовов для 10 вопросов: генерация и проверка, при смысловом отказе одно видимое исправление и повторная проверка. HTTP retry и rewrite отсутствуют. Судья Pro thinking high; модель и usage сохранены. Тестовый лимит генерации не меняет default null в UI. Проверяются PASSED, дословность и provenance; смысл оценивается также вручную.'; cases = @(); negative = @() }
 $ragDocuments = @{}
 $ragFailedCases = @()
 $ragDataDirectory = Join-Path $PSScriptRoot '../data'
@@ -19,16 +19,16 @@ function Save-RagReport {
     [IO.File]::WriteAllText($ragReportPath, ($ragReport | ConvertTo-Json -Depth 60), [Text.UTF8Encoding]::new($false))
 }
 Save-RagReport
-"Новый trace: $ragReportPath. До 20 платных LLM-вызовов; старые прогоны сохраняются."
+"Новый trace: $ragReportPath. До 40 платных LLM-вызовов; старые прогоны сохраняются."
 function Invoke-Grounded([string]$Question, [double]$Threshold = 0.65) {
     $ragBody = @{ question = $Question; indexId = $ragIndex.id; candidateTopK = 10; finalTopK = 5; similarityThreshold = $Threshold; contextMaxCharacters = 16000; maxOutputTokens = $MaxOutputTokens; useRewrite = $false } | ConvertTo-Json
-    Invoke-RestMethod "$ragApi/grounded-answers" -Method Post -ContentType 'application/json; charset=utf-8' -Body ([Text.Encoding]::UTF8.GetBytes($ragBody)) -TimeoutSec 240
+    Invoke-RestMethod "$ragApi/grounded-answers" -Method Post -ContentType 'application/json; charset=utf-8' -Body ([Text.Encoding]::UTF8.GetBytes($ragBody)) -TimeoutSec 900
 }
 foreach ($ragCase in $ragQuestions) {
     $ragResult = Invoke-Grounded $ragCase.question
     $ragReport.cases += @{ case = $ragCase; result = $ragResult }
     Save-RagReport # Сохраняем и отклонённый ответ до сообщения об ошибке.
-    if ($ragResult.llmStagesAttempted -gt 2) { throw 'Без rewrite ожидается не более двух LLM-стадий.' }
+    if ($ragResult.llmStagesAttempted -gt 4) { throw 'Без rewrite ожидается не более четырёх LLM-стадий с одним исправлением.' }
     if ($ragResult.status -ne 'ANSWERED') {
         if ($ragResult.claims.Count -or $ragResult.sources.Count) { throw 'Отклонённый ответ содержит публичные утверждения или источники.' }
         $ragFailedCases += $ragCase.id; "$($ragCase.id): $($ragResult.status); trace сохранён."; continue
@@ -41,11 +41,18 @@ foreach ($ragCase in $ragQuestions) {
         $_.claimIndex
     } | Sort-Object)
     if (($ragCheckedIndices -join ',') -cne ((0..($ragResult.claims.Count - 1)) -join ',')) { throw 'Индексы смысловых вердиктов повторяются, пропущены или не совпадают с пунктами.' }
-    if ($ragResult.llmStagesAttempted -ne 2 -or !$ragResult.generation -or !$ragResult.supportCheck.generation) { throw 'Не учтены обе LLM-стадии.' }
+    $ragExpectedStages = if ($ragResult.repair) { 4 } else { 2 }
+    if ($ragResult.llmStagesAttempted -ne $ragExpectedStages -or !$ragResult.generation -or !$ragResult.supportCheck.generation) { throw 'Не учтены все LLM-стадии.' }
+    $ragGenerations = @($ragResult.generation, $ragResult.supportCheck.generation)
+    if ($ragResult.repair) {
+        if ($ragResult.repair.originalSupportCheck.status -ne 'REJECTED') { throw 'Исправление возможно только после смыслового отказа.' }
+        $ragGenerations += @($ragResult.repair.originalGeneration, $ragResult.repair.originalSupportCheck.generation)
+    }
     if ($ragResult.totalUsage) {
-        if (!$ragResult.generation.usage -or !$ragResult.supportCheck.generation.usage) { throw 'Общий usage не должен быть известен при неизвестном расходе стадии.' }
+        if (@($ragGenerations | Where-Object { !$_.usage }).Count) { throw 'Общий usage не должен быть известен при неизвестном расходе стадии.' }
         foreach ($ragMetric in @('promptTokens', 'completionTokens', 'totalTokens')) {
-            if ($ragResult.totalUsage.$ragMetric -ne ($ragResult.generation.usage.$ragMetric + $ragResult.supportCheck.generation.usage.$ragMetric)) { throw "Неверный суммарный usage: $ragMetric." }
+            $ragSum = ($ragGenerations | ForEach-Object { $_.usage.$ragMetric } | Measure-Object -Sum).Sum
+            if ($ragResult.totalUsage.$ragMetric -ne $ragSum) { throw "Неверный суммарный usage: $ragMetric." }
         }
     }
     foreach ($ragClaim in $ragResult.claims) {

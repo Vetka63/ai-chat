@@ -40,5 +40,8 @@ data class GroundingRetrieval(val searchQuery: String, val rawCandidates: List<S
 /** Raw JSON доступен только как явно непроверенная диагностика, никогда как основной ответ. */
 data class GroundingGeneration(val model: String, val finishReason: String, val milliseconds: Long, val usage: TokenUsage?, val estimatedCost: CostEstimate?, val messages: List<LlmMessage>, val rawJson: String)
 
+/** Единственный отклонённый черновик и его проверка; диагностические данные, не публичные claims. */
+data class GroundingRepair(val originalGeneration: GroundingGeneration, val originalSupportCheck: ClaimSupportCheck)
+
 /** Результат независимого вопроса; UNKNOWN/INVALID/ERROR не маскируются как доказанный ответ. */
-data class GroundedResult(val request: GroundingRequest, val snapshotId: String, val status: GroundedStatus, val answer: String, val clarification: String?, val claims: List<GroundedClaim>, val sources: List<EvidenceSource>, val issues: List<EvidenceIssue>, val retrieval: GroundingRetrieval?, val rewrite: RewriteTrace?, val generation: GroundingGeneration?, val llmStagesAttempted: Int, val totalUsage: TokenUsage?, val estimatedCost: CostEstimate?, val totalMilliseconds: Long, val warnings: List<String>, val supportCheck: ClaimSupportCheck? = null)
+data class GroundedResult(val request: GroundingRequest, val snapshotId: String, val status: GroundedStatus, val answer: String, val clarification: String?, val claims: List<GroundedClaim>, val sources: List<EvidenceSource>, val issues: List<EvidenceIssue>, val retrieval: GroundingRetrieval?, val rewrite: RewriteTrace?, val generation: GroundingGeneration?, val llmStagesAttempted: Int, val totalUsage: TokenUsage?, val estimatedCost: CostEstimate?, val totalMilliseconds: Long, val warnings: List<String>, val supportCheck: ClaimSupportCheck? = null, val repair: GroundingRepair? = null)

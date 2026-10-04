@@ -19,19 +19,21 @@ import java.nio.file.Path
 import java.time.Instant
 import java.util.UUID
 
-/** Опциональные четыре платных вызова настоящего проверяющего адаптера; без генерации, rewrite и повторов. */
+/** Опциональные платные вызовы настоящего проверяющего адаптера; без генерации, rewrite и повторов. */
 @EnabledIfEnvironmentVariable(named = "RAG_RUN_LIVE_SUPPORT", matches = "true")
 class ClaimSupportLiveTest {
     private data class Case(val id: String, val source: String, val section: String, val claim: String, val quote: String, val expected: SupportCheckStatus)
 
     @Test fun `real checker rejects audit failures and accepts supported paraphrase`() {
         val mapper = jacksonObjectMapper()
-        val key = System.getenv("DEEPSEEK_API_KEY").orEmpty()
+        val key = System.getenv("DEEPSEEK_API_KEY")?.takeIf { it.isNotBlank() } ?: System.getenv("LLM_API_KEY").orEmpty()
         require(key.isNotBlank()) { "Для явно включённого live-теста нужен серверный DEEPSEEK_API_KEY." }
         val properties = DeepSeekProperties(
             apiKey = key,
             baseUrl = System.getenv("DEEPSEEK_BASE_URL")?.takeIf { it.isNotBlank() } ?: "https://api.deepseek.com",
-            model = System.getenv("DEEPSEEK_MODEL")?.takeIf { it.isNotBlank() } ?: "deepseek-flash",
+            model = System.getenv("RAG_SUPPORT_TEST_MODEL")?.takeIf { it.isNotBlank() } ?: System.getenv("DEEPSEEK_MODEL")?.takeIf { it.isNotBlank() } ?: "deepseek-flash",
+            supportModel = System.getenv("RAG_SUPPORT_TEST_MODEL")?.takeIf { it.isNotBlank() } ?: "deepseek-v4-pro",
+            supportReasoningEffort = System.getenv("RAG_SUPPORT_TEST_EFFORT")?.takeIf { it.isNotBlank() } ?: "high",
         )
         val checker = LlmClaimSupportValidator(DeepSeekLlmClient(properties, mapper), ClaimSupportPromptAssembler(mapper), mapper, CostEstimator())
         val cases = listOf(
@@ -47,16 +49,34 @@ class ClaimSupportLiveTest {
             Case("stash-supported-paraphrase", "07-git-tools/sections/stashing-cleaning.asc", "Необычное припрятывание",
                 "Чтобы git stash также сохранил созданные неотслеживаемые файлы, укажите -u или --include-untracked.",
                 "Если вы укажете опцию `--include-untracked` или `-u`, Git также припрячет все неотслеживаемые файлы, которые вы создали.", SupportCheckStatus.PASSED),
+            Case("object-count-is-example", "03-git-branching/sections/nutshell.asc", "О ветвлении в двух словах",
+                "Репозиторий хранит три блоб объекта (по одному на каждый файл), объект дерева каталогов и объект коммита.",
+                "Ваш репозиторий Git теперь хранит пять объектов: три блоб объекта (по одному на каждый файл), объект _дерева_ каталогов, содержащий список файлов и соответствующих им блобов, а так же объект _коммита_, содержащий метаданные и указатель на объект дерева каталогов.", SupportCheckStatus.REJECTED),
+            Case("object-count-with-scope", "03-git-branching/sections/nutshell.asc", "О ветвлении в двух словах",
+                "В приведённом в книге примере репозиторий теперь хранит пять объектов: три blob, одно дерево и один коммит.",
+                "Ваш репозиторий Git теперь хранит пять объектов: три блоб объекта (по одному на каждый файл), объект _дерева_ каталогов, содержащий список файлов и соответствующих им блобов, а так же объект _коммита_, содержащий метаданные и указатель на объект дерева каталогов.", SupportCheckStatus.PASSED),
+            Case("head-exception-matters", "10-git-internals/sections/refs.asc", "HEAD",
+                "Файл HEAD — это символическая ссылка на текущую ветку; она содержит не сам хеш SHA-1, а указатель на другую ссылку.",
+                "Файл HEAD -- это символическая ссылка на текущую ветку.\nСимволическая ссылка отличается от обычной тем, что она содержит не сам хеш SHA-1, а указатель на другую ссылку.", SupportCheckStatus.REJECTED),
+            Case("merge-example-is-not-every-merge", "03-git-branching/sections/rebasing.asc", "Простейшее перебазирование",
+                "При слиянии выполняется трёхстороннее слияние между двумя последними снимками сливаемых веток и их общего родителя, создавая новый снимок (и коммит).",
+                "Она осуществляет трёхстороннее слияние между двумя последними снимками сливаемых веток (`C3` и `C4`) и самого недавнего общего для этих веток родительского снимка (`C2`), создавая новый снимок (и коммит).", SupportCheckStatus.REJECTED),
+            Case("head-never-is-false", "10-git-internals/sections/refs.asc", "HEAD",
+                "HEAD всегда является символической ссылкой на ветку и никогда не содержит SHA-1 хеш объекта.",
+                "Файл HEAD -- это символическая ссылка на текущую ветку.\nСимволическая ссылка отличается от обычной тем, что она содержит не сам хеш SHA-1, а указатель на другую ссылку.", SupportCheckStatus.REJECTED),
+            Case("head-normal-case", "10-git-internals/sections/refs.asc", "HEAD",
+                "В обычном состоянии с текущей веткой HEAD является символической ссылкой: хранит указатель на другую ссылку, а не сам SHA-1.",
+                "Файл HEAD -- это символическая ссылка на текущую ветку.\nСимволическая ссылка отличается от обычной тем, что она содержит не сам хеш SHA-1, а указатель на другую ссылку.", SupportCheckStatus.PASSED),
         )
         val directory = Path.of("../data").toAbsolutePath().normalize()
         Files.createDirectories(directory)
         val runId = Instant.now().toString().replace(':', '-') + "-" + UUID.randomUUID().toString().take(8)
         val reportPath = directory.resolve("day24-support-live-$runId.json")
         val records = mutableListOf<Map<String, Any>>()
-        val report = mapOf("at" to Instant.now().toString(), "runId" to runId, "note" to "Четыре вызова настоящей проверки смысла, без retry. Цитаты взяты из локального Pro Git. Это выборка регрессий, не доказательство безошибочности модели.", "cases" to records)
+        val report = mapOf("at" to Instant.now().toString(), "runId" to runId, "note" to "${cases.size} вызовов настоящей проверки смысла, без retry. Цитаты взяты из локального Pro Git. Это выборка регрессий, не доказательство безошибочности модели.", "cases" to records)
         fun save() = Files.writeString(reportPath, mapper.writerWithDefaultPrettyPrinter().writeValueAsString(report))
         save()
-        println("Live support trace: $reportPath; максимум четыре платных вызова.")
+        println("Live support trace: $reportPath; максимум ${cases.size} платных вызовов.")
         val failures = mutableListOf<String>()
         for (case in cases) {
             val document = Files.readString(Path.of("../corpus/progit-ru/book").resolve(case.source))
