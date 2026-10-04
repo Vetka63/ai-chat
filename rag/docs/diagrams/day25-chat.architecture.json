@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {"title": "Мини чат RAG с памятью задачи", "quality_profile": "showcase", "viewBox": [1320, 600]},
+  "components": [
+    {"id":"chat-ui","type":"frontend","label":"Чат Vue","sublabel":"История, память, цитаты","pos":[35,255],"size":[190,76]},
+    {"id":"chat-service","type":"backend","label":"ConversationService","sublabel":"Один обмен, без retry","pos":[345,255],"size":[230,76]},
+    {"id":"state-store","type":"database","label":"SQLite чатов","sublabel":"История отдельно от памяти","pos":[345,45],"size":[230,76]},
+    {"id":"context-preparer","type":"backend","label":"DialoguePreparer","sublabel":"Запрос поиска и patch памяти","pos":[345,475],"size":[230,76]},
+    {"id":"grounded-flow","type":"backend","label":"GroundingService","sublabel":"Новый контекст для каждого turn","pos":[720,255],"size":[240,76]},
+    {"id":"evidence-search","type":"backend","label":"Поиск и фильтр","sublabel":"Ollama и SQLite индекса","pos":[720,45],"size":[240,76]},
+    {"id":"answer-model","type":"external","label":"DeepSeek API","sublabel":"JSON с цитируемыми пунктами","pos":[720,475],"size":[240,76]},
+    {"id":"quote-validator","type":"security","label":"CitationValidator","sublabel":"Точные цитаты, реальные IDs","pos":[1070,255],"size":[215,76]}
+  ],
+  "connections": [
+    {"id":"send-turn","from":"chat-ui","to":"chat-service","label":"HTTP turn","variant":"emphasis"},
+    {"id":"persist-turn","from":"chat-service","to":"state-store","label":"Atomic SQL"},
+    {"id":"prepare-turn","from":"chat-service","to":"context-preparer","label":"Память и хвост","labelDy":24},
+    {"id":"answer-turn","from":"chat-service","to":"grounded-flow","label":"Уточнённый вопрос","variant":"emphasis"},
+    {"id":"retrieve-turn","from":"grounded-flow","to":"evidence-search","label":"Свежий retrieval"},
+    {"id":"generate-turn","from":"grounded-flow","to":"answer-model","label":"Book context","labelDy":24},
+    {"id":"validate-turn","from":"grounded-flow","to":"quote-validator","label":"JSON и чанки","variant":"security"}
+  ],
+  "cards": [
+    {"dot":"emerald","title":"Изоляция чатов","items":["Индекс закреплён на весь чат","User turn записан до сетевых вызовов"]},
+    {"dot":"cyan","title":"Контекст задачи","items":["Подготовка использует DeepSeek, проверяет patch","Цель живёт дольше короткого хвоста"]},
+    {"dot":"rose","title":"Источники ответа","items":["Память не подменяет цитаты книги","Точный текст цитаты не доказывает смысл"]}
+  ]
+}

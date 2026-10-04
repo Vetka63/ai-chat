@@ -2,16 +2,21 @@ import type { components } from './schema'
 export type Schema<K extends keyof components['schemas']> = components['schemas'][K]
 
 /** Одна HTTP-точка входа; ошибки API отображаются без потери сообщения backend. */
-export async function request<T>(path: string, body?: unknown): Promise<T> {
-  const response = await fetch(`/api/v1${path}`, { method: body === undefined ? 'GET' : 'POST', headers: body === undefined ? {} : { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) })
+export async function request<T>(path: string, body?: unknown, method = body === undefined ? 'GET' : 'POST'): Promise<T> {
+  const response = await fetch(`/api/v1${path}`, { method, headers: body === undefined ? {} : { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) })
   if (!response.ok) {
     const error = await response.json().catch(() => null) as Schema<'ApiError'> | null
     throw new Error(error?.message ?? `Ошибка HTTP ${response.status}`)
   }
-  return response.json() as Promise<T>
+  return response.status === 204 ? undefined as T : response.json() as Promise<T>
 }
 
 export const api = {
+  conversations: () => request<Schema<'Conversation'>[]>('/conversations'),
+  createConversation: (body: Schema<'CreateConversation'>) => request<Schema<'ConversationDetail'>>('/conversations', body),
+  conversation: (id: string) => request<Schema<'ConversationDetail'>>(`/conversations/${encodeURIComponent(id)}`),
+  sendTurn: (id: string, body: Schema<'SendTurn'>) => request<Schema<'ConversationDetail'>>(`/conversations/${encodeURIComponent(id)}/turns`, body),
+  deleteConversation: (id: string) => request<void>(`/conversations/${encodeURIComponent(id)}`, undefined, 'DELETE'),
   groundedAnswer: (body: Schema<'GroundingRequest'>) => request<Schema<'GroundedResult'>>('/grounded-answers', body),
   experiment: (body: Schema<'ExperimentRequest'>) => request<Schema<'ExperimentComparison'>>('/experiments/compare', body),
   answerSettings: () => request<Schema<'AnswerSettings'>>('/answer-settings'),

@@ -13,6 +13,8 @@ JDK 21, Kotlin, Spring Boot MVC. Boot создаёт компоненты чер
 | `rewriting` | JSON-переформулировка только поискового запроса |
 | `experiments` | Сравнение четырёх режимов retrieval, общие стадии и независимые результаты |
 | `grounding` | JSON-пункты с точными цитатами, серверные источники и fail-closed проверка |
+| `conversations` | Сохраняемые чаты, durable user turn, idempotency/revision, scoped memory и история |
+| `taskmemory` | Подготовка contextual query и patch памяти с exact user provenance |
 | `config` | Пути, runtime URL, модель, batch size, timeout |
 | `common` | Общий формат ошибки и hashing |
 

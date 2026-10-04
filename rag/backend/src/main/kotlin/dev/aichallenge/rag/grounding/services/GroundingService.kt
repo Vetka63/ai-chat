@@ -23,7 +23,7 @@ class GroundingService(private val repository: IndexRepository, private val sear
     private val log = LoggerFactory.getLogger(javaClass)
 
     /** Пустой контекст не вызывает LLM; неверные цитаты не выпускают частичный ответ и не запускают retry. */
-    fun answer(request: GroundingRequest): GroundedResult {
+    fun answer(request: GroundingRequest, dialogue: GroundingDialogue? = null): GroundedResult {
         validate(request)
         val clean = request.copy(question = request.question.trim())
         val snapshotId = repository.index(clean.indexId).snapshotId
@@ -48,7 +48,7 @@ class GroundingService(private val repository: IndexRepository, private val sear
             return GroundedResult(clean, snapshotId, checked.status, answer, checked.clarification, checked.claims, checked.sources, checked.issues, retrieval, rewrite, generation, attempts, if (complete) sumUsage(usages) else null, cost, (System.nanoTime() - started) / 1_000_000, warnings)
         }
         try {
-            val query = if (clean.useRewrite) { attempts++; rewriter.rewrite(clean.question).also { rewrite = it }.query } else clean.question
+            val query = dialogue?.resolvedQuestion ?: if (clean.useRewrite) { attempts++; rewriter.rewrite(clean.question).also { rewrite = it }.query } else clean.question
             val pool = search.search(clean.indexId, SearchRequest(query, clean.candidateTopK))
             val selection = selector.select(pool.hits, clean.finalTopK, clean.similarityThreshold)
             val included = packing.select(selection.selected, clean.contextMaxCharacters)
@@ -56,7 +56,7 @@ class GroundingService(private val repository: IndexRepository, private val sear
             retrieval = GroundingRetrieval(query, pool.hits, selection.selected, selection.decisions, included, selection.selected.filter { it.chunk.chunkId !in ids }.map { it.chunk.chunkId }, included.sumOf { it.chunk.text.length }, pool.milliseconds, pool.inputTokens)
             if (selection.selected.isEmpty()) return result(EvidenceValidation(GroundedStatus.UNKNOWN, clarification = "Уточните вопрос о Git или выберите другой индекс. Поиск не нашёл фрагментов выше выбранного порога."))
             if (included.isEmpty()) return result(EvidenceValidation(GroundedStatus.ERROR, issues = listOf(EvidenceIssue("context_budget_too_small", "Целые чанки не помещаются в бюджет. Увеличьте его; LLM не вызывалась."))))
-            val messages = prompt.assemble(clean.question, included)
+            val messages = prompt.assemble(clean.question, included, dialogue)
             attempts++
             val response = llm.completeJson(messages, clean.maxOutputTokens)
             generation = GroundingGeneration(response.model, response.finishReason, response.milliseconds, response.usage, costs.estimate(response.model, response.usage), messages, response.content)

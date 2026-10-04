@@ -4,6 +4,58 @@
  */
 
 export interface paths {
+    "/api/v1/conversations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listConversations"];
+        put?: never;
+        post: operations["createConversation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/conversations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["getConversation"];
+        put?: never;
+        post?: never;
+        delete: operations["deleteConversation"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/conversations/{id}/turns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["sendConversationTurn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/grounded-answers": {
         parameters: {
             query?: never;
@@ -264,6 +316,94 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @enum {string} */
+        MemoryLayer: "GOAL" | "CLARIFICATIONS" | "CONSTRAINTS" | "TERMS";
+        MemoryFact: {
+            layer: components["schemas"]["MemoryLayer"];
+            key: string;
+            value: string;
+            sourceTurnId: string;
+            quote: string;
+        };
+        TaskMemory: {
+            facts: components["schemas"]["MemoryFact"][];
+        };
+        MemoryChange: {
+            layer: components["schemas"]["MemoryLayer"];
+            key: string;
+            value: string | null;
+            quote: string;
+        };
+        PreparationTrace: {
+            query: string;
+            memory: components["schemas"]["TaskMemory"];
+            changes: components["schemas"]["MemoryChange"][];
+            model: string;
+            finishReason: string;
+            milliseconds: number;
+            usage: components["schemas"]["TokenUsage"] | null;
+            estimatedCost: components["schemas"]["CostEstimate"] | null;
+            messages: components["schemas"]["LlmMessage"][];
+            rawJson: string;
+            issues: string[];
+        };
+        ConversationSettings: {
+            indexId: string;
+            /** @default 10 */
+            candidateTopK: number;
+            /** @default 5 */
+            finalTopK: number;
+            /** @default 0.65 */
+            similarityThreshold: number;
+            /** @default 16000 */
+            contextMaxCharacters: number;
+            /** @default 6 */
+            historyTurns: number;
+            /** @default 10000 */
+            historyMaxCharacters: number;
+            maxOutputTokens?: number | null;
+        };
+        CreateConversation: {
+            title: string;
+            settings: components["schemas"]["ConversationSettings"];
+        };
+        SendTurn: {
+            requestId: string;
+            question: string;
+            expectedRevision: number;
+        };
+        Conversation: {
+            id: string;
+            title: string;
+            settings: components["schemas"]["ConversationSettings"];
+            snapshotId: string;
+            createdAt: string;
+            updatedAt: string;
+            revision: number;
+        };
+        /** @enum {string} */
+        TurnStatus: "PENDING" | "COMPLETED" | "INTERRUPTED";
+        ConversationTurn: {
+            id: string;
+            requestId: string;
+            question: string;
+            createdAt: string;
+            status: components["schemas"]["TurnStatus"];
+            preparation: components["schemas"]["PreparationTrace"] | null;
+            result: components["schemas"]["GroundedResult"] | null;
+            issue: string | null;
+            memoryAfter: components["schemas"]["TaskMemory"] | null;
+            includedHistoryTurnIds: string[];
+            omittedHistoryTurnCount: number;
+            totalUsage: components["schemas"]["TokenUsage"] | null;
+            estimatedCost: components["schemas"]["CostEstimate"] | null;
+            llmStagesAttempted: number;
+        };
+        ConversationDetail: {
+            conversation: components["schemas"]["Conversation"];
+            memory: components["schemas"]["TaskMemory"];
+            turns: components["schemas"]["ConversationTurn"][];
+        };
         GroundingRequest: {
             question: string;
             indexId: string;
@@ -643,6 +783,174 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    listConversations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Чаты без истории */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Conversation"][];
+                };
+            };
+        };
+    };
+    createConversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateConversation"];
+            };
+        };
+        responses: {
+            /** @description Чат создан */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationDetail"];
+                };
+            };
+            /** @description Неверные настройки */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Индекс отсутствует */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getConversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Полная история и отдельная память */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationDetail"];
+                };
+            };
+            /** @description Чат отсутствует */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    deleteConversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Чат и его история/память удалены; индекс не затронут */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Чат отсутствует */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Есть pending сообщение */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    sendConversationTurn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SendTurn"];
+            };
+        };
+        responses: {
+            /** @description Чат с durable результатом; повтор requestId не вызывает LLM */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationDetail"];
+                };
+            };
+            /** @description Неверный запрос */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Чат отсутствует */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Устаревший revision, pending turn или повтор ID с другим текстом */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     generateGroundedAnswer: {
         parameters: {
             query?: never;

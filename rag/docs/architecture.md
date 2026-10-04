@@ -1,6 +1,6 @@
 # Архитектура лаборатории RAG
 
-Этот документ описывает индексацию дня 21, генерацию дня 22, сравнение retrieval дня 23 и grounded-ответы дня 24. Основной корпус — русский перевод Pro Git, не старое предложение QASPER. Алгоритмы и проверки — в [day22-guide.md](day22-guide.md), [day23-guide.md](day23-guide.md) и [day24-guide.md](day24-guide.md).
+Этот документ описывает индексацию дня 21, генерацию дня 22, сравнение retrieval дня 23, grounded-ответы дня 24 и чат дня 25. Основной корпус — русский перевод Pro Git. Алгоритмы: [день 22](day22-guide.md), [день 23](day23-guide.md), [день 24](day24-guide.md), [день 25](day25-guide.md).
 
 ## Назначение компонентов
 
@@ -34,7 +34,15 @@ rag/
 └── .env.example             Несекретные параметры нового приложения
 ```
 
-Backend пакеты: `config`, `common`, `documents`, `indexing`, `embeddings`, `retrieval`, `answering`, `rewriting`, `experiments`, `grounding`. Внутри доменов находятся models, controllers, services, ports, adapters и enums только при наличии реального кода. DTO принадлежат своему домену. Будущие `chat`, `taskmemory` не создаются пустыми каталогами заранее.
+Backend пакеты: `config`, `common`, `documents`, `indexing`, `embeddings`, `retrieval`, `answering`, `rewriting`, `experiments`, `grounding`, `conversations`, `taskmemory`. Внутри доменов models, controllers, services, ports, adapters и enums только при наличии кода; DTO принадлежат своему домену.
+
+## Чат и память дня 25
+
+ConversationService оркестрирует новый обмен, но не дублирует retrieval/citation logic. ConversationRepository сохраняет историю и state отдельно. DialoguePreparer объединяет извлечение памяти и contextual query в одном измеряемом LLM-вызове. MemoryPatchValidator проверяет происхождение и границы patch; стабильность общей цели дополнительно защищена сервером.
+
+GroundingService принимает опциональный internal GroundingDialogue. Одноразовый API дня 24 работает как раньше, а чат передаёт resolvedQuestion, memory и recent dialogue. Новый SearchService вызов выполняется для каждого корректно подготовленного вопроса. Книга остаётся единственным evidence для технических claims; память только поясняет пользовательскую задачу.
+
+SQLite разделяет `conversations`, `conversation_turns`, `task_memory` и ранее существующие индексные таблицы. Один pending turn на чат, idempotency key, revision, короткие immediate transactions и atomic finish защищают от обычных race/повторов. Startup recovery рассчитан только на один локальный backend; multi-replica требует lease.
 
 ## Зависимости доменов
 
@@ -120,6 +128,8 @@ Compare требует два разных индекса. Контролиру�
 Логи включают job/index ID, стратегию, прогресс, dimension и ошибки. Домен answering пишет статус провайдера, фактическую модель, latency, finish reason и usage, но не ключ, тексты вопросов или сырой ответ API. Для дня 21 ключ не нужен; день 22 получает его только через окружение backend. Runtime SQLite, модели и node_modules не отправляются в Git. Model pull и исходники скачиваются только при подготовке; индексирование после этого выполняется локально.
 
 ## Архитектурная схема
+
+[Схема дня 25](diagrams/day25-chat.html) показывает зависимости сохраняемого чата и памяти; [receipt](diagrams/day25-acceptance.md) фиксирует проверки и неизменные хеши артефакта.
 
 [Схема дня 24](diagrams/day24-grounding.html) показывает зависимости grounded-флоу; [receipt](diagrams/day24-acceptance.md) отделяет artifact checks, browser evidence и визуальную оценку.
 

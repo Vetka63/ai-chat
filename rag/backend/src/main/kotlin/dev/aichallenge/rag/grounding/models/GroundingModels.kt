@@ -6,6 +6,11 @@ import dev.aichallenge.rag.retrieval.models.SearchHit
 import dev.aichallenge.rag.retrieval.selection.models.CandidateDecision
 import dev.aichallenge.rag.rewriting.models.RewriteTrace
 import jakarta.validation.constraints.*
+import dev.aichallenge.rag.taskmemory.models.DialogueItem
+import dev.aichallenge.rag.taskmemory.models.TaskMemory
+
+/** Внутренний контекст чата; history/memory объясняют вопрос, но не заменяют book evidence. */
+data class GroundingDialogue(val resolvedQuestion: String, val memory: TaskMemory, val recent: List<DialogueItem>, val omittedTurnCount: Int)
 
 /** Один grounded-вопрос; threshold обязателен, rewrite опционален, история не подмешивается. */
 data class GroundingRequest(

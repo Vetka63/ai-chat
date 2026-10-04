@@ -1,6 +1,8 @@
 # API contract
 
-`openapi.json` описывает HTTP интерфейс дней 21–24 и DTO. Backend отдаёт его как `/api-spec/openapi.json`. Клиент генерирует `src/api/schema.d.ts` через openapi-typescript при build.
+`openapi.json` описывает HTTP интерфейс дней 21–25 и DTO. Backend отдаёт его как `/api-spec/openapi.json`. Клиент генерирует `src/api/schema.d.ts` через openapi-typescript при build.
+
+День 25: GET/POST `/api/v1/conversations`, GET/DELETE `/{id}`, POST `/{id}/turns`. CreateConversation закрепляет настройки/индекс, SendTurn принимает question/requestId/expectedRevision. Response ConversationDetail содержит scoped memory и durable turns. Читайте turn.status, issue, result.status: HTTP 200 не гарантирует технический ANSWERED. UNKNOWN/INVALID/ERROR не имеют публичных claims/sources. Pending/дубликат запроса можно получить без новых вызовов; stale/pending/ID conflict — 409. DELETE возвращает 204, клиент не парсит пустое тело. Полный JSON trace может содержать пользовательский диалог, memory и непроверенный raw JSON; это не безопасный публичный отчёт по умолчанию.
 
 День 22: POST `/api/v1/answers`, GET `/api/v1/answer-settings`, GET `/api/v1/evaluation/questions`. BASELINE не требует индекса; RAG требует готовый indexId. Бюджет — символы текстов целых чанков. `maxOutputTokens=null` не отправляет лимит провайдеру. Ошибки upstream — 502/503. Объекты usage/cost nullable, неизвестные измерения не заменяются нулём.
 

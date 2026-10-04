@@ -1,0 +1,37 @@
+.conversation-lab { min-width: 0; --line: #dce3d7; --panel: #fff; --surface: #f3f5ef; --muted: #717f69; --accent: #39744f; --accent-soft: #eaf1e5; }
+.rag-chat-layout { display: grid; grid-template-columns: 200px minmax(0, 1fr) 260px; height: max(580px, calc(100dvh - 200px)); border: 1px solid var(--line); border-radius: 20px; overflow: hidden; background: var(--panel); }
+.rag-chat-layout.memory-hidden { grid-template-columns: 200px minmax(0, 1fr); }
+.rag-chat-list, .rag-memory-panel { padding: 18px; min-width: 0; background: var(--surface); display: flex; flex-direction: column; gap: 12px; overflow-y: auto; border-right: 1px solid var(--line); }
+.rag-chat-items { overflow-y: auto; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+.rag-chat-items button { text-align: left; display: grid; gap: 5px; flex-shrink: 0; overflow-wrap: anywhere; }
+.rag-chat-items button.selected { border-color: var(--accent); background: var(--accent-soft); }
+.rag-chat-main { min-height: 0; min-width: 0; display: flex; flex-direction: column; padding: 0; margin: 0; max-width: none; align-self: stretch; }
+.rag-chat-heading { display: flex; flex-shrink: 0; align-items: center; justify-content: space-between; gap: 12px; padding: 20px 24px; border-bottom: 1px solid var(--line); }
+.rag-chat-heading h2 { font-size: 18px; margin: 0 0 5px; overflow-wrap: anywhere; }
+.rag-chat-messages { flex: 1; min-height: 0; overflow-y: auto; padding: 24px; overscroll-behavior: contain; }
+.rag-chat-empty { max-width: 560px; margin: 80px auto; color: var(--muted); line-height: 1.8; }
+.rag-chat-turn { margin: 0 auto 30px; max-width: 800px; overflow-wrap: anywhere; }
+.rag-user-message { white-space: pre-wrap; margin: 0 0 18px auto; max-width: 85%; width: fit-content; border-radius: 18px 18px 4px 18px; padding: 14px 20px; background: var(--accent-soft); }
+.rag-assistant-message { line-height: 1.7; }
+.rag-answer-status { color: var(--muted); }
+.rag-chat-claim > p { white-space: pre-wrap; }
+.rag-chat-claim details { border-left: 2px solid var(--line); padding-left: 12px; font-size: 13px; }
+.rag-chat-claim summary, .rag-turn-trace summary { cursor: pointer; color: var(--muted); }
+.rag-turn-trace { font-size: 12px; margin-top: 18px; }
+.rag-turn-trace pre { max-height: 300px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.rag-chat-composer { padding: 16px 24px 20px; flex-shrink: 0; border-top: 1px solid var(--line); }
+.rag-chat-composer textarea { width: 100%; resize: vertical; min-height: 70px; max-height: 180px; margin-top: 6px; }
+.rag-chat-composer > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 8px; }
+.rag-chat-composer small { color: var(--muted); font-size: 11px; }
+.rag-memory-panel { border-right: 0; border-left: 1px solid var(--line); font-size: 13px; overflow-wrap: anywhere; }
+.rag-memory-panel h3, .rag-memory-panel h4 { margin: 4px 0; }
+.rag-memory-panel .hint { margin: 0; }
+.rag-memory-fact { background: var(--panel); padding: 10px 12px; border-radius: 10px; }
+.rag-memory-fact p { margin: 0 0 8px; }
+.rag-memory-fact blockquote { margin: 8px 0; color: var(--muted); }
+.rag-chat-create { padding: 22px; overflow-y: auto; display: block; max-width: 700px; }
+.rag-chat-create fieldset { border: 0; padding: 0; display: grid; gap: 15px; }
+.rag-chat-create label { display: grid; gap: 7px; }
+.rag-chat-create > .primary { margin-top: 18px; }
+@media (max-width: 1250px) { .rag-chat-layout { grid-template-columns: 165px minmax(0, 1fr); } .rag-memory-panel { grid-column: 1 / -1; max-height: 280px; border-top: 1px solid var(--line); } .rag-chat-layout:has(.rag-memory-panel) { height: auto; } .rag-chat-main { height: max(560px, calc(100dvh - 200px)); } }
+@media (max-width: 700px) { .rag-chat-layout, .rag-chat-layout.memory-hidden { display: flex; flex-direction: column; height: auto; } .rag-chat-list { max-height: 190px; border-bottom: 1px solid var(--line); border-right: 0; } .rag-chat-items { flex-direction: row; overflow-x: auto; } .rag-chat-items button { min-width: 140px; max-width: 190px; } .rag-chat-main { height: 650px; } .rag-chat-heading, .rag-chat-messages, .rag-chat-composer { padding: 16px; } .rag-chat-heading { flex-wrap: wrap; } .rag-chat-composer > div { flex-wrap: wrap; } .rag-memory-panel { max-height: 380px; } }
