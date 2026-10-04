@@ -17,6 +17,8 @@ import dev.aichallenge.rag.retrieval.services.SearchService
 import dev.aichallenge.rag.retrieval.selection.adapters.SimilarityCandidateSelector
 import dev.aichallenge.rag.rewriting.models.RewriteTrace
 import dev.aichallenge.rag.rewriting.ports.QueryRewriter
+import dev.aichallenge.rag.taskmemory.models.DialogueItem
+import dev.aichallenge.rag.taskmemory.models.TaskMemory
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.*
@@ -249,6 +251,22 @@ class GroundingTest {
         assertEquals(75L, r.totalUsage!!.totalTokens)
         assertEquals(CostEstimator().estimate("deepseek-flash", f.usage)!!.minimumUsd * 5, r.estimatedCost!!.minimumUsd, 1e-10)
         verify(f.search, times(1)).search("index", SearchRequest("rewritten", 10))
+    }
+
+    @Test fun `repair keeps resolved dialogue memory and history without repeated retrieval or rewrite`() {
+        val f = Fixture(supportContent = supportJson("unsupported"), repairSupportContent = supportJson())
+        val dialogue = GroundingDialogue("resolved", TaskMemory(), listOf(DialogueItem("t1", "Сохрани мои локальные изменения.", null)), 3)
+        val r = f.service.answer(f.request().copy(useRewrite = true), dialogue)
+        assertEquals(GroundedStatus.ANSWERED, r.status); assertEquals(0, f.rewriteCalls)
+        val originalMessages = r.repair!!.originalGeneration.messages
+        assertEquals(originalMessages, r.generation!!.messages.take(originalMessages.size))
+        val data = mapper.readTree(r.generation!!.messages[1].content)
+        assertEquals("resolved", data.path("resolved_question").asText())
+        assertEquals("Сохрани мои локальные изменения.", data.path("recent_dialogue")[0].path("user").asText())
+        assertEquals(3, data.path("omitted_history_turns").asInt())
+        assertEquals(mapper.readTree(mapper.writeValueAsString(dialogue.memory)), data.path("task_memory"))
+        verify(f.search, times(1)).search("index", SearchRequest("resolved", 10))
+        assertEquals(4, r.llmStagesAttempted)
     }
 
     @Test fun `repair unknown invalid citations and truncation stop before second checker`() {

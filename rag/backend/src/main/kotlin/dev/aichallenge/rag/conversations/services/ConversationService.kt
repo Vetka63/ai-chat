@@ -70,9 +70,10 @@ class ConversationService(private val repository: ConversationRepository, privat
         val selected = mutableListOf<DialogueItem>()
         for (turn in turns.takeLast(settings.historyTurns).asReversed()) {
             val answer = turn.result?.takeIf { it.status in listOf(GroundedStatus.ANSWERED, GroundedStatus.UNKNOWN) }?.let { it.answer + (it.clarification?.let { c -> "\n$c" } ?: "") }
-            val size = turn.question.length + (answer?.length ?: 0)
+            val resolvedQuestion = turn.preparation?.takeIf { it.issues.isEmpty() }?.query
+            val size = turn.question.length + (answer?.length ?: 0) + (resolvedQuestion?.length ?: 0)
             if (size > remaining) break // Не пропускаем новое сообщение ради старого; не режем текст молча.
-            selected.add(DialogueItem(turn.id, turn.question, answer)); remaining -= size
+            selected.add(DialogueItem(turn.id, turn.question, answer, resolvedQuestion)); remaining -= size
         }
         return selected.asReversed()
     }

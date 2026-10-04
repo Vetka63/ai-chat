@@ -5,7 +5,7 @@ const source = { chunkId: 'c1', documentId: 'doc', source: 'git.asc', title: 'Gi
 function result(question: string, indexId: string, invalid = false) {
   return { request: { question, indexId }, snapshotId: 'snap', status: invalid ? 'INVALID_EVIDENCE' : 'ANSWERED', answer: invalid ? 'Ответ не прошёл проверку источников.' : 'Сохраняется подготовленная версия.', clarification: null, claims: invalid ? [] : [{ text: 'Сохраняется подготовленная версия.', citations: [{ source, quote, startInChunk: 0, endInChunkExclusive: quote.length, canonicalStart: 0, canonicalEndExclusive: quote.length }] }], sources: invalid ? [] : [source], issues: [], retrieval: { rawCandidates: [], included: [], omittedChunkIds: [] }, rewrite: null, generation: { rawJson: 'UNVERIFIED <script>window.fake=true</script>' }, llmStagesAttempted: 1, totalUsage: null, estimatedCost: null, totalMilliseconds: 2, warnings: [] }
 }
-type FixtureOptions = { invalid?: boolean; lostResponse?: boolean; lostRecoveryResponse?: boolean; absentFirstPost?: boolean; posts?: any[]; holdFirstResponse?: Promise<void> }
+type FixtureOptions = { invalid?: boolean; repair?: boolean; lostResponse?: boolean; lostRecoveryResponse?: boolean; absentFirstPost?: boolean; posts?: any[]; holdFirstResponse?: Promise<void> }
 async function fixture(page: Page, options: FixtureOptions = {}) {
   const state: Record<string, any> = {}
   let recoveryFailure = false, postCount = 0, chatCount = 0
@@ -30,6 +30,13 @@ async function fixture(page: Page, options: FixtureOptions = {}) {
       if (body.expectedRevision !== d.conversation.revision) return r.fulfill({ status: 409, json: { message: 'Чат изменился' } })
       if (!d.memory.facts.length) d.memory.facts.push({ layer: 'GOAL', key: 'goal', value: 'Сохранить изменения', sourceTurnId: turnId, quote: body.question })
       d.turns.push({ id: turnId, requestId: body.requestId, question: body.question, createdAt: new Date().toISOString(), status: 'COMPLETED', preparation: { query: 'Как сохранить изменения Git?', changes: [], rawJson: 'UNVERIFIED', usage: null }, result: result(body.question, d.conversation.settings.indexId, options.invalid), issue: null, memoryAfter: d.memory, includedHistoryTurnIds: [], omittedHistoryTurnCount: 0, totalUsage: null, estimatedCost: null, llmStagesAttempted: 2 })
+      if (options.repair) {
+        const generation = { model: 'draft-fixture', finishReason: 'stop', milliseconds: 1, usage: null, estimatedCost: null, messages: [], rawJson: JSON.stringify({ claims: [{ text: 'ИСХОДНЫЙ ЛОЖНЫЙ ВЫВОД ЧАТА' }] }) }
+        const turn = d.turns.at(-1)
+        turn.llmStagesAttempted = 5; turn.result.llmStagesAttempted = 4
+        turn.result.repair = { originalGeneration: generation, originalSupportCheck: { status: 'REJECTED', claims: [{ claimIndex: 0, verdict: 'UNSUPPORTED', reason: 'Пропущено условие источника.' }], issues: [], generation: { ...generation, model: 'judge-fixture', rawJson: '{}' } } }
+        turn.result.supportCheck = { status: 'PASSED', claims: [{ claimIndex: 0, verdict: 'SUPPORTED', reason: 'Подтверждено.' }], issues: [], generation: { ...generation, rawJson: '{}' } }
+      }
       d.conversation.revision += 2
       if (options.lostResponse && postCount === 1) { recoveryFailure = !!options.lostRecoveryResponse; return r.abort('failed') }
       if (postCount === 1 && options.holdFirstResponse) await options.holdFirstResponse
@@ -49,7 +56,7 @@ async function start(page: Page, name = 'Моя задача') {
   await page.getByRole('button', { name: 'Создать чат', exact: true }).click()
   await expect(page.locator('.rag-chat-heading h2')).toHaveText(name)
 }
-async function send(page: Page, q: string) { await page.getByRole('textbox', { name: 'Сообщение по задаче' }).fill(q); await page.getByRole('button', { name: 'Отправить', exact: true }).click(); await expect(page.getByRole('button', { name: 'Отправить', exact: true })).toBeVisible() }
+async function send(page: Page, q: string, timeout = 5_000) { await page.getByRole('textbox', { name: 'Сообщение по задаче' }).fill(q); await page.getByRole('button', { name: 'Отправить', exact: true }).click(); await expect(page.getByRole('button', { name: 'Отправить', exact: true })).toBeVisible({ timeout }) }
 test('chat memory isolation reload sources and deletion', async ({ page }) => {
   const state = await fixture(page); await start(page)
   await send(page, 'Цель: сохранить изменения. Как работает git add?')
@@ -90,6 +97,22 @@ test('invalid output remains quarantined and settings cannot mutate existing cha
   for (const raw of await page.getByText('UNVERIFIED', { exact: false }).all()) await expect(raw).not.toBeVisible()
   await expect(page.getByRole('spinbutton')).toHaveCount(0)
   expect(await page.evaluate(() => (window as any).fake)).toBeUndefined()
+})
+test('chat repair preserves final-only answer and collapses rejected draft across reload', async ({ page }) => {
+  await fixture(page, { repair: true }); await start(page); await send(page, 'Что делает add?')
+  await expect(page.locator('.rag-chat-composer')).toContainText('до 5 LLM-вызовов')
+  await expect(page.locator('.rag-chat-claim')).toContainText('Сохраняется подготовленная версия.')
+  await expect(page.locator('.rag-chat-claim')).not.toContainText('ИСХОДНЫЙ ЛОЖНЫЙ ВЫВОД ЧАТА')
+  const diagnostic = page.locator('.grounding-repair')
+  await expect(diagnostic.locator('> summary')).toHaveText('Исправление черновика · 1 попытка')
+  for (const text of await page.getByText('ИСХОДНЫЙ ЛОЖНЫЙ ВЫВОД ЧАТА', { exact: false }).all()) await expect(text).not.toBeVisible()
+  await diagnostic.locator('> summary').click()
+  await expect(diagnostic.locator('.rejected-draft-claim')).toContainText('ИСХОДНЫЙ ЛОЖНЫЙ ВЫВОД ЧАТА')
+  await expect(diagnostic).toContainText('Пропущено условие источника.')
+  await page.reload(); await page.getByRole('button', { name: 'Чат с RAG и памятью' }).click()
+  await expect(diagnostic).not.toHaveAttribute('open', '')
+  for (const text of await page.getByText('ИСХОДНЫЙ ЛОЖНЫЙ ВЫВОД ЧАТА', { exact: false }).all()) await expect(text).not.toBeVisible()
+  await expect(page.locator('.rag-chat-claim')).toContainText('Сохраняется подготовленная версия.')
 })
 test('lost HTTP response recovers durable message without second POST', async ({ page }) => {
   const state = await fixture(page, { invalid: false, lostResponse: true }); await start(page); await send(page, 'Мой вопрос')
@@ -267,14 +290,21 @@ test('another tab editing its draft preserves in-flight receipt and both chat st
     expect(posts).toHaveLength(1)
   } finally { release(); await other.close() }
 })
-test('live chat resolves followup keeps goal and opens snapshot source @live', async ({ page }) => {
-  test.skip(process.env.RAG_LIVE !== 'true', 'Opt-in: up to 6 paid DeepSeek calls')
-  test.setTimeout(300000)
+test('live chat resolves followup keeps goal and opens snapshot source @live', async ({ page }, testInfo) => {
+  test.skip(process.env.RAG_LIVE !== 'true', 'Opt-in: up to 10 paid DeepSeek calls including bounded repairs')
+  test.setTimeout(1_800_000)
   await start(page, `UI день25 ${Date.now()}`)
-  await send(page, 'Моя цель — отменить локальный коммит и сохранить изменения. Что делает git reset --soft?')
-  await expect(page.locator('.rag-chat-turn').first()).toHaveAttribute('data-status', 'ANSWERED', { timeout: 150000 })
-  await send(page, 'А что станет с индексом?')
-  await expect(page.locator('.rag-chat-turn').last()).toHaveAttribute('data-status', 'ANSWERED', { timeout: 150000 })
+  const questions = ['Моя цель — отменить локальный коммит и сохранить изменения. Что делает git reset --soft?', 'А что станет с индексом?']
+  for (const [position, question] of questions.entries()) {
+    await page.getByRole('textbox', { name: 'Сообщение по задаче' }).fill(question)
+    const responsePromise = page.waitForResponse(r => new URL(r.url()).pathname.endsWith('/turns') && r.request().method() === 'POST', { timeout: 840_000 })
+    await page.getByRole('button', { name: 'Отправить', exact: true }).click()
+    const response = await responsePromise, trace = await response.json(), turn = trace.turns?.at(-1)
+    await testInfo.attach(`day25-live-turn-${position + 1}-${Date.now()}.json`, { body: JSON.stringify(trace, null, 2), contentType: 'application/json' })
+    console.log(`Day25 live turn ${position + 1}: HTTP ${response.status()}, status=${turn?.result?.status}, llmStagesAttempted=${turn?.llmStagesAttempted ?? 'unknown'}, repair=${!!turn?.result?.repair}`)
+    await expect(page.getByRole('button', { name: 'Отправить', exact: true })).toBeVisible({ timeout: 840_000 })
+    await expect(page.locator('.rag-chat-turn').last()).toHaveAttribute('data-status', 'ANSWERED')
+  }
   await expect(page.locator('.rag-memory-fact').first()).toContainText(/сохранить/)
   await page.locator('.rag-chat-turn').last().locator('.rag-turn-trace > summary').click()
   await expect(page.locator('.rag-chat-turn').last().locator('.rag-turn-trace')).toContainText(/reset/)

@@ -88,13 +88,21 @@ class ConversationTest {
             override fun settings() = AnswerSettings(true, "deepseek-flash", 0.0, "disabled", 16000, null, "")
             override fun complete(messages: List<LlmMessage>, maxOutputTokens: Int?) = LlmCompletion("id", "deepseek-flash", """{"query":"Как включить файл в временное сохранение?","inventory":[],"updates":[],"removals":[]}""", "stop", 1, null)
         }
-        val recent = listOf(DialogueItem("older", "Обсуждали другую операцию", "Старый ответ"), DialogueItem("latest", "Временное сохранение", "Последний ответ"))
+        val resolved = "Как включить файл в операцию временного сохранения?"
+        val recent = listOf(DialogueItem("older", "Обсуждали другую операцию", "Старый ответ"), DialogueItem("latest", "А как включить его?", null, resolved))
         val trace = LlmDialoguePreparer(fake, mapper, patch, CostEstimator()).prepare(context("А как включить файл?").copy(recent = recent))
         val payload = mapper.readTree(trace.messages[1].content)
         assertEquals("latest", payload.path("latest_exchange").path("turnId").asText())
+        assertEquals(resolved, payload.path("latest_exchange").path("resolvedQuestion").asText())
+        assertTrue(payload.path("latest_exchange").path("assistant").isNull)
         assertEquals(1, payload.path("recent_dialogue").size())
         assertEquals("older", payload.path("recent_dialogue").first().path("turnId").asText())
         assertTrue(trace.issues.isEmpty())
+    }
+    @Test fun `old dialogue item without resolved question remains readable`() {
+        val old = mapper.readValue("""{"turnId":"old","user":"Вопрос","assistant":null}""", DialogueItem::class.java)
+        assertNull(old.resolvedQuestion)
+        assertEquals("Вопрос", old.user)
     }
     @Test fun `history memory and immutable index survive restart and stay isolated`() {
         val r = repo(); r.create(chat("a")); r.create(chat("b"))
@@ -134,23 +142,25 @@ class ConversationTest {
             latch.countDown(); assertEquals(1, futures.count { it.get() }); assertEquals(1, r.detail("a").turns.size)
         } finally { executor.shutdownNow() }
     }
-    private inner class Fixture(val fail: Boolean = false, val invalid: Boolean = false) {
+    private inner class Fixture(val fail: Boolean = false, val invalid: Boolean = false, val groundedStatus: GroundedStatus = GroundedStatus.UNKNOWN, val resolved: String? = null) {
         val r = repo(); val indexes = mock(IndexRepository::class.java); val grounding = mock(GroundingService::class.java)
         val received = mutableListOf<DialogueContext>(); val usage = TokenUsage(10, 5, 15, null, null)
+        val groundedDialogue = mutableListOf<GroundingDialogue>()
         val preparer = object : DialoguePreparer { override fun prepare(context: DialogueContext): PreparationTrace {
             received.add(context); if (fail) throw LabException("llm_unavailable", "Провайдер недоступен.")
             val memory = if (context.question.contains("Цель")) TaskMemory(listOf(MemoryFact(MemoryLayer.GOAL, "goal", context.question, context.turnId, context.question))) else context.memory
-            return PreparationTrace("resolved: ${context.question}", memory, emptyList(), "fixture", "stop", 1, usage, null, emptyList(), "{}", if (invalid) listOf("invalid") else emptyList())
+            return PreparationTrace(resolved ?: "resolved: ${context.question}", memory, emptyList(), "fixture", "stop", 1, usage, null, emptyList(), "{}", if (invalid) listOf("invalid") else emptyList())
         } }
         val service = ConversationService(r, indexes, preparer, grounding)
         init {
             val index = mock(IndexInfo::class.java); `when`(index.snapshotId).thenReturn("snapshot"); `when`(indexes.index("index")).thenReturn(index)
             `when`(grounding.answer(any(GroundingRequest::class.java) ?: GroundingRequest("Q", "index"), any(GroundingDialogue::class.java) ?: GroundingDialogue("Q", TaskMemory(), emptyList(), 0))).thenAnswer { call ->
                 val request = call.getArgument<GroundingRequest>(0)
-                GroundedResult(request, "snapshot", GroundedStatus.UNKNOWN, "Не знаю", "Уточните", emptyList(), emptyList(), emptyList(), null, null, null, 1, usage, null, 1, emptyList())
+                groundedDialogue.add(call.getArgument(1))
+                GroundedResult(request, "snapshot", groundedStatus, "Не знаю", "Уточните", emptyList(), emptyList(), emptyList(), null, null, null, 1, usage, null, 1, emptyList())
             }
         }
-        fun create(history: Int = 6) = service.create(CreateConversation("Chat", ConversationSettings("index", historyTurns = history)))
+        fun create(history: Int = 6, historyMaxCharacters: Int = 10000) = service.create(CreateConversation("Chat", ConversationSettings("index", historyTurns = history, historyMaxCharacters = historyMaxCharacters)))
         fun send(d: ConversationDetail, q: String) = service.send(d.conversation.id, SendTurn("r${d.conversation.revision}", q, d.conversation.revision))
     }
     @Test fun `every turn resolves history retains goal fresh grounding and accounts prep once`() {
@@ -163,6 +173,47 @@ class ConversationTest {
     @Test fun `bounded tail is visible but full history persists`() {
         val f = Fixture(); var d = f.create(2); for (n in 1..5) d = f.send(d, "Q$n")
         assertEquals(5, d.turns.size); assertEquals(2, d.turns.last().includedHistoryTurnIds.size); assertEquals(2, d.turns.last().omittedHistoryTurnCount)
+    }
+    @Test fun `validated resolved question survives rejected answer and restart without restoring rejected text`() {
+        for (status in GroundedStatus.entries) {
+            val resolved = "Какой режим операции $status сохраняет выбранные объекты?"
+            val f = Fixture(groundedStatus = status, resolved = resolved)
+            val first = f.send(f.create(), "Какой из них выбрать?")
+            val restarted = ConversationService(repo(), f.indexes, f.preparer, f.grounding)
+            val continued = restarted.send(first.conversation.id, SendTurn("continue", "А если нужен другой режим?", first.conversation.revision))
+            val previous = f.received.last().recent.single()
+            assertEquals(first.turns.single().id, previous.turnId)
+            assertEquals("Какой из них выбрать?", previous.user)
+            assertEquals(resolved, previous.resolvedQuestion)
+            if (status in listOf(GroundedStatus.INVALID_EVIDENCE, GroundedStatus.ERROR)) assertNull(previous.assistant)
+            else assertEquals("Не знаю\nУточните", previous.assistant)
+            assertEquals(previous, f.groundedDialogue.last().recent.single())
+            assertEquals(listOf(previous.turnId), continued.turns.last().includedHistoryTurnIds)
+        }
+    }
+    @Test fun `resolved questions consume history budget without skipping or truncating exchanges`() {
+        val f = Fixture(); var d = f.create(historyMaxCharacters = 1000)
+        for (n in 1..4) d = f.send(d, "$n".repeat(260))
+        val history = f.received.last().recent
+        assertEquals(1, history.size)
+        assertEquals(d.turns[2].id, history.single().turnId)
+        assertEquals(d.turns[2].question, history.single().user)
+        assertEquals(d.turns[2].preparation!!.query, history.single().resolvedQuestion)
+        assertTrue(history.sumOf { it.user.length + (it.assistant?.length ?: 0) + (it.resolvedQuestion?.length ?: 0) } <= 1000)
+        assertEquals(2, d.turns.last().omittedHistoryTurnCount)
+        assertEquals(4, d.turns.size)
+    }
+    @Test fun `failed or invalid preparation cannot supply a resolved history question`() {
+        for (invalid in listOf(false, true)) {
+            val f = Fixture(fail = !invalid, invalid = invalid)
+            val first = f.send(f.create(), "Вопрос о прежней операции")
+            f.send(first, "А какой режим?")
+            val history = f.received.last().recent.single()
+            assertEquals(first.turns.single().question, history.user)
+            assertNull(history.assistant)
+            assertNull(history.resolvedQuestion)
+            verifyNoInteractions(f.grounding)
+        }
     }
     @Test fun `preparation failure preserves user old memory and blocks grounding`() {
         for (invalid in listOf(false, true)) {

@@ -24,7 +24,10 @@ class MemoryPatchValidator(private val mapper: ObjectMapper) {
         val changes = mutableListOf<MemoryChange>()
         for ((name, fields) in listOf("updates" to arrayOf("layer", "key", "value", "quote"), "removals" to arrayOf("layer", "key", "quote"))) {
             for (node in root.path(name)) {
-                require(shape(node, *fields)) { "memory_patch_shape" }
+                // Отсутствующий value и явный null одинаково обозначают удаление; другие поля запрещены.
+                val explicitRemovalValue = name == "removals" && node.has("value")
+                require(shape(node, *(if (explicitRemovalValue) fields + "value" else fields))) { "memory_patch_shape" }
+                if (explicitRemovalValue) require(node.path("value").isNull) { "memory_removal_value" }
                 val layer = MemoryLayer.valueOf(text(node, "layer", 20).uppercase())
                 val key = text(node, "key", 80)
                 require(layer != MemoryLayer.GOAL || key == "goal") { "memory_goal_key" }
@@ -55,14 +58,20 @@ class MemoryPatchValidator(private val mapper: ObjectMapper) {
         val covered = mutableSetOf<Pair<MemoryLayer, String>>()
         val seen = mutableSetOf<Pair<MemoryLayer, String>>()
         for (item in inventory) {
-            require(shape(item, "action", "layer", "key", "value", "quote")) { "memory_inventory_shape" }
+            val action = text(item, "action", 10)
+            // RETAIN не создаёт и не обновляет факт: исходные quote/sourceTurnId остаются в памяти.
+            val fields = if (action == "RETAIN") listOf("action", "layer", "key") + listOf("value", "quote").filter { item.has(it) }
+                else listOf("action", "layer", "key", "value", "quote")
+            require(shape(item, *fields.toTypedArray())) { "memory_inventory_shape" }
+            val retainWithoutQuote = action == "RETAIN" && !item.has("quote")
             val layer = MemoryLayer.valueOf(text(item, "layer", 20).uppercase())
             val key = text(item, "key", 80)
             val id = layer to key
             require(seen.add(id)) { "duplicate_memory_inventory_key" }
-            val quote = text(item, "quote", 500, trim = false)
-            require(input.question.contains(quote)) { "memory_inventory_quote_not_exact" }
-            when (text(item, "action", 10)) {
+            val quote = if (retainWithoutQuote) null else text(item, "quote", 500, trim = false).also {
+                require(input.question.contains(it)) { "memory_inventory_quote_not_exact" }
+            }
+            when (action) {
                 "UPSERT" -> {
                     val value = text(item, "value", 400)
                     require(changes.any { it.layer == layer && it.key == key && it.value == value && it.quote == quote }) { "uncovered_memory_fact" }
@@ -74,8 +83,9 @@ class MemoryPatchValidator(private val mapper: ObjectMapper) {
                     covered.add(id)
                 }
                 "RETAIN" -> {
-                    val value = text(item, "value", 400)
-                    require(input.memory.facts.any { it.layer == layer && it.key == key && it.value == value }) { "memory_retain_not_existing" }
+                    val existing = input.memory.facts.singleOrNull { it.layer == layer && it.key == key }
+                    require(existing != null) { "memory_retain_not_existing" }
+                    if (item.has("value")) require(text(item, "value", 400, trim = false) == existing.value) { "memory_retain_not_existing" }
                     require(changes.none { it.layer == layer && it.key == key }) { "memory_retain_conflicts_with_patch" }
                 }
                 else -> throw IllegalArgumentException("memory_inventory_action")

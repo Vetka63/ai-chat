@@ -17,14 +17,14 @@ elseif ($Phase -eq 'Continue') {
 } else { $ragReportPath = Join-Path $ragData "day25-live-results-$([DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfff')).json" }
 if ($Phase -ne 'Continue' -and (Test-Path -LiteralPath $ragReportPath)) { throw 'Отчёт уже существует; новый запуск не перезаписывает прошлые доказательства. Выберите новый -ReportPath.' }
 $ragDocuments = @{}
-function Post-Rag([string]$Path, $Body) { Invoke-RestMethod "$ragApi$Path" -Method Post -ContentType 'application/json; charset=utf-8' -Body ([Text.Encoding]::UTF8.GetBytes(($Body | ConvertTo-Json -Depth 20))) -TimeoutSec 300 }
+function Post-Rag([string]$Path, $Body) { Invoke-RestMethod "$ragApi$Path" -Method Post -ContentType 'application/json; charset=utf-8' -Body ([Text.Encoding]::UTF8.GetBytes(($Body | ConvertTo-Json -Depth 20))) -TimeoutSec 900 }
 function Save-RagReport { [IO.File]::WriteAllText($ragReportPath, ($ragReport | ConvertTo-Json -Depth 90), [Text.UTF8Encoding]::new($false)) }
 if ($Phase -eq 'Continue') { $ragReport = Get-Content -LiteralPath $ragReportPath -Raw | ConvertFrom-Json -AsHashtable }
 else {
     $ragIndexList = Invoke-RestMethod "$ragApi/indexes"
     $ragIndex = $ragIndexList | Where-Object { $_.config.strategy -eq 'STRUCTURAL' -and $_.config.maxCharacters -eq 3000 -and $_.config.overlapCharacters -eq 300 } | Select-Object -First 1
     if (!$ragIndex) { throw 'Нужен STRUCTURAL индекс 3000/300.' }
-    $ragReport = @{ at = [DateTimeOffset]::UtcNow.ToString('o'); indexId = $ragIndex.id; note = '2 scenarios x 12 user turns; max 72 paid calls (preparation + answer + support check), fewer for UNKNOWN. 2400 is answer test cap only. No retries. Exact quotes/provenance and expected memory checked automatically; review answer meaning separately.'; chats = @{}; results = @(); checks = @() }
+    $ragReport = @{ at = [DateTimeOffset]::UtcNow.ToString('o'); indexId = $ragIndex.id; note = '2 scenarios x 12 user turns; max 120 paid calls (preparation + answer + support check + at most one semantic revision/recheck), fewer for UNKNOWN. 2400 is answer test cap only. No HTTP retries. Exact quotes/provenance and expected memory checked automatically; review answer meaning separately.'; chats = @{}; results = @(); checks = @() }
     foreach ($ragCase in $ragCases) {
         $ragChat = Post-Rag '/conversations' @{ title = "День25 проверка $($ragCase.id) $([DateTime]::Now.ToString('HHmmss'))"; settings = @{ indexId = $ragIndex.id; historyTurns = 6; historyMaxCharacters = 10000; maxOutputTokens = $MaxOutputTokens } }
         $ragReport.chats[$ragCase.id] = $ragChat.conversation.id
@@ -64,7 +64,8 @@ foreach ($ragCase in $ragCases) {
         if ($ragTurn.result.status -eq 'ANSWERED') {
             if (!$ragTurn.result.sources.Count) { throw 'Технический ответ без источников.' }
             if ($ragTurn.result.supportCheck.status -ne 'PASSED' -or $ragTurn.result.supportCheck.claims.Count -ne $ragTurn.result.claims.Count -or @($ragTurn.result.supportCheck.claims | Where-Object { $_.verdict -ne 'SUPPORTED' }).Count) { throw 'Опубликован ответ без успешной смысловой проверки всех пунктов.' }
-            if ($ragTurn.llmStagesAttempted -ne 3) { throw 'Не учтены подготовка, генерация и смысловая проверка.' }
+            $ragExpectedStages = if ($ragTurn.result.repair) { 5 } else { 3 }
+            if ($ragTurn.llmStagesAttempted -ne $ragExpectedStages) { throw 'Не учтены подготовка, генерация, смысловая проверка и возможное исправление.' }
             foreach ($ragClaim in $ragTurn.result.claims) { foreach ($ragCitation in $ragClaim.citations) {
                 $ragHit = $ragTurn.result.retrieval.included | Where-Object { $_.chunk.chunkId -ceq $ragCitation.source.chunkId } | Select-Object -First 1
                 if (!$ragHit -or !$ragHit.chunk.text.Contains($ragCitation.quote)) { throw 'Цитата не из нового контекста.' }

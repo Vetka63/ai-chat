@@ -4,6 +4,7 @@ import { api, type Schema } from '../../api/client'
 import { download } from '../lab/report'
 import { usageText } from '../experiments/report'
 import { conversationMarkdown } from './report'
+import GroundingRepairTrace from '../grounding/GroundingRepairTrace.vue'
 import { conversationClientStateKey, emptyClientState, readClientState, writeClientState, type ConversationClientState, type PendingDelivery } from './deliveryState'
 import '../grounding/grounding.css'
 import './conversations.css'
@@ -149,6 +150,7 @@ function jump(id: string) { document.getElementById(`turn-${id}`)?.scrollIntoVie
                 </template>
                 <template v-else><p>{{ t.result.answer }}</p><p class="clarification" v-if="t.result.clarification">{{ t.result.clarification }}</p><p v-if="!t.result.sources.length" class="hint">Источников ответа нет: технические утверждения не публикуются.</p><p v-for="i in t.result.issues" :key="i.code" class="notice error">{{ i.code }} · {{ i.message }}</p></template>
               </template>
+              <GroundingRepairTrace v-if="t.result?.repair" :repair="t.result.repair" />
               <details v-if="t.result?.supportCheck" class="rag-support-check unverified-diagnostics">
                 <summary>Проверка смысловой поддержки · {{ t.result.supportCheck.status }}</summary>
                 <p>Дополнительная проверка моделью: {{ usageText(t.result.supportCheck.generation.usage) }}. Её объяснения — диагностика, не новые факты и не гарантия безошибочности.</p>
@@ -163,7 +165,7 @@ function jump(id: string) { document.getElementById(`turn-${id}`)?.scrollIntoVie
           <div v-if="unresolved && !busy" class="notice rag-delivery-recovery" role="status"><p>Доставка сообщения не подтверждена. Оно сохранено в этом браузере, в том числе после перезагрузки страницы.</p><blockquote>{{ unresolved.question }}</blockquote><p>Сначала проверим историю чата. Повторная отправка использует прежний идентификатор и не создаст второй ответ на уже сохранённый запрос.</p><button :disabled="busy" @click="reconcile(false)">Проверить статус</button><button :disabled="busy || pending" @click="reconcile(true)">Проверить и повторить</button></div>
           <p v-if="deliveryNote" class="notice" role="status">{{ deliveryNote }}</p>
         </div>
-        <form class="rag-chat-composer" @submit.prevent="send"><label for="rag-chat-input">Сообщение по задаче</label><textarea id="rag-chat-input" v-model="text" rows="3" maxlength="2000" :disabled="!active || busy || pending || !!unresolved" placeholder="Спросите о Git или уточните ситуацию…" @keydown.ctrl.enter.prevent="send"/><div><small>Ctrl+Enter · до 3 LLM-вызовов, без автоматических повторов</small><button class="primary" :disabled="!active || busy || pending || !!unresolved || !text.trim()">{{ busy || pending ? 'Обрабатываем…' : 'Отправить' }}</button></div></form>
+        <form class="rag-chat-composer" @submit.prevent="send"><label for="rag-chat-input">Сообщение по задаче</label><textarea id="rag-chat-input" v-model="text" rows="3" maxlength="2000" :disabled="!active || busy || pending || !!unresolved" placeholder="Спросите о Git или уточните ситуацию…" @keydown.ctrl.enter.prevent="send"/><div><small>Ctrl+Enter · до 5 LLM-вызовов · не более 1 исправления черновика после смыслового отклонения; без повторов при ошибках связи</small><button class="primary" :disabled="!active || busy || pending || !!unresolved || !text.trim()">{{ busy || pending ? 'Обрабатываем…' : 'Отправить' }}</button></div></form>
       </main>
       <aside v-if="memoryVisible" class="rag-memory-panel">
         <h3>Память этого чата</h3><p class="hint">Это данные пользователя, не источник знаний о Git. Обновляются автоматически. Общая цель сохраняется; для её смены начните сообщение с «Новая цель:».</p>

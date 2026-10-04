@@ -15,8 +15,8 @@ data class MemoryChange(val layer: MemoryLayer, val key: String, val value: Stri
 /** Вход подготовки: только ограниченный хвост и проверенная память, без текстов книги. */
 data class DialogueContext(val turnId: String, val question: String, val memory: TaskMemory, val recent: List<DialogueItem>, val omittedTurnCount: Int)
 
-/** Один прошлый завершённый обмен; неверные ответы модели в хвост не включаются. */
-data class DialogueItem(val turnId: String, val user: String, val assistant: String?)
+/** Прошлый обмен: разрешённый вопрос сохраняет тему, даже если grounded-ответ не прошёл проверку. */
+data class DialogueItem(val turnId: String, val user: String, val assistant: String?, val resolvedQuestion: String? = null)
 
 /** Прозрачная подготовка: отдельно query, patch, вход модели, usage и исходный непроверенный JSON. */
 data class PreparationTrace(val query: String, val memory: TaskMemory, val changes: List<MemoryChange>, val model: String, val finishReason: String, val milliseconds: Long, val usage: TokenUsage?, val estimatedCost: CostEstimate?, val messages: List<LlmMessage>, val rawJson: String, val issues: List<String>)

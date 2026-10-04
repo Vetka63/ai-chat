@@ -66,6 +66,108 @@ class MemoryCompletenessTest {
         }
     }
 
+    @Test fun `minimal retain preserves existing fact and original provenance in production preparation`() {
+        val oldFact = MemoryFact(MemoryLayer.CONSTRAINTS, "offline", "Не обращаться к сети", "original-user", "Работаем без обращений к сети.")
+        val old = TaskMemory(listOf(oldFact, fact(MemoryLayer.TERMS, "project", "Атлас")))
+        val retain = mapOf("action" to "RETAIN", "layer" to "CONSTRAINTS", "key" to "offline")
+        val usage = TokenUsage(10, 5, 15, null, null)
+        val fake = object : LlmClient {
+            override fun settings() = AnswerSettings(true, "deepseek-flash", 0.0, "disabled", 16000, null, "")
+            override fun complete(messages: List<LlmMessage>, maxOutputTokens: Int?) = LlmCompletion("id", "deepseek-flash", raw(inventory = listOf(retain)), "stop", 1, usage)
+        }
+        val trace = LlmDialoguePreparer(fake, mapper, validator, CostEstimator()).prepare(context("Как выполнить задачу без сети?", old))
+        assertTrue(trace.issues.isEmpty())
+        assertTrue(trace.changes.isEmpty())
+        assertEquals(old, trace.memory)
+        assertEquals("original-user", trace.memory.facts.first().sourceTurnId)
+        assertEquals("Работаем без обращений к сети.", trace.memory.facts.first().quote)
+        assertFalse(mapper.readTree(trace.rawJson).path("inventory").first().has("quote"))
+        assertFalse(mapper.readTree(trace.rawJson).path("inventory").first().has("value"))
+        assertEquals(usage, trace.usage)
+    }
+
+    @Test fun `quote optional retain still rejects unknown mismatched duplicate and forged references`() {
+        val q = "По-прежнему используем имя Атлас."
+        val old = TaskMemory(listOf(fact(MemoryLayer.TERMS, "project_name", "Атлас")))
+        val retain = mapOf("action" to "RETAIN", "layer" to "TERMS", "key" to "project_name", "value" to "Атлас")
+        for (bad in listOf(retain + ("key" to "missing"), retain + ("value" to "Другое имя"), retain + ("layer" to "CLARIFICATIONS"), retain + ("sourceTurnId" to "forged"), retain - "key", retain + ("action" to "IGNORE"))) {
+            assertThrows(IllegalArgumentException::class.java) { validate(raw(inventory = listOf(bad)), context(q, old)) }
+        }
+        assertThrows(IllegalArgumentException::class.java) { validate(raw(inventory = listOf(retain)), context(q)) }
+        assertThrows(IllegalArgumentException::class.java) { validate(raw(inventory = listOf(retain, retain)), context(q, old)) }
+        assertThrows(IllegalArgumentException::class.java) { validate(raw(listOf(change("TERMS", "project_name", "Атлас", q)), inventory = listOf(retain)), context(q, old)) }
+        val removal = mapOf("layer" to "TERMS", "key" to "project_name", "quote" to q)
+        assertThrows(IllegalArgumentException::class.java) { validate(raw(removals = listOf(removal), inventory = listOf(retain)), context(q, old)) }
+    }
+
+    @Test fun `optional retain quote when present must still be an exact current user substring`() {
+        val q = "По-прежнему используем имя Атлас."
+        val old = TaskMemory(listOf(MemoryFact(MemoryLayer.TERMS, "project_name", "Атлас", "original", "Назовём проект Атлас.")))
+        val retain = mapOf("action" to "RETAIN", "layer" to "TERMS", "key" to "project_name")
+        assertEquals(old, validate(raw(inventory = listOf(retain + ("quote" to q))), context(q, old)).second)
+        for (quote in listOf(null, "", "Назовём проект Атлас.", "Придуманный текст")) {
+            assertThrows(IllegalArgumentException::class.java) { validate(raw(inventory = listOf(retain + ("quote" to quote))), context(q, old)) }
+        }
+    }
+
+    @Test fun `retain value and quote are independently optional but supplied value is exact`() {
+        val q = "По-прежнему используем имя Атлас."
+        val old = TaskMemory(listOf(fact(MemoryLayer.TERMS, "project_name", "Атлас")))
+        val retain = mapOf("action" to "RETAIN", "layer" to "TERMS", "key" to "project_name")
+        for (entry in listOf(retain, retain + ("value" to "Атлас"), retain + ("quote" to q), retain + mapOf("value" to "Атлас", "quote" to q))) {
+            val result = validate(raw(inventory = listOf(entry)), context(q, old))
+            assertEquals(old, result.second)
+            assertTrue(result.third.isEmpty())
+        }
+        for (value in listOf(null, "", " Атлас ", "атлас", "Другое имя")) {
+            assertThrows(IllegalArgumentException::class.java) { validate(raw(inventory = listOf(retain + ("value" to value))), context(q, old)) }
+        }
+        for (bad in listOf(retain + ("key" to "unknown"), retain + ("sourceTurnId" to "forged"), retain - "layer")) {
+            assertThrows(IllegalArgumentException::class.java) { validate(raw(inventory = listOf(bad)), context(q, old)) }
+        }
+        assertThrows(IllegalArgumentException::class.java) { validate(raw(inventory = listOf(retain)), context(q)) }
+    }
+
+    @Test fun `rename upsert with minimal retain references is atomic and preserves old provenance`() {
+        val goal = MemoryFact(MemoryLayer.GOAL, "goal", "Подготовить выпуск приложения", "first", "Моя цель — подготовить выпуск приложения.")
+        val ban = MemoryFact(MemoryLayer.CONSTRAINTS, "shared_force_ban", "Force push в общую ветку запрещён", "first", "В общую ветку force push запрещён.")
+        val branch = MemoryFact(MemoryLayer.TERMS, "working_branch", "release-payment", "first", "Назовём рабочую ветку release-payment.")
+        val old = TaskMemory(listOf(goal, ban, branch))
+        val quote = "Переименуем рабочую ветку в release-payments-v2."
+        val q = "$quote Общая цель и запрет force push прежние. Как переименовать локальную ветку?"
+        val update = change("TERMS", branch.key, "release-payments-v2", quote)
+        val retained = listOf(mapOf("action" to "RETAIN", "layer" to "GOAL", "key" to goal.key), mapOf("action" to "RETAIN", "layer" to "CONSTRAINTS", "key" to ban.key))
+        val result = validate(raw(listOf(update), inventory = listOf(item(update)) + retained), context(q, old))
+        assertEquals(3, result.second.facts.size)
+        assertEquals(goal, result.second.facts.single { it.layer == MemoryLayer.GOAL })
+        assertEquals(ban, result.second.facts.single { it.layer == MemoryLayer.CONSTRAINTS })
+        assertEquals(MemoryFact(MemoryLayer.TERMS, branch.key, "release-payments-v2", "current", quote), result.second.facts.single { it.layer == MemoryLayer.TERMS })
+        assertEquals(listOf(MemoryChange(MemoryLayer.TERMS, branch.key, "release-payments-v2", quote)), result.third)
+        assertEquals(listOf(goal, ban, branch), old.facts)
+        val badRetain = retained.last() + ("key" to "unknown")
+        assertThrows(IllegalArgumentException::class.java) { validate(raw(listOf(update), inventory = listOf(item(update), retained.first(), badRetain)), context(q, old)) }
+        assertEquals(listOf(goal, ban, branch), old.facts)
+        assertThrows(IllegalArgumentException::class.java) { validate(raw(listOf(update), inventory = listOf(item(update + ("quote" to "Чужая цитата"))) + retained), context(q, old)) }
+        assertEquals(listOf(goal, ban, branch), old.facts)
+    }
+
+    @Test fun `upsert and remove still require exact quotes in both patch and inventory`() {
+        val q = "Не обращаться к сети"
+        val update = change("CONSTRAINTS", "offline", q, q)
+        val upsert = item(update)
+        assertThrows(IllegalArgumentException::class.java) { validate(raw(listOf(update), inventory = listOf(upsert - "quote")), context(q)) }
+        assertThrows(IllegalArgumentException::class.java) { validate(raw(listOf(update - "quote"), inventory = listOf(upsert)), context(q)) }
+        val old = TaskMemory(listOf(fact(MemoryLayer.CONSTRAINTS, "offline", q)))
+        val cancel = "Снимаю ограничение на обращения к сети."
+        val removal = mapOf("layer" to "CONSTRAINTS", "key" to "offline", "quote" to cancel)
+        val inventory = removal + mapOf("action" to "REMOVE", "value" to null)
+        assertThrows(IllegalArgumentException::class.java) { validate(raw(removals = listOf(removal), inventory = listOf(inventory - "quote")), context(cancel, old)) }
+        assertThrows(IllegalArgumentException::class.java) { validate(raw(removals = listOf(removal - "quote"), inventory = listOf(inventory)), context(cancel, old)) }
+        for (wrongQuote in listOf(q, "Придуманный текст")) {
+            assertThrows(IllegalArgumentException::class.java) { validate(raw(removals = listOf(removal + ("quote" to wrongQuote)), inventory = listOf(inventory + ("quote" to wrongQuote))), context(cancel, old)) }
+        }
+    }
+
     @Test fun `duplicate JSON keys and trailing objects cannot override memory inventory`() {
         val q = context("Что такое индекс?")
         assertThrows(Exception::class.java) { validate(raw() + " {}", q) }
@@ -105,12 +207,76 @@ class MemoryCompletenessTest {
         assertThrows(IllegalArgumentException::class.java) { validate(raw(removals = listOf(removal), inventory = listOf(inventory)), context(q)) }
     }
 
+    @Test fun `live explicit null removal and omitted value are equivalent in production preparation`() {
+        val ban = MemoryFact(MemoryLayer.CONSTRAINTS, "force_push_common_branch", "в общую ветку force push запрещён", "first", "В общую ветку force push запрещён.")
+        val goal = fact(MemoryLayer.GOAL, "goal", "подготовить выпуск приложения в отдельной ветке")
+        val branch = MemoryFact(MemoryLayer.TERMS, "working_branch", "рабочая ветка называется release-payments-v2", "rename", "Переименуем рабочую ветку в release-payments-v2.")
+        val old = TaskMemory(listOf(goal, branch, ban))
+        val quote = "Снимаю прежний запрет на force push в общую ветку."
+        val q = "$quote Это изменение условий учебного сценария, команды выполнять не нужно. Как посмотреть список локальных веток?"
+        val removal = mapOf("layer" to "CONSTRAINTS", "key" to ban.key, "quote" to quote)
+        val inventory = removal + mapOf("action" to "REMOVE", "value" to null)
+        for (entry in listOf(removal, removal + ("value" to null))) {
+            val payload = raw(removals = listOf(entry), inventory = listOf(inventory))
+            val fake = object : LlmClient {
+                override fun settings() = AnswerSettings(true, "deepseek-flash", 0.0, "disabled", 16000, null, "")
+                override fun complete(messages: List<LlmMessage>, maxOutputTokens: Int?) = LlmCompletion("id", "deepseek-flash", payload, "stop", 1, null)
+            }
+            val trace = LlmDialoguePreparer(fake, mapper, validator, CostEstimator()).prepare(context(q, old))
+            assertTrue(trace.issues.isEmpty())
+            assertEquals(listOf(goal, branch), trace.memory.facts)
+            assertEquals(listOf(MemoryChange(MemoryLayer.CONSTRAINTS, ban.key, null, quote)), trace.changes)
+            assertEquals(payload, trace.rawJson)
+            assertEquals(listOf(goal, branch, ban), old.facts)
+        }
+    }
+
+    @Test fun `explicit null removal still requires exact current provenance and complete inventory`() {
+        val ban = fact(MemoryLayer.CONSTRAINTS, "offline", "Не обращаться к сети")
+        val old = TaskMemory(listOf(ban))
+        val quote = "Снимаю ограничение на обращения к сети."
+        val q = "$quote Как посмотреть ветки?"
+        val removal = mapOf("layer" to "CONSTRAINTS", "key" to ban.key, "value" to null, "quote" to quote)
+        val inventory = removal + ("action" to "REMOVE")
+        for (bad in listOf(removal - "quote", removal + ("quote" to null), removal + ("quote" to ""), removal + ("quote" to ban.quote))) {
+            assertThrows(IllegalArgumentException::class.java) { validate(raw(removals = listOf(bad), inventory = listOf(bad + ("action" to "REMOVE"))), context(q, old)) }
+        }
+        for (badInventory in listOf(inventory - "quote", inventory - "value", inventory + ("value" to "null"), inventory + ("quote" to "Как посмотреть ветки?"))) {
+            assertThrows(IllegalArgumentException::class.java) { validate(raw(removals = listOf(removal), inventory = listOf(badInventory)), context(q, old)) }
+        }
+        assertThrows(IllegalArgumentException::class.java) { validate(raw(removals = listOf(removal)), context(q, old)) }
+        assertThrows(IllegalArgumentException::class.java) { validate(raw(inventory = listOf(inventory)), context(q, old)) }
+        val unknown = removal + ("key" to "unknown")
+        assertThrows(IllegalArgumentException::class.java) { validate(raw(removals = listOf(unknown), inventory = listOf(unknown + ("action" to "REMOVE"))), context(q, old)) }
+        assertEquals(listOf(ban), old.facts)
+    }
+
+    @Test fun `removal rejects nonnull values extra fields and duplicate keys atomically`() {
+        val ban = fact(MemoryLayer.CONSTRAINTS, "offline", "Не обращаться к сети")
+        val old = TaskMemory(listOf(ban))
+        val quote = "Снимаю ограничение на обращения к сети."
+        val q = "$quote Проект называется Атлас."
+        val update = change("TERMS", "project", "Атлас", "Проект называется Атлас.")
+        val removal = mapOf("layer" to "CONSTRAINTS", "key" to ban.key, "quote" to quote)
+        val inventory = listOf(item(update), removal + mapOf("action" to "REMOVE", "value" to null))
+        for (value in listOf<Any>("null", "", ban.value, false, 0, emptyList<String>(), emptyMap<String, String>())) {
+            assertThrows(IllegalArgumentException::class.java) { validate(raw(listOf(update), listOf(removal + ("value" to value)), inventory), context(q, old)) }
+            assertEquals(listOf(ban), old.facts)
+        }
+        for (extra in listOf("action" to "REMOVE", "sourceTurnId" to "forged", "extra" to "ignored")) {
+            assertThrows(IllegalArgumentException::class.java) { validate(raw(listOf(update), listOf(removal + ("value" to null) + extra), inventory), context(q, old)) }
+        }
+        assertThrows(IllegalArgumentException::class.java) { validate(raw(listOf(update), listOf(removal, removal + ("value" to null)), inventory), context(q, old)) }
+        assertEquals(listOf(ban), old.facts)
+    }
+
     @Test fun `assistant and old user claims cannot supply current memory provenance`() {
         val quote = "Будем использовать main"
         val c = change("TERMS", "target", "main", quote)
         val input = context("Что дальше?").copy(recent = listOf(DialogueItem("old", "Старый вопрос", quote)))
         assertThrows(IllegalArgumentException::class.java) { validate(raw(listOf(c), inventory = listOf(item(c))), input) }
         assertThrows(IllegalArgumentException::class.java) { validate(raw(listOf(c), inventory = listOf(item(c))), input.copy(recent = listOf(DialogueItem("old", quote, null)))) }
+        assertThrows(IllegalArgumentException::class.java) { validate(raw(listOf(c), inventory = listOf(item(c))), input.copy(recent = listOf(DialogueItem("old", "Старый вопрос", null, quote)))) }
     }
 
     @Test fun `inventory cannot bypass protected goal or create a duplicate value under another key`() {
