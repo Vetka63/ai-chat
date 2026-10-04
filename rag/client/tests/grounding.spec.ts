@@ -96,7 +96,7 @@ test('one repaired draft stays collapsed while only final evidence is public', a
 })
 
 test('live grounded quote opens correct immutable document @live', async ({ page }, testInfo) => {
-  test.skip(process.env.RAG_LIVE !== 'true', 'Opt-in: up to 18 paid DeepSeek calls including one bounded repair')
+  test.skip(process.env.RAG_LIVE !== 'true', 'Opt-in: up to 20 paid DeepSeek calls including one bounded repair and scope guards')
   test.setTimeout(900_000)
   await page.goto('/'); await page.getByRole('button', { name: 'Источники и цитаты' }).click()
   const responsePromise = page.waitForResponse(r => new URL(r.url()).pathname.endsWith('/grounded-answers') && r.request().method() === 'POST', { timeout: 840_000 })
