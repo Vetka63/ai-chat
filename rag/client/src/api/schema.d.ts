@@ -4,6 +4,22 @@
  */
 
 export interface paths {
+    "/api/v1/experiments/compare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["compareRetrievalModes"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/answer-settings": {
         parameters: {
             query?: never;
@@ -232,6 +248,71 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @enum {string} */
+        RetrievalMode: "RAW" | "FILTERED" | "REWRITE" | "REWRITE_FILTERED";
+        ExperimentRequest: {
+            question: string;
+            indexId: string;
+            modes: components["schemas"]["RetrievalMode"][];
+            candidateTopK: number;
+            finalTopK: number;
+            similarityThreshold: number;
+            contextMaxCharacters: number;
+            maxOutputTokens?: number | null;
+            generateAnswers: boolean;
+        };
+        CandidateDecision: {
+            hit: components["schemas"]["SearchHit"];
+            /** @enum {string} */
+            reason: "SELECTED" | "BELOW_THRESHOLD" | "TOP_K_LIMIT";
+        };
+        RetrievalTrace: {
+            originalQuestion: string;
+            searchQuery: string;
+            filterApplied: boolean;
+            thresholdApplied: number | null;
+            rawCandidates: components["schemas"]["SearchHit"][];
+            selectedCandidates: components["schemas"]["SearchHit"][];
+            decisions: components["schemas"]["CandidateDecision"][];
+            retrievalMilliseconds: number;
+            embeddingInputTokens: number | null;
+        };
+        RewriteTrace: {
+            query: string;
+            model: string;
+            finishReason: string;
+            milliseconds: number;
+            usage: components["schemas"]["TokenUsage"] | null;
+            estimatedCost: components["schemas"]["CostEstimate"] | null;
+            messages: components["schemas"]["LlmMessage"][];
+            rawResponse: string;
+        };
+        ExperimentError: {
+            code: string;
+            message: string;
+        };
+        ExperimentResult: {
+            mode: components["schemas"]["RetrievalMode"];
+            /** @enum {string} */
+            status: "ANSWERED" | "RETRIEVED" | "NO_CONTEXT" | "ERROR";
+            message: string | null;
+            error: components["schemas"]["ExperimentError"] | null;
+            pipeline: components["schemas"]["RetrievalTrace"] | null;
+            answer: components["schemas"]["AnswerResult"] | null;
+            generationAttempted: boolean;
+        };
+        ExperimentComparison: {
+            request: components["schemas"]["ExperimentRequest"];
+            snapshotId: string;
+            rewrite: components["schemas"]["RewriteTrace"] | null;
+            rewriteError: components["schemas"]["ExperimentError"] | null;
+            results: components["schemas"]["ExperimentResult"][];
+            totalMilliseconds: number;
+            llmStagesAttempted: number;
+            totalUsage: components["schemas"]["TokenUsage"] | null;
+            estimatedCost: components["schemas"]["CostEstimate"] | null;
+            warnings: string[];
+        };
         AnswerRequest: {
             question: string;
             /** @enum {string} */
@@ -466,6 +547,44 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    compareRetrievalModes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExperimentRequest"];
+            };
+        };
+        responses: {
+            /** @description Результаты режимов, общие стадии и независимые ошибки */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExperimentComparison"];
+                };
+            };
+            /** @description Некорректная конфигурация */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Индекс отсутствует */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     getAnswerSettings: {
         parameters: {
             query?: never;

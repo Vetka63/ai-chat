@@ -31,6 +31,7 @@ class DeepSeekAdapterTest {
             val result = client.complete(listOf(LlmMessage("user", "Вопрос")), null)
             val request = jacksonObjectMapper().readTree(requests.single())
             assertFalse(request.has("max_tokens"))
+            assertFalse(request.has("response_format"))
             assertEquals("disabled", request.path("thinking").path("type").asText())
             assertEquals(0.0, request.path("temperature").asDouble())
             assertEquals(15L, result.usage!!.totalTokens)
@@ -60,5 +61,13 @@ class DeepSeekAdapterTest {
         val client = DeepSeekLlmClient(DeepSeekProperties(), jacksonObjectMapper())
         assertFalse(client.settings().configured)
         assertEquals("llm_not_configured", assertThrows(LabException::class.java) { client.complete(listOf(LlmMessage("user", "Вопрос")), null) }.code)
+    }
+    @Test fun `JSON object requested only for technical generation`() {
+        withServer(valid) { client, requests ->
+            client.completeJson(listOf(LlmMessage("user", "Верни JSON")), 512)
+            val request = jacksonObjectMapper().readTree(requests.single())
+            assertEquals("json_object", request.path("response_format").path("type").asText())
+            assertEquals(512, request.path("max_tokens").asInt())
+        }
     }
 }

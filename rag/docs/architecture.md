@@ -1,6 +1,6 @@
 # Архитектура лаборатории RAG
 
-Этот документ описывает индексацию дня 21 и дополнение дня 22. Основной корпус — русский перевод Pro Git, не старое предложение QASPER. Алгоритм генерации, конфигурация и проверка — в [day22-guide.md](day22-guide.md).
+Этот документ описывает индексацию дня 21, генерацию дня 22 и сравнение retrieval дня 23. Основной корпус — русский перевод Pro Git, не старое предложение QASPER. Алгоритмы и проверки — в [day22-guide.md](day22-guide.md) и [day23-guide.md](day23-guide.md).
 
 ## Назначение компонентов
 
@@ -34,7 +34,7 @@ rag/
 └── .env.example             Несекретные параметры нового приложения
 ```
 
-Backend пакеты: `config`, `common`, `documents`, `indexing`, `embeddings`, `retrieval`, `answering`. Внутри доменов находятся models, controllers, services, ports, adapters и enums только при наличии реального кода. DTO принадлежат своему домену. Будущие `rewriting`, `grounding`, `chat`, `taskmemory` не создаются пустыми каталогами заранее.
+Backend пакеты: `config`, `common`, `documents`, `indexing`, `embeddings`, `retrieval`, `answering`, `rewriting`, `experiments`. Внутри доменов находятся models, controllers, services, ports, adapters и enums только при наличии реального кода. DTO принадлежат своему домену. Будущие `grounding`, `chat`, `taskmemory` не создаются пустыми каталогами заранее.
 
 ## Зависимости доменов
 
@@ -99,7 +99,7 @@ SQLite использует foreign keys, WAL и busy_timeout. Каждая оп
 
 SearchService вычисляет embedding вопроса, читает вектора выбранного индекса, считает точный cosine, сортирует по score и стабильному chunk ID, возвращает top-K. Это линейный поиск малого корпуса: он прозрачен, но при миллионах чанков потребуется другая реализация vector storage/search.
 
-Cosine не является вероятностью корректного ответа. Порог отказа, reranking и query rewriting относятся к дню 23. В день 21 UI показывает достаточно данных для ручной проверки: попал ли ожидаемый раздел в top-5.
+Cosine не является вероятностью корректного ответа. День 23 добавляет отдельный CandidateSelector: threshold → final top-K, без перестановки ranking. Затем PromptAssembler применяет бюджет целых чанков. Это фильтр, не обученный reranker. В trace сохраняются все кандидаты, причины исключения и переданный контекст. Пустая выдача не запускает генерацию и не доказывает отсутствия ответа в книге.
 
 Compare требует два разных индекса. Контролируемое сравнение допускается при одном snapshot и embedding identity; различия maxCharacters/overlap помечаются отдельно. Один только меньший index или больший score не доказывает лучшее качество. Build latency содержит прогрев и зависит от порядка запуска.
 
@@ -107,7 +107,9 @@ Compare требует два разных индекса. Контролиру�
 
 День 22 уже добавил AnswerService как оркестратор, PromptAssembler и LlmClient с DeepSeek adapter. Используется существующий SearchService, а не второй дублирующий поиск. Ввод пользователя и найденный текст — разные поля user JSON; системная инструкция одинакова для BASELINE и RAG. Эта изоляция не является гарантией защиты от всех prompt injection. Ответы пока не сохраняются в SQLite как чат.
 
-День 23 добавит QueryRewriter и CandidateSelector для четырёх сравнимых режимов. Day 24 — server-owned evidence IDs, валидатор точных цитат и unknown gate. Day 25 — conversation repository и изолированную task memory с provenance пользовательских сообщений.
+День 23 добавил QueryRewriter и CandidateSelector для четырёх сравнимых режимов. ExperimentService выполняет один общий rewrite и максимум два поиска; ошибки независимых генераций не уничтожают соседние результаты. AnswerGenerator выделен из AnswerService и переиспользуется обоими флоу. Исходный вопрос сохраняется в генерации, rewrite используется только в поиске. API usage общего rewrite считается один раз; отсутствие измерения не превращается в ноль.
+
+День 24 — server-owned evidence IDs, валидатор точных цитат и unknown gate по качеству доказательств. День 25 — conversation repository и изолированная task memory с provenance пользовательских сообщений.
 
 Контрольные вопросы, expected answers и gold evidence живут в evaluation, не в CorpusSnapshot и не в embedding input. Нельзя добиться хорошей проверки, проиндексировав эталонные ответы рядом с книгой.
 
@@ -118,5 +120,7 @@ Compare требует два разных индекса. Контролиру�
 Логи включают job/index ID, стратегию, прогресс, dimension и ошибки. Домен answering пишет статус провайдера, фактическую модель, latency, finish reason и usage, но не ключ, тексты вопросов или сырой ответ API. Для дня 21 ключ не нужен; день 22 получает его только через окружение backend. Runtime SQLite, модели и node_modules не отправляются в Git. Model pull и исходники скачиваются только при подготовке; индексирование после этого выполняется локально.
 
 ## Архитектурная схема
+
+[Схема дня 23](diagrams/day23-architecture.html) показывает доменные обращения эксперимента; [receipt](diagrams/day23-acceptance.md) фиксирует проверку артефакта, браузера и визуальный просмотр отдельно.
 
 [Схема дня 21](diagrams/day21-architecture.html) показывает индексацию. [Схема дня 22](diagrams/day22-architecture.html) — вызовы двух режимов ответа; [receipt](diagrams/day22-acceptance.md) отделяет проверки артефакта, браузера и визуальный просмотр. Русский текст схем сохранён; стандартные элементы viewer и HTML lang у Archify остаются английскими. Исторические rag-week-architecture файлы с QASPER не отражают текущий corpus profile и не используются как инструкция реализации.

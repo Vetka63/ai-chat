@@ -22,9 +22,16 @@ class DeepSeekLlmClient(private val properties: DeepSeekProperties, private val 
 
     /** Логирует метрики, но не Authorization, промпт, текст ответа или raw error body. */
     override fun complete(messages: List<LlmMessage>, maxOutputTokens: Int?): LlmCompletion {
+        return execute(messages, maxOutputTokens, false)
+    }
+    override fun completeJson(messages: List<LlmMessage>, maxOutputTokens: Int) = execute(messages, maxOutputTokens, true)
+
+    /** Один запрос; JSON object включается только для rewrite, не для пользовательского ответа. */
+    private fun execute(messages: List<LlmMessage>, maxOutputTokens: Int?, jsonObject: Boolean): LlmCompletion {
         if (properties.apiKey.isBlank()) throw LabException("llm_not_configured", "Настройте DEEPSEEK_API_KEY только на backend и пересоздайте контейнер.", HttpStatus.SERVICE_UNAVAILABLE)
         val body = linkedMapOf<String, Any>("model" to properties.model, "messages" to messages, "stream" to false, "temperature" to 0.0, "thinking" to mapOf("type" to "disabled"))
         if (maxOutputTokens != null) body["max_tokens"] = maxOutputTokens
+        if (jsonObject) body["response_format"] = mapOf("type" to "json_object")
         val request = HttpRequest.newBuilder(URI.create(properties.baseUrl.trimEnd('/') + "/chat/completions"))
             .timeout(Duration.ofSeconds(properties.timeoutSeconds)).header("Content-Type", "application/json").header("Authorization", "Bearer ${properties.apiKey}")
             .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(body))).build()

@@ -49,7 +49,7 @@ class AnsweringTest {
             override fun settings() = AnswerSettings(true, "deepseek-flash", 0.0, "disabled", 16000, null, "source")
             override fun complete(messages: List<LlmMessage>, maxOutputTokens: Int?) = LlmCompletion("request", "deepseek-flash", "Ответ", "stop", 12, TokenUsage(10, 5, 15, 0, 10))
         }
-        val result = AnswerService(search, repository, client, assembler, CostEstimator()).answer(AnswerRequest("Вопрос", AnswerMode.BASELINE, "not-an-index"))
+        val result = AnswerService(search, repository, client, assembler, AnswerGenerator(client, assembler, CostEstimator())).answer(AnswerRequest("Вопрос", AnswerMode.BASELINE, "not-an-index"))
         assertEquals("Ответ", result.answer)
         assertNull(result.context.indexId)
         assertTrue(result.context.included.isEmpty())
@@ -57,7 +57,7 @@ class AnsweringTest {
     }
     @Test fun `missing RAG index rejected before provider`() {
         val client = mock(LlmClient::class.java)
-        val service = AnswerService(mock(SearchService::class.java), mock(IndexRepository::class.java), client, assembler, CostEstimator())
+        val service = AnswerService(mock(SearchService::class.java), mock(IndexRepository::class.java), client, assembler, AnswerGenerator(client, assembler, CostEstimator()))
         assertEquals("index_required", assertThrows(LabException::class.java) { service.answer(AnswerRequest("Вопрос", AnswerMode.RAG)) }.code)
         verifyNoInteractions(client)
     }

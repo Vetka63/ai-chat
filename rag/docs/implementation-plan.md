@@ -28,18 +28,22 @@
 - UI сравнения ответов, request latency, API usage, входного контекста и выбранного индекса.
 - Стоимость оценивается диапазоном по опубликованному тарифу с датой и точной моделью; не выдаётся за списание со счёта.
 
-Проверка: 26 backend tests, 2 frontend unit tests, 7 обычных браузерных проверок и 1 live UI test. Выполнены 10 пар реальных ответов и ручное сравнение. Результаты и ограничения — [day22-test-results.md](day22-test-results.md); алгоритм и самостоятельная проверка — [day22-guide.md](day22-guide.md). Days 23–25 пока остаются планом.
+Проверка дня 22: 26 backend tests, 2 frontend unit tests, 7 обычных браузерных проверок и 1 live UI test. Выполнены 10 пар реальных ответов и ручное сравнение. Результаты и ограничения — [day22-test-results.md](day22-test-results.md); алгоритм и самостоятельная проверка — [day22-guide.md](day22-guide.md). Дни 24–25 остаются планом.
 
 ## День 23 — rewrite и второй этап retrieval
 
-Новая ветка от дня 22.
+Реализовано в `ai-challenge-day-23`, от коммита дня 22 `07fa9b4`.
 
 - Сохранить исходный вопрос и rewritten query отдельно; переформулировка не отвечает на вопрос.
-- Контракты `QueryRewriter` и `CandidateFilter`/`Reranker`; raw candidates и final candidates видны отдельно.
+- Контракты `QueryRewriter` и `CandidateSelector`; raw candidates и final candidates видны отдельно.
 - Настройки `candidateTopK`, `finalTopK`, similarity threshold; контроль topK и отсечения.
 - Сравнить baseline, filter, rewrite+filter на тех же контрольных вопросах, модели и корпусе.
 - Начать с прозрачного similarity-фильтра, при необходимости добавить отдельный reranker. Его модель/версия входят в config эксперимента.
 - Не выдавать cosine threshold за универсальную вероятность релевантности: подобрать его по примерам, включая нерелевантные вопросы.
+
+Реализация: CandidateSelector с similarity-фильтром, QueryRewriter с проверяемым JSON, ExperimentService и общий AnswerGenerator, четыре режима и новый UI. RAW/FILTERED разделяют один пул, rewrite-режимы — второй; rewritten query не заменяет исходный вопрос генерации. NO_CONTEXT пропускает LLM, ошибки режимов изолированы. Наблюдение и экспорт включают shared rewrite, решения кандидатов, actual messages и общий расход без двойного учёта.
+
+Проверки: 42 backend tests, 3 frontend unit tests, 9 обычных и 2 live браузерных теста, десять тройных сравнений и нерелевантные вопросы. Результаты — [day23-test-results.md](day23-test-results.md), пересмотренный план — [day23-plan-review.md](day23-plan-review.md), инструкция — [day23-guide.md](day23-guide.md).
 
 ## День 24 — источники и проверяемые цитаты
 

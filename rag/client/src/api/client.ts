@@ -12,6 +12,7 @@ export async function request<T>(path: string, body?: unknown): Promise<T> {
 }
 
 export const api = {
+  experiment: (body: Schema<'ExperimentRequest'>) => request<Schema<'ExperimentComparison'>>('/experiments/compare', body),
   answerSettings: () => request<Schema<'AnswerSettings'>>('/answer-settings'),
   questions: () => request<Schema<'ControlQuestion'>[]>('/evaluation/questions'),
   answer: (body: Schema<'AnswerRequest'>) => request<Schema<'AnswerResult'>>('/answers', body),

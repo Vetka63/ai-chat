@@ -1,8 +1,12 @@
 # API contract
 
-`openapi.json` описывает HTTP интерфейс дней 21–22 и DTO. Backend отдаёт его как `/api-spec/openapi.json`. Клиент генерирует `src/api/schema.d.ts` через openapi-typescript при build.
+`openapi.json` описывает HTTP интерфейс дней 21–23 и DTO. Backend отдаёт его как `/api-spec/openapi.json`. Клиент генерирует `src/api/schema.d.ts` через openapi-typescript при build.
 
 День 22: POST `/api/v1/answers`, GET `/api/v1/answer-settings`, GET `/api/v1/evaluation/questions`. BASELINE не требует индекса; RAG требует готовый indexId. Бюджет — символы текстов целых чанков. `maxOutputTokens=null` не отправляет лимит провайдеру. Ошибки upstream — 502/503. Объекты usage/cost nullable, неизвестные измерения не заменяются нулём.
+
+День 23: POST `/api/v1/experiments/compare`. ExperimentRequest принимает 1–4 различных mode: RAW, FILTERED, REWRITE, REWRITE_FILTERED; candidateTopK 1–20; finalTopK 1–10 и не больше candidate K; конечный cosine threshold [-1,1]; бюджет 300–60000; nullable output cap. Общая конфигурация и snapshot ID возвращаются вместе с одним RewriteTrace и независимыми result/status/error/pipeline/answer. Некорректная конфигурация — 400, неизвестный index — 404; ошибки отдельных стадий возвращаются в соответствующем результате batch. Это не успешный ответ модели: клиент обязан читать status каждой колонки.
+
+generateAnswers=false пропускает генерацию, но rewrite-режимы всё ещё вызывают LLM для подготовки query. NO_CONTEXT всегда означает отсутствие отобранных чанков и отсутствие генерации. TotalUsage nullable при неполном измерении; общий rewrite входит в сумму один раз. Старые DTO/endpoint дня 22 не заменяются.
 
 Основные ресурсы: `/api/v1/corpus`, `/api/v1/documents`, `/api/v1/indexes`, `/api/v1/jobs`. `/api/v1/preview` синхронный, построение индекса — POST `/api/v1/jobs` с HTTP 202, progress GET `/api/v1/jobs/{id}`. Search — POST query конкретного готового index ID. Comparison — `/api/v1/compare`, два distinct IDs.
 

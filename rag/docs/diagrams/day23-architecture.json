@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {"title": "День 23: сравнение фильтра и rewrite", "quality_profile": "showcase", "viewBox": [1340,760]},
+  "components": [
+    {"id":"retrieval-experiment-ui","type":"frontend","label":"Эксперимент в UI","sublabel":"Vue · режимы · trace · экспорт","pos":[50,170],"size":[260,110]},
+    {"id":"shared-comparison","type":"backend","label":"ExperimentService","sublabel":"Общие пулы · отбор · бюджет","pos":[510,170],"size":[280,110]},
+    {"id":"original-question-answer","type":"backend","label":"AnswerGenerator","sublabel":"Исходный вопрос → DeepSeek","pos":[990,170],"size":[280,110]},
+    {"id":"optional-query-rewrite","type":"backend","label":"LlmQueryRewriter","sublabel":"DeepSeek JSON · только поиск","pos":[50,530],"size":[260,110]},
+    {"id":"local-candidate-search","type":"backend","label":"SearchService","sublabel":"SQLite + Ollama · candidate K","pos":[510,530],"size":[280,110]},
+    {"id":"cosine-candidate-selector","type":"backend","label":"CandidateSelector","sublabel":"Порог → final K · журнал решений","pos":[990,530],"size":[280,110]}
+  ],
+  "connections": [
+    {"id":"request-comparison","from":"retrieval-experiment-ui","to":"shared-comparison","label":"REST: compare","variant":"emphasis"},
+    {"id":"generate-with-evidence","from":"shared-comparison","to":"original-question-answer","label":"Контекст не пуст"},
+    {"id":"prepare-query-once","from":"shared-comparison","to":"optional-query-rewrite","label":"Опционально: 1 раз"},
+    {"id":"retrieve-shared-pools","from":"shared-comparison","to":"local-candidate-search","label":"Исходный / rewrite","labelDy":24},
+    {"id":"apply-selected-policy","from":"shared-comparison","to":"cosine-candidate-selector","label":"Политика режима"}
+  ]
+}
