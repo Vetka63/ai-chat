@@ -63,13 +63,14 @@ class GroundingService(private val repository: IndexRepository, private val sear
             if (selection.selected.isEmpty()) return result(EvidenceValidation(GroundedStatus.UNKNOWN, clarification = "Уточните вопрос о Git или выберите другой индекс. Поиск не нашёл фрагментов выше выбранного порога."))
             if (included.isEmpty()) return result(EvidenceValidation(GroundedStatus.ERROR, issues = listOf(EvidenceIssue("context_budget_too_small", "Целые чанки не помещаются в бюджет. Увеличьте его; LLM не вызывалась."))))
             val messages = prompt.assemble(clean.question, included, dialogue)
+            val scopeQuestion = if (dialogue == null) clean.question else "Исходный вопрос:\n${clean.question}\nПоисковое уточнение (только раскрытие ссылок):\n${dialogue.resolvedQuestion}"
             attempts++
             val response = llm.completeGroundedJson(messages, clean.maxOutputTokens)
             generation = GroundingGeneration(response.model, response.finishReason, response.milliseconds, response.usage, costs.estimate(response.model, response.usage), messages, response.content)
             var checked = validator.validate(response.content, response.finishReason, included)
             if (checked.status == GroundedStatus.ANSWERED) {
                 attempts++
-                val support = supportValidator.validate(checked.claims, included)
+                val support = supportValidator.validateScoped(checked.claims, included, scopeQuestion)
                 attempts += support.additionalGenerations.size
                 supportCheck = support
                 if (support.status == SupportCheckStatus.REJECTED) {
@@ -85,7 +86,7 @@ class GroundingService(private val repository: IndexRepository, private val sear
                     checked = validator.validate(repaired.content, repaired.finishReason, included)
                     if (checked.status == GroundedStatus.ANSWERED) {
                         attempts++
-                        val repairedSupport = supportValidator.validate(checked.claims, included)
+                        val repairedSupport = supportValidator.validateScoped(checked.claims, included, scopeQuestion)
                         attempts += repairedSupport.additionalGenerations.size
                         supportCheck = repairedSupport
                         if (repairedSupport.status != SupportCheckStatus.PASSED) checked = EvidenceValidation(GroundedStatus.INVALID_EVIDENCE, issues = repairedSupport.issues)

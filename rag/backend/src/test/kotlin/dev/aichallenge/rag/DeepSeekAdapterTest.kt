@@ -226,6 +226,20 @@ class DeepSeekAdapterTest {
         assertSame(expected, client.completePreparationJson(messages, 16384))
         assertEquals(listOf(messages to 16384), calls)
     }
+    @Test fun `scope profile is Pro without reasoning and does not change support profile`() {
+        withServer(valid) { client, requests ->
+            client.completeScopeJson(listOf(LlmMessage("user", "JSON")), 16384)
+            client.completeVerifiedJson(listOf(LlmMessage("user", "JSON")), 16384)
+            val scope = jacksonObjectMapper().readTree(requests[0])
+            assertEquals("deepseek-v4-pro", scope.path("model").asText())
+            assertEquals("disabled", scope.path("thinking").path("type").asText())
+            assertFalse(scope.has("reasoning_effort"))
+            assertEquals(16384, scope.path("max_tokens").asInt())
+            assertEquals("json_object", scope.path("response_format").path("type").asText())
+            assertEquals("enabled", jacksonObjectMapper().readTree(requests[1]).path("thinking").path("type").asText())
+        }
+    }
+
     @Test fun `non thinking support remains Pro but omits reasoning effort`() {
         withServer(valid, supportThinking = false) { client, requests ->
             client.completeVerifiedJson(listOf(LlmMessage("user", "JSON")), 16384)

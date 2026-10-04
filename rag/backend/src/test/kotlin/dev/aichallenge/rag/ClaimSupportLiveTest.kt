@@ -95,10 +95,10 @@ class ClaimSupportLiveTest {
         val runId = Instant.now().toString().replace(':', '-') + "-" + UUID.randomUUID().toString().take(8)
         val reportPath = directory.resolve("day24-support-live-$runId.json")
         val records = mutableListOf<Map<String, Any>>()
-        val report = mapOf("at" to Instant.now().toString(), "runId" to runId, "thinkingEnabled" to properties.supportThinkingEnabled, "repeats" to repeats, "maximumCalls" to cases.size * repeats, "note" to "Полный набор: книга + явно помеченные синтетические контрастные случаи. Без retry. Все повторения сохранены, не выбор удачных ответов.", "cases" to records)
+        val report = mapOf("at" to Instant.now().toString(), "runId" to runId, "thinkingEnabled" to properties.supportThinkingEnabled, "scopeThinkingEnabled" to properties.scopeThinkingEnabled, "repeats" to repeats, "maximumCalls" to cases.size * repeats * 2, "note" to "Полный набор: книга + синтетические контрастные случаи. Поддержка цитат и отдельный scope guard. Без retry. Все повторения сохранены, не выбор удачных ответов.", "cases" to records)
         fun save() = Files.writeString(reportPath, mapper.writerWithDefaultPrettyPrinter().writeValueAsString(report))
         save()
-        println("Live support trace: $reportPath; максимум ${cases.size * repeats} платных вызовов.")
+        println("Live support trace: $reportPath; максимум ${cases.size * repeats * 2} платных вызовов.")
         val failures = mutableListOf<String>()
         for (round in 1..repeats) for (case in cases) {
             val document = case.context ?: Files.readString(Path.of("../corpus/progit-ru/book").resolve(case.source))

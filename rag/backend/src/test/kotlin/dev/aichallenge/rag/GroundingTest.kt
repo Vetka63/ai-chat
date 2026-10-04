@@ -103,10 +103,15 @@ class GroundingTest {
             override fun settings() = AnswerSettings(true, "deepseek-flash", 0.0, "disabled", 16000, null, "")
             override fun complete(messages: List<LlmMessage>, maxOutputTokens: Int?): LlmCompletion {
                 calls++
-                if (messages.first().content == supportPrompt.system) {
+                if (messages.first().content in listOf(supportPrompt.system, dev.aichallenge.rag.grounding.services.ClaimScopePromptAssembler.system)) {
                     supportCalls++
                     assertEquals(16384, maxOutputTokens)
                     if (failSupport || supportCalls > 1 && failRepairSupport) throw LabException("llm_unavailable", "Тестовый сбой проверки смысла.")
+                    if (messages.first().content == dev.aichallenge.rag.grounding.services.ClaimScopePromptAssembler.system) {
+                        val count = mapper.readTree(messages.last().content).path("items").size()
+                        val content = mapper.writeValueAsString(mapOf("claims" to (0 until count).map { n -> mapper.readTree(supportJson().replace("\"claim_index\":0", "\"claim_index\":$n")).path("claims").first() }))
+                        return LlmCompletion("scope", "deepseek-flash", content, "stop", 3, usage)
+                    }
                     return LlmCompletion("support", "deepseek-flash", if (supportCalls > 1) repairSupportContent ?: supportContent else supportContent, if (supportCalls > 1) repairSupportFinish else supportFinish, 3, if (missingSupportUsage) null else usage)
                 }
                 generationCalls++
@@ -150,6 +155,14 @@ class GroundingTest {
         assertEquals(1, f.rewriteCalls); assertEquals(45L, r.totalUsage!!.totalTokens); assertEquals(3, r.llmStagesAttempted)
         assertEquals("original", mapper.readTree(f.messages[1].content).path("question").asText())
         verify(f.search).search("index", SearchRequest("rewritten", 10))
+        assertEquals("original", mapper.readTree(r.supportCheck!!.generation.messages[1].content).path("question").asText())
+    }
+    @Test fun `repair reuses original scope in each isolated check without treating rewrite as user question`() {
+        val f = Fixture(supportContent = supportJson("unsupported"), repairSupportContent = supportJson(), isolated = true)
+        val result = f.service.answer(f.request().copy(useRewrite = true))
+        assertEquals(GroundedStatus.ANSWERED, result.status)
+        val checks = result.repair!!.originalSupportCheck.generations() + result.supportCheck!!.generations()
+        checks.forEach { assertEquals("original", mapper.readTree(it.messages[1].content).path("question").asText()) }
     }
     @Test fun `provider error is not unknown or ungrounded fallback`() {
         val f = Fixture(fail = true); val r = f.service.answer(f.request())
@@ -342,9 +355,9 @@ class GroundingTest {
         val f = Fixture(modelContent = content, isolated = true)
         val result = f.service.answer(f.request())
         assertEquals(GroundedStatus.ANSWERED, result.status)
-        assertEquals(3, result.llmStagesAttempted)
-        assertEquals(45L, result.totalUsage!!.totalTokens)
-        assertEquals(2, result.supportCheck!!.generations().size)
+        assertEquals(4, result.llmStagesAttempted)
+        assertEquals(60L, result.totalUsage!!.totalTokens)
+        assertEquals(3, result.supportCheck!!.generations().size)
         assertEquals(listOf(0, 1), result.supportCheck!!.claims.map { it.claimIndex })
     }
     @Test fun `isolated failed second check keeps known first usage but not false complete total`() {

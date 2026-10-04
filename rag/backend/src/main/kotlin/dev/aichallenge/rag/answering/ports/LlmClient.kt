@@ -14,4 +14,6 @@ interface LlmClient {
     fun completeGroundedJson(messages: List<LlmMessage>, maxOutputTokens: Int?): LlmCompletion = completeJson(messages, maxOutputTokens)
     /** Отдельный профиль смысловой проверки; старые адаптеры и fixtures используют свой JSON-путь. */
     fun completeVerifiedJson(messages: List<LlmMessage>, maxOutputTokens: Int?): LlmCompletion = completeJson(messages, maxOutputTokens)
+    /** Проверка условий имеет отдельный режим reasoning; совместимый адаптер делегирует обычному judge. */
+    fun completeScopeJson(messages: List<LlmMessage>, maxOutputTokens: Int?): LlmCompletion = completeVerifiedJson(messages, maxOutputTokens)
 }
