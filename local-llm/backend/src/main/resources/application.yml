@@ -1,0 +1,19 @@
+spring:
+  application:
+    name: local-llm-lab
+server:
+  port: 8080
+local-llm:
+  base-url: ${OLLAMA_BASE_URL:http://localhost:11436}
+  models: ${LOCAL_LLM_MODELS:qwen3:8b}
+  database-path: ${LOCAL_LLM_DATABASE_PATH:./data/lab.sqlite}
+  timeout-seconds: 300
+  context-size: 8192
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never

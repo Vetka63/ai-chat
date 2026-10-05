@@ -1,0 +1,9 @@
+backend/.gradle/
+backend/build/
+client/node_modules/
+client/dist/
+client/test-results/
+data/
+.env
+.env.*
+!.env.example

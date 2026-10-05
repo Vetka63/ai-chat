@@ -1,0 +1,28 @@
+name: ai-chat-local-llm
+services:
+  ollama:
+    image: ollama/ollama:0.35.1
+    environment:
+      OLLAMA_NO_CLOUD: "1"
+      OLLAMA_HOST: 0.0.0.0:11434
+    ports: ["127.0.0.1:${LOCAL_LLM_OLLAMA_PORT:-11436}:11434"]
+    volumes: ["local-models:/root/.ollama"]
+    restart: unless-stopped
+  backend:
+    build: { context: ., dockerfile: backend/Dockerfile }
+    ports: ["127.0.0.1:${LOCAL_LLM_API_PORT:-8482}:8080"]
+    environment:
+      OLLAMA_BASE_URL: http://ollama:11434
+      LOCAL_LLM_MODELS: ${LOCAL_LLM_MODELS:-qwen3:8b}
+      LOCAL_LLM_DATABASE_PATH: /app/data/lab.sqlite
+    volumes: ["local-data:/app/data"]
+    depends_on: [ollama]
+    restart: unless-stopped
+  client:
+    build: { context: ., dockerfile: client/Dockerfile }
+    ports: ["127.0.0.1:${LOCAL_LLM_UI_PORT:-8483}:80"]
+    depends_on: [backend]
+    restart: unless-stopped
+volumes:
+  local-models:
+  local-data:
