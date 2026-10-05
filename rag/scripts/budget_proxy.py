@@ -52,18 +52,33 @@ def request_reserve(body):
 
 class Ledger:
     """Атомарный общий счётчик; неизвестный исход сохраняет весь резерв."""
-    def __init__(self, path, stage_cny=5):
+    def __init__(self, path, stage_cny=5, authorized_cny=40):
+        # Дополнительные 20 CNY разрешены пользователем 2026-10-05.
+        # Опциональное повышение не обнуляет ни вызовы, ни unknown-резервы.
+        if authorized_cny not in (40, 60):
+            raise ValueError('Only the explicitly authorized 40 or 60 CNY ceiling is supported')
+        ceiling = round(authorized_cny * 1_000_000)
         self.stage = round(stage_cny * 1_000_000)
-        if not 0 < self.stage <= 40_000_000:
-            raise ValueError('Stage cap must be within 40 CNY')
+        if not 0 < self.stage <= ceiling:
+            raise ValueError('Stage cap must be within the authorized ceiling')
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.file_lock = open(str(self.path) + '.lock', 'a')
         fcntl.flock(self.file_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         self.lock = threading.Lock()
-        self.state = json.loads(self.path.read_text()) if self.path.exists() else {'limit': 40_000_000, 'calls': []}
-        if self.state['limit'] != 40_000_000:
-            raise ValueError('Unexpected ledger ceiling')
+        self.state = json.loads(self.path.read_text()) if self.path.exists() else {'limit': ceiling, 'calls': []}
+        if self.state['limit'] != ceiling:
+            if self.state['limit'] != 40_000_000 or ceiling != 60_000_000:
+                self.file_lock.close()
+                raise ValueError('Unexpected ledger ceiling; cannot reset or lower it implicitly')
+            if any(c['status'] == 'pending' for c in self.state['calls']):
+                self.file_lock.close()
+                raise ValueError('Wait for all requests before applying the authorized increase')
+            self.state.setdefault('limitChanges', []).append({
+                'at': time.time(), 'from': self.state['limit'], 'to': ceiling,
+                'reason': 'User authorized additional 20 CNY on 2026-10-05 for video scenarios',
+            })
+            self.state['limit'] = ceiling
         for call in self.state['calls']:
             if call['status'] == 'pending':
                 call['status'] = 'unknown_after_restart'
@@ -110,7 +125,7 @@ class Ledger:
 
     def snapshot(self):
         with self.lock:
-            return {'limitCny': 40, 'stageCapCny': self.stage / 1e6, 'committedUpperCny': self.total() / 1e6,
+            return {'limitCny': self.state['limit'] / 1e6, 'stageCapCny': self.stage / 1e6, 'committedUpperCny': self.total() / 1e6,
                     'calls': len(self.state['calls']), 'pending': sum(c['status'] == 'pending' for c in self.state['calls']),
                     'unknown': sum(c['status'].startswith('unknown') for c in self.state['calls']),
                     'note': 'Conservative cost, not provider invoice; includes reservations and ignores cache discounts.'}
@@ -165,5 +180,6 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == '__main__':
     server = ThreadingHTTPServer(('0.0.0.0', 8787), Handler)
-    server.ledger = Ledger(os.environ['BUDGET_LEDGER'], float(os.environ.get('BUDGET_STAGE_CNY', '5')))
+    server.ledger = Ledger(os.environ['BUDGET_LEDGER'], float(os.environ.get('BUDGET_STAGE_CNY', '5')),
+                           float(os.environ.get('BUDGET_AUTHORIZED_CNY', '40')))
     server.serve_forever()

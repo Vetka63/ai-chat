@@ -89,6 +89,35 @@ class BudgetTests(unittest.TestCase):
                 resumed.reserve(1)
             resumed.file_lock.close()
 
+    def test_explicit_increase_preserves_cost_unknowns_and_audit(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'ledger.json'
+            ledger = Ledger(path, 39)
+            call = ledger.reserve(500_000)
+            ledger.finish(call)  # Неизвестный исход нельзя бесплатно списать.
+            ledger.file_lock.close()
+            increased = Ledger(path, 59, 60)
+            self.assertEqual(60, increased.snapshot()['limitCny'])
+            self.assertEqual(.5, increased.snapshot()['committedUpperCny'])
+            self.assertEqual(1, increased.snapshot()['unknown'])
+            self.assertEqual(1, increased.snapshot()['calls'])
+            self.assertEqual(1, len(increased.state['limitChanges']))
+            increased.reserve(58_500_000)
+            with self.assertRaises(ValueError):
+                increased.reserve(1)
+            increased.file_lock.close()
+
+    def test_increase_does_not_interrupt_pending_or_reset_old_ledger(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'ledger.json'
+            ledger = Ledger(path, 39)
+            ledger.reserve(500_000)
+            ledger.file_lock.close()
+            original = path.read_text()
+            with self.assertRaises(ValueError):
+                Ledger(path, 59, 60)
+            self.assertEqual(original, path.read_text())
+
 
 if __name__ == '__main__':
     unittest.main()

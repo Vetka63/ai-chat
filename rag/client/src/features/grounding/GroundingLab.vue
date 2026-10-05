@@ -5,6 +5,7 @@ import { download } from '../lab/report'
 import { usageText, reasonLabels } from '../experiments/report'
 import { groundedMarkdown, supportGenerations } from './report'
 import GroundingRepairTrace from './GroundingRepairTrace.vue'
+import { listGroundingHistory, loadGroundingResult, saveGroundingResult, parseGroundingImport, MAX_IMPORT_BYTES, type GroundingHistoryEntry } from './history'
 import '../answering/answering.css'
 import './grounding.css'
 
@@ -19,17 +20,78 @@ const candidateK = ref(20), finalK = ref(10), threshold = ref(.60), budget = ref
 const useRewrite = ref(false), maxOutput = ref<number | null>(null)
 const busy = ref(false), error = ref('')
 const result = ref<Schema<'GroundedResult'> | null>(null)
+const history = ref<GroundingHistoryEntry[]>([]), selectedHistory = ref('')
+const savedEntry = ref<GroundingHistoryEntry | null>(null), historyError = ref(''), historyBusy = ref(false)
+const importSummary = ref(''), importFailures = ref<string[]>([])
+const maxImportFiles = 20
 const opened = ref<{ document: Schema<'Document'>; citation: Schema<'VerifiedCitation'> } | null>(null)
 const invalid = computed(() => !question.value.trim() || !indexId.value || finalK.value > candidateK.value)
 const statusLabels = { ANSWERED: 'Цитаты проверены', UNKNOWN: 'Не знаю по найденным материалам', INVALID_EVIDENCE: 'Ответ не прошёл проверку', ERROR: 'Ошибка стадии' }
 function close(e: KeyboardEvent) { if (e.key === 'Escape') opened.value = null }
-onMounted(async () => { try { [settings.value, questions.value] = await Promise.all([api.answerSettings(), api.questions()]) } catch (e) { error.value = String(e) }; window.addEventListener('keydown', close) })
+onMounted(async () => {
+  try { [settings.value, questions.value] = await Promise.all([api.answerSettings(), api.questions()]) } catch (e) { error.value = String(e) }
+  try {
+    const loaded = await listGroundingHistory()
+    history.value = Array.from(new Map([...loaded, ...history.value].map(entry => [entry.id, entry])).values()).sort((a, b) => b.savedAt.localeCompare(a.savedAt))
+    if (history.value[0] && !result.value && !busy.value) { selectedHistory.value = history.value[0].id; await openSaved() }
+  } catch (e) { historyError.value = String(e) }
+  window.addEventListener('keydown', close)
+})
 onUnmounted(() => window.removeEventListener('keydown', close))
 async function run() {
   if (busy.value || invalid.value) return
-  busy.value = true; error.value = ''; result.value = null; opened.value = null
+  busy.value = true; error.value = ''; result.value = null; opened.value = null; savedEntry.value = null; selectedHistory.value = ''
   const body: Schema<'GroundingRequest'> = { question: question.value.trim(), indexId: indexId.value, candidateTopK: candidateK.value, finalTopK: finalK.value, similarityThreshold: threshold.value, contextMaxCharacters: budget.value, useRewrite: useRewrite.value, maxOutputTokens: typeof maxOutput.value === 'number' ? maxOutput.value : null }
-  try { result.value = await api.groundedAnswer(body) } catch (e) { error.value = e instanceof Error ? e.message : String(e) } finally { busy.value = false }
+  try { result.value = await api.groundedAnswer(body); await remember(result.value, 'request') } catch (e) { error.value = e instanceof Error ? e.message : String(e) } finally { busy.value = false }
+}
+async function remember(value: Schema<'GroundedResult'>, origin: GroundingHistoryEntry['origin'], fileName?: string, quiet = false): Promise<string | null> {
+  try {
+    const entry = await saveGroundingResult(value, origin, fileName)
+    savedEntry.value = entry; selectedHistory.value = entry.id; history.value = [entry, ...history.value]
+    if (!quiet) historyError.value = ''
+    return null
+  } catch (e) {
+    const message = `Результат показан, но не сохранён в браузере: ${String(e)}. Скачайте JSON.`
+    if (!quiet) historyError.value = message
+    return message
+  }
+}
+async function openSaved() {
+  if (busy.value || historyBusy.value || !selectedHistory.value) return
+  historyBusy.value = true; historyError.value = ''; opened.value = null
+  try { result.value = await loadGroundingResult(selectedHistory.value); savedEntry.value = history.value.find(e => e.id === selectedHistory.value) ?? null; useSavedSettings(result.value) }
+  catch (e) { historyError.value = String(e) } finally { historyBusy.value = false }
+}
+async function importResult(event: Event) {
+  const input = event.target as HTMLInputElement, files = Array.from(input.files ?? [])
+  if (!files.length || busy.value || historyBusy.value) return
+  importFailures.value = []; importSummary.value = ''; historyError.value = ''
+  if (files.length > maxImportFiles) {
+    importFailures.value = [`Выбрано ${files.length} файлов. Можно не более ${maxImportFiles} за один импорт. Ни один файл из этого выбора не импортирован.`]
+    input.value = ''; return
+  }
+  historyBusy.value = true
+  let saved = 0
+  try {
+    for (const file of files) {
+      try {
+        if (file.size > MAX_IMPORT_BYTES) throw new Error('Файл больше 20 МБ.')
+        const imported = parseGroundingImport(await file.text())
+        result.value = imported; savedEntry.value = { id: '', savedAt: new Date().toISOString(), origin: 'import', fileName: file.name, question: imported.request.question, indexId: imported.request.indexId, status: imported.status }; selectedHistory.value = ''; opened.value = null
+        useSavedSettings(imported)
+        const saveError = await remember(imported, 'import', file.name, true)
+        if (saveError) importFailures.value.push(`${file.name}: ${saveError}`)
+        else saved++
+      } catch (e) { importFailures.value.push(`${file.name}: ${e instanceof Error ? e.message : String(e)}`) }
+    }
+    importSummary.value = `Импорт завершён: сохранено ${saved} из ${files.length}. Успешные результаты доступны в списке; ошибки не удаляют их.`
+  } finally { historyBusy.value = false; input.value = '' }
+}
+function savedLabel(entry: GroundingHistoryEntry) { return `${new Date(entry.savedAt).toLocaleString('ru-RU')} · ${entry.origin === 'import' ? 'импорт' : entry.status} · ${entry.question}` }
+function useSavedSettings(value: Schema<'GroundedResult'>) {
+  const r = value.request
+  question.value = r.question; indexId.value = r.indexId; candidateK.value = r.candidateTopK; finalK.value = r.finalTopK
+  threshold.value = r.similarityThreshold; budget.value = r.contextMaxCharacters; useRewrite.value = r.useRewrite; maxOutput.value = r.maxOutputTokens ?? null; selectedCase.value = ''
 }
 async function openCitation(citation: Schema<'VerifiedCitation'>) {
   try {
@@ -46,6 +108,15 @@ async function openCitation(citation: Schema<'VerifiedCitation'>) {
     <h2>Ответ, который можно сопоставить с книгой</h2>
     <p>Сначала сервер проверяет точность цитат, затем отдельный LLM-вызов — поддержку каждого утверждения. Неподтверждённый ответ не публикуется. Проверка снижает риск ошибки, но не гарантирует истинность.</p>
     <div v-if="error" class="notice error" role="alert">{{ error }}</div>
+    <section class="grounding-history" aria-label="Сохранённые результаты дня 24">
+      <h3>Сохранённые результаты</h3>
+      <p class="hint">Ответы сохраняются в этом браузере, включая отказы и диагностику. Это отдельные запросы, не диалог. Перезапуск сервера не удаляет их; другой браузер и очистка данных сайта не перенесут историю. Для резервной копии скачайте JSON.</p>
+      <label>Выбрать сохранённый результат<select v-model="selectedHistory" :disabled="busy || historyBusy" @change="openSaved"><option value="">{{ history.length ? 'Выберите результат' : 'Пока нет сохранённых результатов' }}</option><option v-for="entry in history" :key="entry.id" :value="entry.id">{{ savedLabel(entry) }}</option></select></label>
+      <details><summary>Открыть ранее скачанный JSON без нового запроса к LLM</summary><label>Импорт JSON-ответов<input type="file" multiple accept=".json,application/json" :disabled="busy || historyBusy" @change="importResult"></label><p class="hint">До 20 файлов за один выбор, до 20 МБ каждый. В каждом файле — один ответ. Проверяется формат, но не происхождение и не истинность. Импорт всегда помечается отдельно; это не повторная проверка текущей версией приложения.</p></details>
+      <p v-if="importSummary" class="import-summary" role="status">{{ importSummary }}</p>
+      <ul v-if="importFailures.length" class="import-errors notice error" role="alert"><li v-for="(failure, i) in importFailures" :key="i">{{ failure }}</li></ul>
+      <p v-if="historyError" class="notice error" role="alert">{{ historyError }}</p>
+    </section>
     <fieldset class="answer-controls" :disabled="busy">
       <label>Контрольный вопрос дня 24<select v-model="selectedCase" @change="expected && (question = expected.question)"><option value="">Свой вопрос</option><option v-for="q in questions" :key="q.id" :value="q.id">{{ q.id }} — {{ q.question }}</option></select></label>
       <details v-if="expected"><summary>Ожидание для проверки</summary><p>{{ expected.expected }}</p><small>{{ expected.expectedSourceSuffix }}</small></details>
@@ -61,10 +132,12 @@ async function openCitation(citation: Schema<'VerifiedCitation'>) {
       <label class="rewrite-toggle"><input v-model="useRewrite" type="checkbox">Переформулировать запрос поиска · один дополнительный LLM-вызов</label>
     </fieldset>
     <p class="hint">Низкий score → «не знаю», без генерации. После смыслового отклонения возможна одна попытка исправления черновика. Неверная цитата, обрезанный JSON и ошибки связи не запускают повтор. Пустой лимит не передаёт max_tokens.</p>
-    <button class="primary" :disabled="busy || invalid" @click="run">{{ busy ? 'Ищем и проверяем…' : `Ответить с цитатами · до ${useRewrite ? 51 : 50} API-вызовов` }}</button>
+    <button class="primary" :disabled="busy || historyBusy || invalid" @click="run">{{ busy ? 'Ищем и проверяем…' : `Ответить с цитатами · до ${useRewrite ? 51 : 50} API-вызовов` }}</button>
     <p v-if="settings && !settings.configured" class="hint">Ключ не настроен. Поиск и отказ по порогу доступны; непустой контекст потребует серверный ключ.</p>
     <article v-if="result" class="grounded-result" :data-status="result.status">
-      <header><h3>{{ statusLabels[result.status] }}</h3><small>{{ result.status }} · {{ result.totalMilliseconds }} мс</small></header>
+      <p v-if="savedEntry" class="saved-result-label">{{ savedEntry.origin === 'import' ? 'Импортированный результат' : 'Сохранённый результат' }} · {{ new Date(savedEntry.savedAt).toLocaleString('ru-RU') }} · индекс {{ savedEntry.indexId }}</p>
+      <p v-if="savedEntry?.origin === 'import'" class="notice">Файл {{ savedEntry.fileName }}. Дата выше — время импорта, не выполнения. Статус и проверки взяты из файла и не подтверждены этим приложением. Открытие цитаты сверяет только точный текст с доступным snapshot, не смысл ответа.</p>
+      <header><h3>{{ savedEntry?.origin === 'import' ? `Статус в файле: ${result.status}` : statusLabels[result.status] }}</h3><small>{{ result.status }} · {{ result.totalMilliseconds }} мс</small></header>
       <p class="saved-question">{{ result.request.question }}</p>
       <template v-if="result.status === 'ANSWERED'">
         <section v-for="(claim, n) in result.claims" :key="n" class="grounded-claim">
@@ -88,3 +161,10 @@ async function openCitation(citation: Schema<'VerifiedCitation'>) {
     <div v-if="opened" class="modal-backdrop" @click.self="opened = null"><section class="document-modal" role="dialog" aria-modal="true" aria-labelledby="citation-title"><header><h2 id="citation-title">{{ opened.document.title }}</h2><button class="icon-button" aria-label="Закрыть цитату" @click="opened = null">×</button></header><p>Цитата совпала с snapshot: {{ result?.snapshotId }}. Координаты UTF-16: {{ opened.citation.canonicalStart }}–{{ opened.citation.canonicalEndExclusive }}.</p><details><summary>Документ целиком с подсветкой цитаты</summary><pre>{{ opened.document.text.slice(0, opened.citation.canonicalStart) }}<mark>{{ opened.citation.quote }}</mark>{{ opened.document.text.slice(opened.citation.canonicalEndExclusive) }}</pre></details><blockquote class="evidence-quote">{{ opened.citation.quote }}</blockquote></section></div>
   </section>
 </template>
+
+<style scoped>
+.grounding-history { border: 1px solid #dbe3d8; border-radius: 12px; padding: 16px; margin: 20px 0; min-width: 0; }
+.grounding-history label { display: grid; gap: 8px; min-width: 0; }
+.grounding-history select, .grounding-history input { width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; }
+.saved-result-label { font-size: 13px; color: #4b6250; overflow-wrap: anywhere; }
+</style>

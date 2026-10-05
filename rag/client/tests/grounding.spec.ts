@@ -27,6 +27,61 @@ test('grounded sources snapshot highlight exports and tab persistence', async ({
   expect((await download).suggestedFilename()).toBe('day24-grounded.md')
   await page.getByRole('button', { name: 'Корпус документов' }).click(); await page.getByRole('button', { name: 'Источники и цитаты' }).click()
   await expect(page.locator('.grounded-claim')).toBeVisible()
+  await page.reload(); await page.getByRole('button', { name: 'Источники и цитаты' }).click()
+  await expect(page.locator('.grounded-claim')).toContainText(quote)
+  await expect(page.locator('.saved-result-label')).toContainText('Сохранённый результат')
+})
+
+test('imported JSON remains explicitly unverified after refresh and does not call the LLM', async ({ page }) => {
+  let generated = 0
+  await page.route('**/api/v1/grounded-answers', r => { generated++; return r.abort() })
+  await page.goto('/'); await page.getByRole('button', { name: 'Источники и цитаты' }).click()
+  await page.getByText('Открыть ранее скачанный JSON без нового запроса к LLM', { exact: true }).click()
+  const exported = result({ question: 'Ранее заданный вопрос', indexId: 'old-index', candidateTopK: 20, finalTopK: 10, similarityThreshold: .6, contextMaxCharacters: 32000, useRewrite: false, maxOutputTokens: 16384 })
+  await page.getByLabel('Импорт JSON-ответов').setInputFiles({ name: 'real-export-shape.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(exported)) })
+  await expect(page.locator('.saved-result-label')).toContainText('Импортированный результат')
+  await expect(page.locator('.grounded-result')).toContainText('не подтверждены этим приложением')
+  await expect(page.locator('.grounded-result h3')).toHaveText('Статус в файле: ANSWERED')
+  await page.reload(); await page.getByRole('button', { name: 'Источники и цитаты' }).click()
+  await expect(page.locator('.saved-result-label')).toContainText('Импортированный результат')
+  await expect(page.locator('.grounded-claim')).toContainText('Используйте -u.')
+  expect(generated).toBe(0)
+})
+
+test('multiple imports preserve valid files and list individual errors without calling the LLM', async ({ page }) => {
+  let generated = 0
+  await page.route('**/api/v1/grounded-answers', r => { generated++; return r.abort() })
+  await page.goto('/'); await page.getByRole('button', { name: 'Источники и цитаты' }).click()
+  await page.getByText('Открыть ранее скачанный JSON без нового запроса к LLM', { exact: true }).click()
+  const request = { question: 'Первый импорт', indexId: 'old-index', candidateTopK: 20, finalTopK: 10, similarityThreshold: .6, contextMaxCharacters: 32000, useRewrite: false, maxOutputTokens: 16384 }
+  await page.getByLabel('Импорт JSON-ответов').setInputFiles([
+    { name: 'first.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(result(request))) },
+    { name: 'broken.json', mimeType: 'application/json', buffer: Buffer.from('{broken') },
+    { name: 'last.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(result({ ...request, question: 'Второй импорт' }))) },
+  ])
+  await expect(page.locator('.import-summary')).toContainText('сохранено 2 из 3')
+  await expect(page.locator('.import-errors')).toContainText('broken.json: Файл не является корректным JSON')
+  await expect(page.getByLabel('Выбрать сохранённый результат').locator('option')).toHaveCount(3)
+  await expect(page.locator('.saved-question')).toHaveText('Второй импорт')
+  await page.reload(); await page.getByRole('button', { name: 'Источники и цитаты' }).click()
+  await expect(page.getByLabel('Выбрать сохранённый результат').locator('option')).toHaveCount(3)
+  await expect(page.locator('.saved-result-label')).toContainText('Импортированный результат')
+  expect(generated).toBe(0)
+})
+
+test('import count and per-file size limits fail clearly while preserving other valid files', async ({ page }) => {
+  await page.route('**/api/v1/grounded-answers', r => r.abort())
+  await page.goto('/'); await page.getByRole('button', { name: 'Источники и цитаты' }).click()
+  await page.getByText('Открыть ранее скачанный JSON без нового запроса к LLM', { exact: true }).click()
+  const exported = result({ question: 'Небольшой файл', indexId: 'old-index', candidateTopK: 20, finalTopK: 10, similarityThreshold: .6, contextMaxCharacters: 32000, useRewrite: false, maxOutputTokens: 16384 })
+  const small = { name: 'small.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(exported)) }
+  await page.getByLabel('Импорт JSON-ответов').setInputFiles(Array.from({ length: 21 }, (_, i) => ({ ...small, name: `file-${i}.json` })))
+  await expect(page.locator('.import-errors')).toContainText('Можно не более 20')
+  await expect(page.getByLabel('Выбрать сохранённый результат').locator('option')).toHaveCount(1)
+  await page.getByLabel('Импорт JSON-ответов').setInputFiles([{ name: 'large.json', mimeType: 'application/json', buffer: Buffer.alloc(20 * 1024 * 1024 + 1, ' ') }, small])
+  await expect(page.locator('.import-summary')).toContainText('сохранено 1 из 2')
+  await expect(page.locator('.import-errors')).toContainText('large.json: Файл больше 20 МБ')
+  await expect(page.getByLabel('Выбрать сохранённый результат').locator('option')).toHaveCount(2)
 })
 test('invalid output quarantined mobile contained and unknown explicit', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })

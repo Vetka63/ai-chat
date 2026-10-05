@@ -6,6 +6,7 @@ services:
     environment:
       BUDGET_LEDGER: /ledger/day24-25-budget-cycle2.json
       BUDGET_STAGE_CNY: ${RAG_BUDGET_STAGE_CNY:-5}
+      BUDGET_AUTHORIZED_CNY: ${RAG_BUDGET_AUTHORIZED_CNY:-40}
     volumes: ["./scripts:/checks:ro", "./data:/ledger"]
     ports: ["127.0.0.1:8787:8787"]
   backend:
