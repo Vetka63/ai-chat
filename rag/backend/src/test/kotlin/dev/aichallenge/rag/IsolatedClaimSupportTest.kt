@@ -46,7 +46,12 @@ class IsolatedClaimSupportTest {
         var calls = 0
         val delegate = object : ClaimSupportValidator {
             override fun validateScope(claims: List<GroundedClaim>, included: List<SearchHit>, question: String?): ClaimSupportCheck {
-                error("Уже отклонённый черновик не требует дополнительной платной проверки")
+                assertEquals(1, claims.size)
+                assertEquals(claims.single().citations.map { it.source.chunkId }, included.map { it.chunk.chunkId })
+                val rejected = claims.single() == this@IsolatedClaimSupportTest.claims[2]
+                return ClaimSupportCheck(if (rejected) SupportCheckStatus.REJECTED else SupportCheckStatus.PASSED,
+                    listOf(ClaimSupportAssessment(0, if (rejected) ClaimSupportVerdict.UNSUPPORTED else ClaimSupportVerdict.SUPPORTED, "scope")),
+                    if (rejected) listOf(EvidenceIssue("unsupported", "lost premise", 0)) else emptyList(), trace)
             }
             override fun validate(input: List<GroundedClaim>, included: List<SearchHit>): ClaimSupportCheck {
                 assertEquals(listOf(claims[calls]), input)
@@ -58,14 +63,16 @@ class IsolatedClaimSupportTest {
             }
         }
         val checked = IsolatedClaimSupportValidator(delegate, ClaimSupportPromptAssembler(jacksonObjectMapper()), 1).validate(claims, hits)
-        assertEquals(3, calls); assertEquals(3, checked.generations().size)
+        assertEquals(3, calls); assertEquals(5, checked.generations().size)
         assertEquals(listOf(0, 1, 2), checked.claims.map { it.claimIndex })
-        assertEquals(1, checked.issues.single().claimIndex)
+        assertEquals(listOf(1, 2), checked.issues.map { it.claimIndex })
+        assertEquals(listOf(1, 2), checked.claims.filter { it.verdict == ClaimSupportVerdict.UNSUPPORTED }.map { it.claimIndex })
         assertEquals(SupportCheckStatus.REJECTED, checked.status)
     }
     @Test fun `transport failure keeps preceding calls and failed attempt without retry or pretending zero usage`() {
         var calls = 0
         val delegate = object : ClaimSupportValidator {
+            override fun validateScope(claims: List<GroundedClaim>, included: List<SearchHit>, question: String?) = scopePassed(claims)
             override fun validate(input: List<GroundedClaim>, included: List<SearchHit>): ClaimSupportCheck {
                 if (++calls == 2) throw IllegalStateException("sensitive transport body")
                 return ClaimSupportCheck(SupportCheckStatus.PASSED, listOf(ClaimSupportAssessment(0, ClaimSupportVerdict.SUPPORTED, "reason")), emptyList(), trace)
@@ -73,9 +80,9 @@ class IsolatedClaimSupportTest {
         }
         val checked = IsolatedClaimSupportValidator(delegate, ClaimSupportPromptAssembler(jacksonObjectMapper()), 1).validate(claims, hits)
         assertEquals(SupportCheckStatus.INVALID_RESPONSE, checked.status)
-        assertEquals(3, calls); assertEquals(3, checked.generations().size)
-        assertNull(checked.additionalGenerations.first().usage)
-        assertEquals("error", checked.additionalGenerations.first().finishReason)
+        assertEquals(3, calls); assertEquals(5, checked.generations().size)
+        assertNull(checked.generations()[2].usage)
+        assertEquals("error", checked.generations()[2].finishReason)
         assertFalse(checked.toString().contains("sensitive"))
     }
     @Test fun `parallel checks are bounded and results retain original claim order`() {
@@ -98,7 +105,7 @@ class IsolatedClaimSupportTest {
             assertTrue(peak.get() in 2..3)
             assertEquals(input.map { it.text }, result.claims.map { it.reason })
             assertEquals((0..5).toList(), result.claims.map { it.claimIndex })
-            assertEquals(7, result.generations().size)
+            assertEquals(12, result.generations().size)
         } finally { checker.close() }
     }
     @Test fun `scope rejection overrides prior support and scope outage fails closed without retry`() {
@@ -116,8 +123,8 @@ class IsolatedClaimSupportTest {
             try {
                 val result = checker.validate(claims, hits)
                 assertEquals(if (fail) SupportCheckStatus.INVALID_RESPONSE else SupportCheckStatus.REJECTED, result.status)
-                assertEquals(1, scopeCalls)
-                assertEquals(4, result.generations().size)
+                assertEquals(3, scopeCalls)
+                assertEquals(6, result.generations().size)
                 if (fail) assertNull(result.generations().last().usage)
                 else assertTrue(result.claims.all { it.verdict == ClaimSupportVerdict.UNSUPPORTED })
                 assertFalse(result.toString().contains("private provider body"))

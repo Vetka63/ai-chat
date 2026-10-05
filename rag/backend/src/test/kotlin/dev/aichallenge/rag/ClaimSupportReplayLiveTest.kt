@@ -38,7 +38,7 @@ class ClaimSupportReplayLiveTest {
         for (round in 1..repeats) {
             val result = checker.validate(claims, included)
             records.add(mapOf("round" to round, "supportCheck" to result))
-            Files.writeString(path, mapper.writerWithDefaultPrettyPrinter().writeValueAsString(mapOf("thinkingEnabled" to properties.supportThinkingEnabled, "scopeThinkingEnabled" to properties.scopeThinkingEnabled, "maximumCalls" to (claims.size + 2) * repeats, "records" to records)))
+            Files.writeString(path, mapper.writerWithDefaultPrettyPrinter().writeValueAsString(mapOf("thinkingEnabled" to properties.supportThinkingEnabled, "scopeThinkingEnabled" to properties.scopeThinkingEnabled, "maximumCalls" to claims.size * 3 * repeats, "records" to records)))
             for (index in listOf(0, 2)) if (result.claims.firstOrNull { it.claimIndex == index }?.verdict != ClaimSupportVerdict.UNSUPPORTED) failures.add("round=$round index=$index")
             println("Replay round=$round ${result.status}, calls=${result.generations().size}; trace=$path")
         }

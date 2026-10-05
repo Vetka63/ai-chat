@@ -3,6 +3,7 @@ package dev.aichallenge.rag.grounding.adapters
 import dev.aichallenge.rag.answering.ports.LlmClient
 import dev.aichallenge.rag.answering.services.CostEstimator
 import dev.aichallenge.rag.grounding.enums.ClaimSupportVerdict
+import dev.aichallenge.rag.grounding.enums.EvidenceScope
 import dev.aichallenge.rag.grounding.enums.SupportCheckStatus
 import dev.aichallenge.rag.grounding.models.*
 import dev.aichallenge.rag.grounding.ports.ClaimSupportValidator
@@ -27,11 +28,22 @@ class LlmClaimSupportValidator(private val llm: LlmClient, private val prompt: C
         return check(claims, included, messages)
     }
     override fun validateScope(claims: List<GroundedClaim>, included: List<SearchHit>, question: String?): ClaimSupportCheck {
+        return validateScope(claims, included, question, List(claims.size) { null })
+    }
+    override fun validateScope(claims: List<GroundedClaim>, included: List<SearchHit>, question: String?, claimScopes: List<EvidenceScope?>): ClaimSupportCheck {
+        require(claimScopes.size == claims.size)
         val sourceMessages = SourceScopeInspector.messages(claims, included, mapper)
         val sourceResponse = llm.completeVerifiedJson(sourceMessages, 16384)
         val sourceGeneration = GroundingGeneration(sourceResponse.model, sourceResponse.finishReason, sourceResponse.milliseconds, sourceResponse.usage, costs.estimate(sourceResponse.model, sourceResponse.usage), sourceMessages, sourceResponse.content)
         val bindings = if (sourceResponse.finishReason == "stop") SourceScopeInspector.parse(sourceResponse.content, claims, included, mapper) else null
         if (bindings == null) return ClaimSupportCheck(SupportCheckStatus.INVALID_RESPONSE, emptyList(), listOf(EvidenceIssue("invalid_source_scope", "Не удалось выделить область действия источника. Ответ не опубликован.")), sourceGeneration)
+        // Независимая разметка источника не может быть отменена последующим LLM-вердиктом.
+        // Не допускаем общее правило, когда хотя бы одно его доказательство — частный пример.
+        val mismatches = bindings.filter { it.example && claimScopes[it.claimIndex] == EvidenceScope.GENERAL }.map { it.claimIndex }.toSet()
+        fun mismatch(index: Int) = ClaimSupportAssessment(index, ClaimSupportVerdict.UNSUPPORTED,
+            "Первичная проверка определила общее утверждение, независимая разметка — частный пример. Ограничьте утверждение постановкой примера и явно сохраните его условия либо используйте доказательство общего правила.", claimScopes[index])
+        if (mismatches.size == claims.size) return ClaimSupportCheck(SupportCheckStatus.REJECTED, claims.indices.map(::mismatch),
+            mismatches.map { EvidenceIssue("unsupported_claim", "Обобщён частный пример источника.", it) }, sourceGeneration)
         val requirements = ClaimScopePromptAssembler.requirements(bindings, included)
         val messages = ClaimScopePromptAssembler.assemble(claims, requirements, question, mapper)
         return try {
@@ -41,9 +53,10 @@ class LlmClaimSupportValidator(private val llm: LlmClient, private val prompt: C
             if (verdicts == null) ClaimSupportCheck(SupportCheckStatus.INVALID_RESPONSE, emptyList(), listOf(EvidenceIssue("invalid_scope_checks", "Не получены однозначные проверки всех условий источника.")), sourceGeneration, listOf(generation))
             else {
                 val assessments = claims.indices.map { index ->
+                    if (index in mismatches) return@map mismatch(index)
                     val missing = verdicts.filter { it.requirement.claimIndex == index && !it.preserved }
                     ClaimSupportAssessment(index, if (missing.isEmpty()) ClaimSupportVerdict.SUPPORTED else ClaimSupportVerdict.UNSUPPORTED,
-                        if (missing.isEmpty()) "Область действия и условия источника сохранены." else missing.joinToString("; ") { it.reason }.take(1000))
+                        if (missing.isEmpty()) "Область действия и условия источника сохранены." else missing.joinToString("; ") { it.reason }.take(1000), claimScopes[index])
                 }
                 val issues = assessments.filter { it.verdict != ClaimSupportVerdict.SUPPORTED }.map { EvidenceIssue("unsupported_claim", "Потеряно условие или область действия источника.", it.claimIndex) }
                 ClaimSupportCheck(if (issues.isEmpty()) SupportCheckStatus.PASSED else SupportCheckStatus.REJECTED, assessments, issues, sourceGeneration, listOf(generation))
@@ -109,7 +122,7 @@ class LlmClaimSupportValidator(private val llm: LlmClient, private val prompt: C
                 scopeMismatch -> "Обобщён частный пример. $reason".take(300)
                 conditionMismatch -> "Потеряно условие источника. $reason".take(300)
                 else -> reason
-            }))
+            }, EvidenceScope.valueOf(claimScope!!.uppercase())))
         }
         if (seen != claims.indices.toSet()) return invalid("invalid_support_shape", "Проверка смысла пропустила пункт ответа.")
         val ordered = assessments.sortedBy { it.claimIndex }

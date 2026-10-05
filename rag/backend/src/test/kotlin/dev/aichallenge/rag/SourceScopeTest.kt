@@ -6,6 +6,7 @@ import dev.aichallenge.rag.grounding.services.ClaimSupportPromptAssembler
 import dev.aichallenge.rag.grounding.services.ClaimScopePromptAssembler
 import dev.aichallenge.rag.grounding.adapters.LlmClaimSupportValidator
 import dev.aichallenge.rag.grounding.enums.SupportCheckStatus
+import dev.aichallenge.rag.grounding.enums.EvidenceScope
 import dev.aichallenge.rag.answering.models.*
 import dev.aichallenge.rag.answering.ports.LlmClient
 import dev.aichallenge.rag.answering.services.CostEstimator
@@ -22,6 +23,23 @@ class SourceScopeTest {
     private val hits = fixture.path("included").toList().map { mapper.treeToValue(it, SearchHit::class.java) }
     private val id = hits.single().chunk.chunkId
     private fun raw(scope: String = "example", spans: List<Int> = listOf(1), chunk: String = id, index: Int = 0) = mapper.writeValueAsString(mapOf("bindings" to listOf(mapOf("claim_index" to index, "chunk_id" to chunk, "scope" to scope, "premise_spans" to spans))))
+    @Test fun `source example cannot support a general claim even if a later judge would approve it`() {
+        var calls = 0
+        val llm = object : LlmClient {
+            override fun settings() = AnswerSettings(true, "deepseek-flash", 0.0, "disabled", 16000, null, "")
+            override fun complete(messages: List<LlmMessage>, maxOutputTokens: Int?): LlmCompletion {
+                check(++calls == 1) { "Contradiction must stop before the permissive scope judge" }
+                return LlmCompletion("fixture", "deepseek-v4-pro", raw(), "stop", 1, TokenUsage(10, 10, 20, 0, 10))
+            }
+        }
+        val result = LlmClaimSupportValidator(llm, ClaimSupportPromptAssembler(mapper), mapper, CostEstimator())
+            .validateScope(claims, hits, null, List(claims.size) { EvidenceScope.GENERAL })
+        assertEquals(SupportCheckStatus.REJECTED, result.status)
+        assertEquals(1, calls)
+        assertEquals(1, result.generations().size)
+        assertEquals(EvidenceScope.GENERAL, result.claims.single().claimScope)
+        assertTrue(result.claims.single().reason.contains("частный пример"))
+    }
     @Test fun `source pass does not see generated answer or user question`() {
         assertTrue(SourceScopeInspector.system.contains("json", ignoreCase = true))
         assertTrue(ClaimScopePromptAssembler.system.contains("json", ignoreCase = true)) // Требование API для response_format=json_object.

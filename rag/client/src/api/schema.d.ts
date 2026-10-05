@@ -474,6 +474,11 @@ export interface components {
             claimIndex: number;
             verdict: components["schemas"]["ClaimSupportVerdict"];
             reason: string;
+            /**
+             * @description Primary claim scope, retained for cross-checking source-only classification; absent in historical results.
+             * @enum {string|null}
+             */
+            claimScope?: "GENERAL" | "EXAMPLE" | null;
         };
         ClaimSupportCheck: {
             status: components["schemas"]["SupportCheckStatus"];

@@ -106,7 +106,7 @@ test('invalid output remains quarantined and settings cannot mutate existing cha
 })
 test('chat repair preserves final-only answer and collapses rejected draft across reload', async ({ page }) => {
   await fixture(page, { repair: true }); await start(page); await send(page, 'Что делает add?')
-  await expect(page.locator('.rag-chat-composer')).toContainText('до 23 LLM-вызовов')
+  await expect(page.locator('.rag-chat-composer')).toContainText('до 51 LLM-вызова')
   await expect(page.locator('.rag-chat-claim')).toContainText('Сохраняется подготовленная версия.')
   await expect(page.locator('.rag-chat-claim')).not.toContainText('ИСХОДНЫЙ ЛОЖНЫЙ ВЫВОД ЧАТА')
   const diagnostic = page.locator('.grounding-repair')
@@ -297,7 +297,7 @@ test('another tab editing its draft preserves in-flight receipt and both chat st
   } finally { release(); await other.close() }
 })
 test('live chat resolves followup keeps goal and opens snapshot source @live', async ({ page }, testInfo) => {
-  test.skip(process.env.RAG_LIVE !== 'true', 'Opt-in: up to 46 paid DeepSeek calls including isolated checks and bounded repairs')
+  test.skip(process.env.RAG_LIVE !== 'true', 'Opt-in: up to 102 paid DeepSeek calls including isolated checks and bounded repairs')
   test.setTimeout(1_800_000)
   const cap = Number(process.env.RAG_LIVE_MAX_OUTPUT_TOKENS ?? '16384')
   expect(Number.isInteger(cap) && cap > 0 && cap <= 16384).toBe(true)

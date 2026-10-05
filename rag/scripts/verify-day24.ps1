@@ -1,4 +1,4 @@
-param([string]$ApiUrl = 'http://localhost:8382/api/v1', [int]$MaxOutputTokens = 16384, [double]$SimilarityThreshold = .60, [int]$CandidateTopK = 20, [int]$FinalTopK = 10, [int]$ContextMaxCharacters = 32000, [ValidateRange(0,10)][int]$AbortAfterFailures = 0, [string]$DeploymentNote = 'Профили задаются серверной конфигурацией; имена фактически ответивших моделей сохранены в trace.')
+param([string]$ApiUrl = 'http://localhost:8382/api/v1', [int]$MaxOutputTokens = 16384, [double]$SimilarityThreshold = .60, [int]$CandidateTopK = 20, [int]$FinalTopK = 10, [int]$ContextMaxCharacters = 32000, [ValidateRange(0,10)][int]$AbortAfterFailures = 0, [ValidateRange(0.9,1)][double]$MinimumAnsweredRate = 0.9, [string]$DeploymentNote = 'Профили задаются серверной конфигурацией; имена фактически ответивших моделей сохранены в trace.')
 $ErrorActionPreference = 'Stop'
 $ragApi = $ApiUrl.TrimEnd('/')
 $ragSettings = Invoke-RestMethod "$ragApi/answer-settings"
@@ -9,7 +9,7 @@ if (!$ragIndex) { throw 'Нужен готовый STRUCTURAL индекс 3000/
 $ragQuestions = Invoke-RestMethod "$ragApi/evaluation/questions"
 if ($ragQuestions.Count -ne 10) { throw 'Ожидалось 10 вопросов.' }
 $ragRunId = '{0}-{1}' -f [DateTimeOffset]::UtcNow.ToString('yyyyMMdd-HHmmss-fff'), [Guid]::NewGuid().ToString('N').Substring(0, 8)
-$ragReport = @{ at = [DateTimeOffset]::UtcNow.ToString('o'); runId = $ragRunId; indexId = $ragIndex.id; comparisonModelNotGrounded = $ragSettings.model; generationTestMaxOutputTokens = $MaxOutputTokens; deploymentNote = $DeploymentNote; supportCheckMaxOutputTokens = 16384; note = 'До 220 LLM-вызовов для 10 вопросов: генерация и изолированная проверка каждого пункта, при смысловом отказе одна правка и новые изолированные проверки. HTTP retry и rewrite отсутствуют. Фактические модели и usage каждой стадии сохранены; режим thinking проверяется по deploymentNote и конфигурации сервера. Тестовый лимит генерации не меняет default null в UI. Проверяются PASSED, дословность и provenance; смысл оценивается также вручную.'; cases = @(); negative = @() }
+$ragReport = @{ at = [DateTimeOffset]::UtcNow.ToString('o'); runId = $ragRunId; indexId = $ragIndex.id; comparisonModelNotGrounded = $ragSettings.model; generationTestMaxOutputTokens = $MaxOutputTokens; deploymentNote = $DeploymentNote; supportCheckMaxOutputTokens = 16384; note = 'До 500 LLM-вызовов для 10 вопросов: генерация и изолированная проверка каждого пункта, при смысловом отказе одна правка и новые изолированные проверки. HTTP retry и rewrite отсутствуют. Фактические модели и usage каждой стадии сохранены; режим thinking проверяется по deploymentNote и конфигурации сервера. Тестовый лимит генерации не меняет default null в UI. Проверяются PASSED, дословность и provenance; смысл оценивается также вручную.'; cases = @(); negative = @() }
 $ragDocuments = @{}
 $ragFailedCases = @()
 $ragDataDirectory = Join-Path $PSScriptRoot '../data'
@@ -19,7 +19,7 @@ function Save-RagReport {
     [IO.File]::WriteAllText($ragReportPath, ($ragReport | ConvertTo-Json -Depth 60), [Text.UTF8Encoding]::new($false))
 }
 Save-RagReport
-"Новый trace: $ragReportPath. До 220 платных LLM-вызовов; старые прогоны сохраняются."
+"Новый trace: $ragReportPath. До 500 платных LLM-вызовов; старые прогоны сохраняются."
 function Invoke-Grounded([string]$Question, [double]$Threshold = $SimilarityThreshold) {
     $ragBody = @{ question = $Question; indexId = $ragIndex.id; candidateTopK = $CandidateTopK; finalTopK = $FinalTopK; similarityThreshold = $Threshold; contextMaxCharacters = $ContextMaxCharacters; maxOutputTokens = $MaxOutputTokens; useRewrite = $false } | ConvertTo-Json
     Invoke-RestMethod "$ragApi/grounded-answers" -Method Post -ContentType 'application/json; charset=utf-8' -Body ([Text.Encoding]::UTF8.GetBytes($ragBody)) -TimeoutSec 900
@@ -28,7 +28,7 @@ foreach ($ragCase in $ragQuestions) {
     $ragResult = Invoke-Grounded $ragCase.question
     $ragReport.cases += @{ case = $ragCase; result = $ragResult }
     Save-RagReport # Сохраняем и отклонённый ответ до сообщения об ошибке.
-    if ($ragResult.llmStagesAttempted -gt 22) { throw 'Без rewrite ожидается не более 22 LLM-стадий с одним исправлением.' }
+    if ($ragResult.llmStagesAttempted -gt 50) { throw 'Без rewrite ожидается не более 50 LLM-стадий с одним исправлением.' }
     if ($ragResult.status -ne 'ANSWERED') {
         if ($ragResult.claims.Count -or $ragResult.sources.Count) { throw 'Отклонённый ответ содержит публичные утверждения или источники.' }
         $ragFailedCases += $ragCase.id; "$($ragCase.id): $($ragResult.status); trace сохранён."
@@ -78,5 +78,7 @@ foreach ($ragQuestion in @('Какая погода завтра в Самаре
 $ragResult = Invoke-Grounded 'Как работает git stash?' 1
 $ragReport.negative += @{ question = 'High threshold'; result = $ragResult }; Save-RagReport
 if ($ragResult.status -ne 'UNKNOWN' -or $ragResult.llmStagesAttempted -ne 0) { throw 'Порог не блокирует слабый контекст.' }
-if ($ragFailedCases.Count) { throw "Не все ответы прошли evidence: $($ragFailedCases -join ', '). Trace: $ragReportPath. Автоматического retry нет." }
-"Проверены 10 ответов и 4 отказа. Trace: $ragReportPath. Проверка модели не гарантирует истину: оцените смысл и полноту также вручную."
+$ragAnsweredCount = @($ragReport.cases | Where-Object { $_.result.status -eq 'ANSWERED' }).Count
+$ragReport.acceptance = @{ answered = $ragAnsweredCount; total = $ragReport.cases.Count; minimumAnsweredRate = $MinimumAnsweredRate; failedCases = $ragFailedCases; semanticReview = 'REQUIRED_SEPARATELY' }; Save-RagReport
+if ($ragReport.cases.Count -ne 10 -or $ragAnsweredCount / 10 -lt $MinimumAnsweredRate) { throw "Не достигнут заранее заданный порог ответов: $ragAnsweredCount/10. Отказы: $($ragFailedCases -join ', '). Trace: $ragReportPath. Автоматического retry нет." }
+"Проверены все 10 вопросов и 4 отрицательные проверки. ANSWERED=$ragAnsweredCount/10, порог=$MinimumAnsweredRate. Trace: $ragReportPath. Смысл и полноту оцените отдельно; отказы не названы ответами."

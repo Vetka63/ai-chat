@@ -279,6 +279,16 @@ class GroundingTest {
         assertFalse(r.answer.contains(instructionLike))
     }
 
+    @Test fun `repair does not truncate a validated explanation before its missing condition`() {
+        val explanation = "Контекст источника. ".repeat(20) + "В конце указано существенное условие: только для конкретного целевого объекта."
+        val rejected = supportJson("unsupported").replace("Проверена связь утверждения с его цитатой.", explanation)
+        val f = Fixture(supportContent = rejected, repairSupportContent = supportJson())
+        val result = f.service.answer(f.request())
+        val feedback = mapper.readTree(result.generation!!.messages.last().content)
+        assertEquals(explanation, feedback.path("rejected_claims")[0].path("reason").asText())
+        assertEquals(GroundedStatus.ANSWERED, result.status)
+    }
+
     @Test fun `repair plus rewrite counts all five stages exactly once`() {
         val f = Fixture(supportContent = supportJson("unsupported"), repairSupportContent = supportJson())
         val r = f.service.answer(f.request().copy(useRewrite = true))
@@ -368,9 +378,9 @@ class GroundingTest {
         val f = Fixture(modelContent = content, isolated = true)
         val result = f.service.answer(f.request())
         assertEquals(GroundedStatus.ANSWERED, result.status, mapper.writeValueAsString(result.supportCheck))
-        assertEquals(5, result.llmStagesAttempted)
-        assertEquals(75L, result.totalUsage!!.totalTokens)
-        assertEquals(4, result.supportCheck!!.generations().size)
+        assertEquals(7, result.llmStagesAttempted)
+        assertEquals(105L, result.totalUsage!!.totalTokens)
+        assertEquals(6, result.supportCheck!!.generations().size)
         assertEquals(listOf(0, 1), result.supportCheck!!.claims.map { it.claimIndex })
     }
     @Test fun `isolated failed second check keeps known first usage but not false complete total`() {
@@ -379,10 +389,11 @@ class GroundingTest {
         val f = Fixture(modelContent = content, isolated = true, failRepairSupport = true)
         val result = f.service.answer(f.request())
         assertEquals(GroundedStatus.INVALID_EVIDENCE, result.status)
-        assertEquals(3, result.llmStagesAttempted)
+        assertEquals(5, result.llmStagesAttempted)
         assertNull(result.totalUsage); assertNull(result.estimatedCost); assertNull(result.repair)
         assertEquals(15L, result.supportCheck!!.generation.usage!!.totalTokens)
-        assertNull(result.supportCheck!!.additionalGenerations.single().usage)
+        assertEquals(4, result.supportCheck!!.generations().size)
+        assertNull(result.supportCheck!!.additionalGenerations.last().usage)
     }
 
 }

@@ -237,14 +237,14 @@ class DeepSeekAdapterTest {
         assertSame(expected, client.completePreparationJson(messages, 16384))
         assertEquals(listOf(messages to 16384), calls)
     }
-    @Test fun `scope comparison is Pro without reasoning while source analysis keeps high profile`() {
+    @Test fun `scope comparison is Pro low while source analysis keeps high profile`() {
         withServer(valid) { client, requests ->
             client.completeScopeJson(listOf(LlmMessage("user", "JSON")), 16384)
             client.completeVerifiedJson(listOf(LlmMessage("user", "JSON")), 16384)
             val scope = jacksonObjectMapper().readTree(requests[0])
             assertEquals("deepseek-v4-pro", scope.path("model").asText())
-            assertEquals("disabled", scope.path("thinking").path("type").asText())
-            assertFalse(scope.has("reasoning_effort"))
+            assertEquals("enabled", scope.path("thinking").path("type").asText())
+            assertEquals("low", scope.path("reasoning_effort").asText())
             assertEquals(16384, scope.path("max_tokens").asInt())
             assertEquals("json_object", scope.path("response_format").path("type").asText())
             assertEquals("enabled", jacksonObjectMapper().readTree(requests[1]).path("thinking").path("type").asText())

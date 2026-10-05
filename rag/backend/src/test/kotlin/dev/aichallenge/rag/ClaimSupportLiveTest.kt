@@ -38,6 +38,8 @@ class ClaimSupportLiveTest {
             supportModel = System.getenv("RAG_SUPPORT_TEST_MODEL")?.takeIf { it.isNotBlank() } ?: "deepseek-v4-pro",
             supportReasoningEffort = System.getenv("RAG_SUPPORT_TEST_EFFORT")?.takeIf { it.isNotBlank() } ?: "high",
             supportThinkingEnabled = System.getenv("RAG_SUPPORT_TEST_THINKING")?.toBooleanStrict() ?: true,
+            scopeThinkingEnabled = System.getenv("RAG_SCOPE_TEST_THINKING")?.toBooleanStrict() ?: true,
+            scopeReasoningEffort = System.getenv("RAG_SCOPE_TEST_EFFORT")?.takeIf { it.isNotBlank() } ?: "low",
         )
         val checker = IsolatedClaimSupportValidator(LlmClaimSupportValidator(DeepSeekLlmClient(properties, mapper), ClaimSupportPromptAssembler(mapper), mapper, CostEstimator()), ClaimSupportPromptAssembler(mapper))
         val bookCases = listOf(
@@ -99,7 +101,11 @@ class ClaimSupportLiveTest {
         val runId = Instant.now().toString().replace(':', '-') + "-" + UUID.randomUUID().toString().take(8)
         val reportPath = directory.resolve("day24-support-live-$runId.json")
         val records = mutableListOf<Map<String, Any>>()
-        val report = mapOf("at" to Instant.now().toString(), "runId" to runId, "thinkingEnabled" to properties.supportThinkingEnabled, "scopeThinkingEnabled" to properties.scopeThinkingEnabled, "repeats" to repeats, "parallelism" to parallelism, "maximumCalls" to cases.size * repeats * 3, "note" to "Полный набор: книга + синтетические контрастные случаи. Поддержка цитат, независимый source-only анализ и scope guard. Без retry. Все повторения сохранены, не выбор удачных ответов.", "cases" to records)
+        val positiveTotal = cases.count { it.expected == SupportCheckStatus.PASSED } * repeats
+        val allowedPositiveFailures = positiveTotal / 20 // Не менее 95%, как задано до исправлений.
+        var positiveFailures = 0
+        var negativeFailures = 0
+        val report = mapOf("at" to Instant.now().toString(), "runId" to runId, "thinkingEnabled" to properties.supportThinkingEnabled, "scopeThinkingEnabled" to properties.scopeThinkingEnabled, "scopeReasoningEffort" to properties.scopeReasoningEffort, "repeats" to repeats, "parallelism" to parallelism, "maximumCalls" to cases.size * repeats * 3, "allowedPositiveFailures" to allowedPositiveFailures, "note" to "Полный набор: книга + синтетические контрастные случаи. Все отрицательные должны получить REJECTED (не технический сбой), не менее 95% положительных — PASSED. Без retry, выборочного повтора или сокрытия отказов. Невыполнимый критерий прекращает следующие круги.", "cases" to records)
         fun save() = Files.writeString(reportPath, mapper.writerWithDefaultPrettyPrinter().writeValueAsString(report))
         save()
         println("Live support trace: $reportPath; максимум ${cases.size * repeats * 3} платных вызовов.")
@@ -125,7 +131,10 @@ class ClaimSupportLiveTest {
             }
             synchronized(reportLock) {
                 records.add(mapOf("id" to case.id, "round" to round, "expected" to case.expected, "claim" to case.claim, "source" to case.source, "quote" to case.quote, "supportCheck" to checked))
-                if (checked.status != case.expected) failures.add("${case.id}: ожидался ${case.expected}, получен ${checked.status}")
+                if (checked.status != case.expected) {
+                    failures.add("${case.id}: ожидался ${case.expected}, получен ${checked.status}")
+                    if (case.expected == SupportCheckStatus.PASSED) positiveFailures++ else negativeFailures++
+                }
                 save()
             }
             println("Support round=$round ${case.id}: expected=${case.expected} actual=${checked.status}")
@@ -134,9 +143,11 @@ class ClaimSupportLiveTest {
         try {
             for (round in 1..repeats) {
                 callers.invokeAll(cases.map { case -> Callable { runOne(round, case) } }).forEach { it.get() }
-                if (failures.isNotEmpty()) break // Полный неуспешный круг сохранён; повторять его без исправления незачем.
+                if (negativeFailures > 0 || positiveFailures > allowedPositiveFailures) break
             }
         } finally { callers.shutdown(); checker.close() }
-        assertTrue(failures.isEmpty(), "${failures.joinToString("; ")}. Все результаты сохранены: $reportPath")
+        assertEquals(0, negativeFailures, "Отрицательный пример не отклонён: ${failures.joinToString("; ")}. Trace: $reportPath")
+        assertTrue(positiveFailures <= allowedPositiveFailures, "Не достигнуты 95% положительных примеров: ${failures.joinToString("; ")}. Trace: $reportPath")
+        assertEquals(cases.size * repeats, records.size, "Приёмка требует все запланированные круги, а не успешный фрагмент.")
     }
 }

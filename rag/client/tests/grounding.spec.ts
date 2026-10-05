@@ -66,9 +66,9 @@ test('one repaired draft stays collapsed while only final evidence is public', a
     supportCheck: { status: 'PASSED', claims: [{ claimIndex: 0, verdict: 'SUPPORTED', reason: 'Подтверждено.' }], issues: [], generation: { ...generation, rawJson: '{}' } },
   } }))
   await page.goto('/'); await page.getByRole('button', { name: 'Источники и цитаты' }).click()
-  await expect(page.getByRole('button', { name: 'Ответить с цитатами · до 22 API-вызовов', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Ответить с цитатами · до 50 API-вызовов', exact: true })).toBeVisible()
   await page.getByRole('checkbox', { name: /Переформулировать запрос поиска/ }).check()
-  await expect(page.getByRole('button', { name: 'Ответить с цитатами · до 23 API-вызовов', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Ответить с цитатами · до 51 API-вызовов', exact: true })).toBeVisible()
   await page.getByRole('button', { name: /^Ответить с цитатами/ }).click()
   await expect(page.locator('.grounded-claim')).toContainText('Используйте -u.')
   await expect(page.locator('.grounded-claim')).not.toContainText(rejected)
