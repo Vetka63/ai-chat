@@ -1,6 +1,9 @@
 package dev.aichallenge.local.web
 
 import dev.aichallenge.local.generation.LabBusy
+import dev.aichallenge.local.generation.InvalidModel
+import dev.aichallenge.local.chat.ChatConflict
+import dev.aichallenge.local.chat.ChatMissing
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.MethodArgumentNotValidException
@@ -12,6 +15,12 @@ import org.springframework.web.bind.annotation.RestControllerAdvice
 class Errors {
     @ExceptionHandler(LabBusy::class)
     fun busy(e: LabBusy) = ResponseEntity.status(HttpStatus.CONFLICT).body(mapOf("message" to e.message))
+    @ExceptionHandler(ChatConflict::class)
+    fun conflict(e: ChatConflict) = ResponseEntity.status(HttpStatus.CONFLICT).body(mapOf("message" to e.message))
+    @ExceptionHandler(ChatMissing::class)
+    fun missing(e: ChatMissing) = ResponseEntity.status(HttpStatus.NOT_FOUND).body(mapOf("message" to e.message))
+    @ExceptionHandler(InvalidModel::class)
+    fun model(e: InvalidModel) = ResponseEntity.badRequest().body(mapOf("message" to e.message))
     @ExceptionHandler(MethodArgumentNotValidException::class)
     fun invalid(e: MethodArgumentNotValidException) = ResponseEntity.badRequest().body(mapOf("message" to
         e.bindingResult.fieldErrors.joinToString("; ") { "${it.field}: ${it.defaultMessage}" }))

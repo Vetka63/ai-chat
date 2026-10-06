@@ -5,9 +5,10 @@ export interface Run { id: string; createdAt: string; request: GenerateRequest; 
 export interface Summary { id: string; createdAt: string; prompt: string; model: string; status: Status }
 export interface RuntimeInfo { connected: boolean; version: string | null; configuredModels: string[]; models: { name: string; sizeBytes: number; parameterSize: string | null; quantization: string | null }[]; error: string | null }
 export interface Scenario { id: string; title: string; difficulty: string; prompt: string; expectation: string }
-async function request<T>(path: string, body?: unknown): Promise<T> {
-  const response = await fetch(`/api/v1${path}`, { method: body === undefined ? 'GET' : 'POST', headers: body === undefined ? {} : { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) })
+export async function request<T>(path: string, body?: unknown, method?: string): Promise<T> {
+  const response = await fetch(`/api/v1${path}`, { method: method ?? (body === undefined ? 'GET' : 'POST'), headers: body === undefined ? {} : { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) })
   if (!response.ok) { const error = await response.json().catch(() => null); throw new Error(error?.message ?? `Ошибка HTTP ${response.status}`) }
+  if (response.status === 204) return undefined as T
   return response.json() as Promise<T>
 }
 export const api = {

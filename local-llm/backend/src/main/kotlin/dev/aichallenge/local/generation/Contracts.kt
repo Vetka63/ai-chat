@@ -49,7 +49,22 @@ data class RuntimeInfo(val connected: Boolean, val version: String?, val configu
 interface LocalLlmRuntime {
     fun info(): RuntimeInfo
     fun generate(request: GenerateRequest): Generation
+    /** Runtime обязан поддержать messages явно; история не подменяется последним prompt. */
+    fun chat(request: LlmChatRequest): Generation = throw RuntimeFailure("Runtime не поддерживает диалог.")
 }
+
+/** Роли протокола Ollama; системную инструкцию создаёт сервер, а не клиент. */
+enum class LlmRole { SYSTEM, USER, ASSISTANT }
+data class LlmMessage(val role: LlmRole, val content: String)
+
+/** Транспортный запрос модели, общий для независимой генерации и контекстного диалога. */
+data class LlmChatRequest(
+    val model: String,
+    val messages: List<LlmMessage>,
+    val temperature: Double = 0.7,
+    val thinking: Boolean = false,
+    val maxOutputTokens: Int? = null,
+)
 
 class RuntimeFailure(message: String) : RuntimeException(message)
 class InvalidModel(message: String) : RuntimeException(message)
