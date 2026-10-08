@@ -1,0 +1,15 @@
+# После загрузки весов backend/Ollama не имеют внешнего доступа.
+# Nginx — локальный входной proxy: Windows не публикует порт internal-only сети.
+services:
+  ollama:
+    networks: [offline]
+  backend:
+    networks: [offline]
+    environment:
+      RAG_CLOUD_ENABLED: "false"
+      DEEPSEEK_API_KEY: ""
+  client:
+    networks: [default, offline]
+networks:
+  offline:
+    internal: true

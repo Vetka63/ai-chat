@@ -5,6 +5,13 @@ services:
     environment:
       OLLAMA_NO_CLOUD: "1"
       OLLAMA_HOST: 0.0.0.0:11434
+      # Embedding и completion не держим одновременно: меньше пиковая нагрузка CUDA/WSL.
+      OLLAMA_MAX_LOADED_MODELS: "1"
+      OLLAMA_NUM_PARALLEL: "1"
+      # В Ollama 0.35.1 llama-server по умолчанию сохраняет до 8 GiB prompt snapshots в RAM.
+      # Диалог хранит backend; этот runtime cache не нужен для корректности и опасен в WSL.
+      LLAMA_ARG_CACHE_RAM: "0"
+      OLLAMA_FLASH_ATTENTION: "1"
     ports: ["127.0.0.1:${LOCAL_LLM_OLLAMA_PORT:-11436}:11434"]
     volumes: ["local-models:/root/.ollama"]
     restart: unless-stopped
@@ -15,6 +22,11 @@ services:
       OLLAMA_BASE_URL: http://ollama:11434
       LOCAL_LLM_MODELS: ${LOCAL_LLM_MODELS:-qwen3:8b}
       LOCAL_LLM_DATABASE_PATH: /app/data/lab.sqlite
+      RAG_DATABASE_PATH: /app/data/rag.sqlite
+      RAG_EMBEDDING_MODEL: ${RAG_EMBEDDING_MODEL:-qwen3-embedding:0.6b}
+      RAG_CLOUD_ENABLED: ${RAG_CLOUD_ENABLED:-false}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-${LLM_API_KEY:-}}
+      RAG_DEEPSEEK_MODELS: ${RAG_DEEPSEEK_MODELS:-deepseek-flash,deepseek-v4-pro}
     volumes: ["local-data:/app/data"]
     depends_on: [ollama]
     restart: unless-stopped

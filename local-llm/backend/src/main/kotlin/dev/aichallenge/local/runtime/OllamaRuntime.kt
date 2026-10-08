@@ -59,7 +59,8 @@ class OllamaRuntime(private val config: LabProperties, private val mapper: Objec
         return Generation(answer, response.path("message").optionalText("thinking"),
             reason, tokens("prompt_eval_count"), tokens("eval_count"),
             milliseconds("total_duration"), milliseconds("load_duration"),
-            if (count != null && evalNs != null && evalNs > 0) count * 1_000_000_000.0 / evalNs else null)
+            if (count != null && evalNs != null && evalNs > 0) count * 1_000_000_000.0 / evalNs else null,
+            actualModel = response.optionalText("model"))
     }
 
     /** Отсутствующие optional-поля не превращаются в ошибку приведения MissingNode в Jackson 3. */

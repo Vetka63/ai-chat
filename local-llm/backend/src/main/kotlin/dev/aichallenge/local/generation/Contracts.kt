@@ -25,6 +25,7 @@ data class Generation(
     val totalMilliseconds: Double?,
     val loadMilliseconds: Double?,
     val tokensPerSecond: Double?,
+    val actualModel: String? = null,
 )
 
 /** Сохранённый сервером запуск, доступный в любом браузере. */

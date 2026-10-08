@@ -13,6 +13,10 @@ import org.springframework.web.bind.annotation.RestControllerAdvice
 /** Ошибки входа и занятости отображаются понятным сообщением, а не пустым ответом. */
 @RestControllerAdvice
 class Errors {
+    @ExceptionHandler(dev.aichallenge.local.rag.models.RagFailure::class)
+    fun rag(e: dev.aichallenge.local.rag.models.RagFailure) = ResponseEntity.badRequest().body(mapOf("message" to e.message))
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException::class)
+    fun upload(e: org.springframework.web.multipart.MaxUploadSizeExceededException) = ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(mapOf("message" to "Файл слишком большой. Максимум 5 МБ."))
     @ExceptionHandler(LabBusy::class)
     fun busy(e: LabBusy) = ResponseEntity.status(HttpStatus.CONFLICT).body(mapOf("message" to e.message))
     @ExceptionHandler(ChatConflict::class)

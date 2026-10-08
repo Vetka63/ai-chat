@@ -1,0 +1,215 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "День 28 · Локальный RAG и сравнение моделей",
+    "quality_profile": "showcase"
+  },
+  "components": [
+    {
+      "id": "ui",
+      "type": "frontend",
+      "label": "Vue · День 28",
+      "sublabel": "Вопросы и сравнение",
+      "pos": [
+        40,
+        340
+      ],
+      "size": [
+        210,
+        84
+      ]
+    },
+    {
+      "id": "experiments",
+      "type": "backend",
+      "label": "ExperimentService",
+      "sublabel": "UUID, фоновые задачи",
+      "pos": [
+        400,
+        340
+      ],
+      "size": [
+        210,
+        84
+      ]
+    },
+    {
+      "id": "retrieval",
+      "type": "backend",
+      "label": "RetrievalService",
+      "sublabel": "Cosine + BM25 + RRF",
+      "pos": [
+        760,
+        340
+      ],
+      "size": [
+        210,
+        84
+      ]
+    },
+    {
+      "id": "prompt",
+      "type": "backend",
+      "label": "Общий контекст",
+      "sublabel": "Одинаковые messages + hash",
+      "pos": [
+        1120,
+        340
+      ],
+      "size": [
+        230,
+        84
+      ]
+    },
+    {
+      "id": "embedding",
+      "type": "backend",
+      "label": "Ollama · embeddings",
+      "sublabel": "qwen3-embedding:0.6b",
+      "pos": [
+        760,
+        80
+      ],
+      "size": [
+        210,
+        84
+      ]
+    },
+    {
+      "id": "index",
+      "type": "database",
+      "label": "SQLite · индекс",
+      "sublabel": "Корпус, чанки, вектора",
+      "pos": [
+        760,
+        640
+      ],
+      "size": [
+        210,
+        84
+      ]
+    },
+    {
+      "id": "local",
+      "type": "backend",
+      "label": "Ollama · Qwen3",
+      "sublabel": "Локальная генерация",
+      "pos": [
+        1500,
+        80
+      ],
+      "size": [
+        210,
+        84
+      ]
+    },
+    {
+      "id": "cloud",
+      "type": "cloud",
+      "label": "DeepSeek",
+      "sublabel": "Только DEEPSEEK / COMPARE",
+      "pos": [
+        1500,
+        640
+      ],
+      "size": [
+        210,
+        84
+      ]
+    },
+    {
+      "id": "results",
+      "type": "database",
+      "label": "SQLite · результаты",
+      "sublabel": "Карточки, ошибки, метрики",
+      "pos": [
+        400,
+        640
+      ],
+      "size": [
+        210,
+        84
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "request",
+      "from": "ui",
+      "to": "experiments",
+      "label": "HTTP + polling"
+    },
+    {
+      "id": "retrieve",
+      "from": "experiments",
+      "to": "retrieval",
+      "label": "Один поиск"
+    },
+    {
+      "id": "embed",
+      "from": "retrieval",
+      "to": "embedding",
+      "label": "/api/embed"
+    },
+    {
+      "id": "vectors",
+      "from": "retrieval",
+      "to": "index",
+      "label": "Чтение векторов",
+      "labelDy": 24
+    },
+    {
+      "id": "prepare",
+      "from": "retrieval",
+      "to": "prompt",
+      "label": "Найденные чанки"
+    },
+    {
+      "id": "local-generation",
+      "from": "prompt",
+      "to": "local",
+      "label": "/api/chat"
+    },
+    {
+      "id": "cloud-generation",
+      "from": "prompt",
+      "to": "cloud",
+      "label": "HTTPS · явный выбор",
+      "variant": "dashed"
+    },
+    {
+      "id": "save",
+      "from": "experiments",
+      "to": "results",
+      "label": "Сохранение каждого ответа",
+      "labelDy": 24
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Полностью локальный режим",
+      "items": [
+        "Корпус и retrieval на компьютере",
+        "Без облачных rewrite, judge и fallback"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "Параллельное сравнение",
+      "items": [
+        "Один неизменяемый контекст для обеих моделей",
+        "Карточки обновляются независимо; MD без новых вызовов"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Честные ограничения",
+      "items": [
+        "Проверяются ID ссылок, не истинность ответа",
+        "Качество: контрольные вопросы и проверка источников"
+      ]
+    }
+  ]
+}
