@@ -10,7 +10,13 @@ class GenerationGate {
 
     /** Не создаёт скрытой очереди или повторов: второй одновременный запрос получает конфликт. */
     fun <T> exclusive(action: () -> T): T {
+        return reserve().use { action() }
+    }
+
+    /** Передаёт владение слотом фоновой задаче; закрытие lease освобождает слот ровно один раз. */
+    fun reserve(): AutoCloseable {
         if (!busy.compareAndSet(false, true)) throw LabBusy()
-        try { return action() } finally { busy.set(false) }
+        val closed = AtomicBoolean(false)
+        return AutoCloseable { if (closed.compareAndSet(false, true)) busy.set(false) }
     }
 }

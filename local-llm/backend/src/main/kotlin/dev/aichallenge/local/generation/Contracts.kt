@@ -25,6 +25,7 @@ data class Generation(
     val totalMilliseconds: Double?,
     val loadMilliseconds: Double?,
     val tokensPerSecond: Double?,
+    val actualModel: String? = null,
 )
 
 /** Сохранённый сервером запуск, доступный в любом браузере. */
@@ -64,6 +65,10 @@ data class LlmChatRequest(
     val temperature: Double = 0.7,
     val thinking: Boolean = false,
     val maxOutputTokens: Int? = null,
+    val contextSize: Int? = null,
+    val topP: Double? = null,
+    val topK: Int? = null,
+    val seed: Int? = null,
 )
 
 class RuntimeFailure(message: String) : RuntimeException(message)

@@ -41,8 +41,11 @@ class OllamaRuntime(private val config: LabProperties, private val mapper: Objec
         if (available.models.none { it.name == request.model }) throw InvalidModel("Модель не установлена локально. Выполните ollama pull ${request.model}.")
         val show = call("/api/show", mapOf("model" to request.model), 10)
         if (show.path("capabilities").none { it.asText() == "completion" }) throw InvalidModel("Это не модель генерации текста.")
-        val options = mutableMapOf<String, Any>("temperature" to request.temperature, "num_ctx" to config.contextSize)
+        val options = mutableMapOf<String, Any>("temperature" to request.temperature, "num_ctx" to (request.contextSize ?: config.contextSize))
         request.maxOutputTokens?.let { options["num_predict"] = it }
+        request.topP?.let { options["top_p"] = it }
+        request.topK?.let { options["top_k"] = it }
+        request.seed?.let { options["seed"] = it }
         val payload = mapOf("model" to request.model, "messages" to request.messages.map { mapOf("role" to it.role.name.lowercase(), "content" to it.content) },
             "stream" to false, "think" to request.thinking, "options" to options, "keep_alive" to "5m", "truncate" to false, "shift" to false)
         val response = call("/api/chat", payload, config.timeoutSeconds)
@@ -59,7 +62,8 @@ class OllamaRuntime(private val config: LabProperties, private val mapper: Objec
         return Generation(answer, response.path("message").optionalText("thinking"),
             reason, tokens("prompt_eval_count"), tokens("eval_count"),
             milliseconds("total_duration"), milliseconds("load_duration"),
-            if (count != null && evalNs != null && evalNs > 0) count * 1_000_000_000.0 / evalNs else null)
+            if (count != null && evalNs != null && evalNs > 0) count * 1_000_000_000.0 / evalNs else null,
+            response.optionalText("model"))
     }
 
     /** Отсутствующие optional-поля не превращаются в ошибку приведения MissingNode в Jackson 3. */
@@ -87,8 +91,8 @@ class OllamaRuntime(private val config: LabProperties, private val mapper: Objec
     private fun httpError(status: Int, body: String): String {
         val exceeded = Regex("request \\((\\d+) tokens\\).*?\\((\\d+) tokens\\)").find(body)
         if (exceeded != null && body.contains("context"))
-            return "Диалог требует ${exceeded.groupValues[1]} токенов, а окно Ollama — ${exceeded.groupValues[2]}. " +
-                "История сохранена. Начните новый чат или уменьшите новое сообщение."
+            return "Запрос требует ${exceeded.groupValues[1]} токенов, а окно Ollama — ${exceeded.groupValues[2]}. " +
+                "История сохранена. Увеличьте окно контекста либо уменьшите вход; в обычном чате можно начать новый диалог."
         val description = try {
             val json = mapper.readTree(body)
             json.optionalText("error") ?: body

@@ -13,6 +13,10 @@ import org.springframework.web.bind.annotation.RestControllerAdvice
 /** Ошибки входа и занятости отображаются понятным сообщением, а не пустым ответом. */
 @RestControllerAdvice
 class Errors {
+    @ExceptionHandler(dev.aichallenge.local.optimization.models.OptimizationFailure::class)
+    fun optimization(e: dev.aichallenge.local.optimization.models.OptimizationFailure) = ResponseEntity.badRequest().body(mapOf("message" to e.message))
+    @ExceptionHandler(dev.aichallenge.local.optimization.models.OptimizationMissing::class)
+    fun optimizationMissing(e: dev.aichallenge.local.optimization.models.OptimizationMissing) = ResponseEntity.status(HttpStatus.NOT_FOUND).body(mapOf("message" to e.message))
     @ExceptionHandler(LabBusy::class)
     fun busy(e: LabBusy) = ResponseEntity.status(HttpStatus.CONFLICT).body(mapOf("message" to e.message))
     @ExceptionHandler(ChatConflict::class)

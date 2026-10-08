@@ -3,5 +3,8 @@
 **/.gradle
 **/build
 data
+artifacts
+corpus
+**/*_RU_complete.txt
 .env
 .env.*

@@ -5,7 +5,7 @@ server:
   port: 8080
 local-llm:
   base-url: ${OLLAMA_BASE_URL:http://localhost:11436}
-  models: ${LOCAL_LLM_MODELS:qwen3:8b}
+  models: ${LOCAL_LLM_MODELS:${OPT_LOCAL_MODEL:qwen3:4b-q4_K_M}}
   database-path: ${LOCAL_LLM_DATABASE_PATH:./data/lab.sqlite}
   timeout-seconds: 300
   context-size: 8192
@@ -17,3 +17,10 @@ management:
   endpoint:
     health:
       show-details: never
+optimization:
+  local-model: ${OPT_LOCAL_MODEL:qwen3:4b-q4_K_M}
+  database-path: ${OPT_DATABASE_PATH:./data/optimization.sqlite}
+  cloud-enabled: ${OPT_CLOUD_ENABLED:false}
+  deepseek-api-key: ${DEEPSEEK_API_KEY:}
+  deepseek-base-url: ${DEEPSEEK_BASE_URL:https://api.deepseek.com}
+  cloud-models: ${OPT_CLOUD_MODELS:deepseek-flash,deepseek-v4-pro}

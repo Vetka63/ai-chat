@@ -45,6 +45,12 @@ class OllamaRuntimeTest {
         runtime.generate(GenerateRequest("qwen3:8b", "hello", maxOutputTokens = 100))
         assertEquals(100, mapper.readTree(sent.single()).path("options").path("num_predict").asInt())
     }
+    @Test fun `experimental context sampling and seed override defaults in real HTTP payload`() = withServer { runtime, sent ->
+        runtime.chat(LlmChatRequest("qwen3:8b", listOf(LlmMessage(LlmRole.USER, "q")), contextSize = 2048, topP = .8, topK = 20, seed = 42))
+        val options = mapper.readTree(sent.single()).path("options")
+        assertEquals(2048, options.path("num_ctx").asInt()); assertEquals(42, options.path("seed").asInt())
+        assertEquals(20, options.path("top_k").asInt()); assertEquals(.8, options.path("top_p").asDouble())
+    }
     @Test fun `empty output is an error and is not retried`() = withServer(answer = "") { runtime, sent ->
         assertThrows(RuntimeFailure::class.java) { runtime.generate(GenerateRequest("qwen3:8b", "q")) }
         assertEquals(1, sent.size)

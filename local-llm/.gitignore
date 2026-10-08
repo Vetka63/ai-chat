@@ -4,6 +4,9 @@ client/node_modules/
 client/dist/
 client/test-results/
 data/
+/artifacts/
+/corpus/
+**/*_RU_complete.txt
 .env
 .env.*
 !.env.example

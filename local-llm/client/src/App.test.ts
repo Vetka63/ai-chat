@@ -6,6 +6,12 @@ import ChatView from './features/chat/ChatView.vue'
 
 beforeEach(() => { window.location.hash = '' })
 describe('local app sections', () => {
+  it('opens day29 directly without importing RAG', () => {
+    window.location.hash = '#optimization/saved'
+    const wrapper = shallowMount(App)
+    expect(wrapper.find('optimization-view-stub').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain('День 28'); wrapper.unmount()
+  })
   it('opens chat by default and keeps day26 reachable through navigation and direct URL', async () => {
     const wrapper = shallowMount(App)
     expect(wrapper.find('chat-view-stub').exists()).toBe(true)
