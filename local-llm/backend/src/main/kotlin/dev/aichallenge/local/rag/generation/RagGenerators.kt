@@ -21,7 +21,8 @@ class LocalRagGenerator(private val runtime: LocalLlmRuntime) : RagGenerator {
         return ModelAnswer(provider, request.localModel, actualModel = response.actualModel ?: request.localModel,
             status = if (response.doneReason == "length") RunStatus.TRUNCATED else RunStatus.COMPLETED,
             answer = response.answer, inputTokens = response.inputTokens?.toLong(), outputTokens = response.outputTokens?.toLong(),
-            loadMilliseconds = response.loadMilliseconds, tokensPerSecond = response.tokensPerSecond, finishReason = response.doneReason)
+            loadMilliseconds = response.loadMilliseconds, tokensPerSecond = response.tokensPerSecond, finishReason = response.doneReason,
+            thinking = response.thinking)
     }
 }
 
@@ -35,10 +36,10 @@ class DeepSeekRagGenerator(private val config: RagProperties, private val mapper
         if (request.cloudModel !in config.deepseekModels) throw RagFailure("Облачная модель не разрешена конфигурацией сервера.")
         val body = linkedMapOf<String, Any>("model" to request.cloudModel,
             "messages" to messages.map { mapOf("role" to it.role.name.lowercase(), "content" to it.content) },
-            "stream" to false, "temperature" to request.temperature,
+            "stream" to false,
             "thinking" to mapOf("type" to if (request.thinking) "enabled" else "disabled"))
         request.maxOutputTokens?.let { body["max_tokens"] = it }
-        if (request.thinking) body["reasoning_effort"] = "high"
+        if (request.thinking) body["reasoning_effort"] = "high" else body["temperature"] = request.temperature
         val response = try {
             val httpRequest = HttpRequest.newBuilder(URI.create(config.deepseekBaseUrl.trimEnd('/') + "/chat/completions"))
                 .timeout(Duration.ofSeconds(config.cloudTimeoutSeconds)).header("Content-Type", "application/json")
@@ -50,9 +51,10 @@ class DeepSeekRagGenerator(private val config: RagProperties, private val mapper
         val json = try { mapper.readTree(response.body()) } catch (_: Exception) { throw RagFailure("DeepSeek вернул некорректный JSON.") }
         val choice = json.path("choices").firstOrNull() ?: throw RagFailure("Нет choices в ответе DeepSeek.")
         val content = choice.path("message").path("content").takeIf { it.isTextual }?.asText()?.trim()
-        if (content.isNullOrBlank()) throw RagFailure("DeepSeek вернул пустой ответ. Возможно, лимит потрачен на reasoning.")
         val finish = choice.path("finish_reason").asText()
         if (finish !in setOf("stop", "length")) throw RagFailure("DeepSeek не завершил обычную генерацию.")
+        if (content == null || content.isBlank() && finish != "length") throw RagFailure("DeepSeek вернул пустой ответ. Возможно, лимит потрачен на reasoning.")
+        val reasoning = choice.path("message").path("reasoning_content").takeIf { it.isTextual }?.asText()?.takeIf { it.isNotBlank() }
         val model = json.path("model").takeIf { it.isTextual }?.asText()?.takeIf { it.isNotBlank() } ?: throw RagFailure("Нет фактического имени модели DeepSeek.")
         val usage = json.path("usage")
         fun tokens(name: String): Long? {
@@ -64,6 +66,6 @@ class DeepSeekRagGenerator(private val config: RagProperties, private val mapper
         val input = tokens("prompt_tokens"); val output = tokens("completion_tokens"); val total = tokens("total_tokens")
         if (total != null && total != input!! + output!!) throw RagFailure("Несогласованный usage DeepSeek.")
         return ModelAnswer(provider, request.cloudModel, model, status = if (finish == "length") RunStatus.TRUNCATED else RunStatus.COMPLETED,
-            answer = content, inputTokens = input, outputTokens = output, finishReason = finish)
+            answer = content, inputTokens = input, outputTokens = output, finishReason = finish, thinking = reasoning)
     }
 }

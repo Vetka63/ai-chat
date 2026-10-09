@@ -49,7 +49,7 @@ class ExperimentService(private val repository: RagRepository, private val retri
             val prepared = retrieval.prepare(initial.request)
             if (prepared.snapshot.included.isEmpty()) {
                 repository.updateExperiment(initial.id) { it.copy(status = ExperimentStatus.UNKNOWN, retrieval = prepared.snapshot,
-                    milliseconds = elapsed(started), error = "Не знаю по найденным фрагментам. Уточните вопрос, область поиска или порог; модели не вызывались.") }
+                    milliseconds = elapsed(started), error = "Не знаю по найденным фрагментам. Уточните вопрос, область поиска или порог; генеративные модели не вызывались.") }
                 return@exclusive
             }
             val names = when (initial.request.mode) { RagMode.LOCAL -> listOf("LOCAL"); RagMode.DEEPSEEK -> listOf("DEEPSEEK"); RagMode.COMPARE -> listOf("LOCAL", "DEEPSEEK") }
@@ -76,7 +76,8 @@ class ExperimentService(private val repository: RagRepository, private val retri
             tasks.forEach { it.get() }
             repository.updateExperiment(initial.id) { run ->
                 val completed = run.answers.count { it.status == RunStatus.COMPLETED }
-                run.copy(status = when { completed == run.answers.size -> ExperimentStatus.COMPLETED; completed > 0 -> ExperimentStatus.PARTIAL; else -> ExperimentStatus.FAILED }, milliseconds = elapsed(started))
+                val partial = run.answers.any { it.status == RunStatus.TRUNCATED }
+                run.copy(status = when { completed == run.answers.size -> ExperimentStatus.COMPLETED; completed > 0 || partial -> ExperimentStatus.PARTIAL; else -> ExperimentStatus.FAILED }, milliseconds = elapsed(started))
             }
         } } catch (failure: Exception) {
             repository.updateExperiment(initial.id) { it.copy(status = ExperimentStatus.FAILED, milliseconds = elapsed(started),

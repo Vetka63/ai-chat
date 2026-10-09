@@ -17,6 +17,25 @@ import java.util.concurrent.atomic.AtomicInteger
 
 class RagTransportTest {
     private val mapper = JsonMapper.builder().addModule(KotlinModule.Builder().build()).build()
+    @Test fun `DeepSeek empty length preserves reasoning usage and omits ineffective temperature`() {
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0); val calls = AtomicInteger(); var finish = "length"
+        server.createContext("/chat/completions") { exchange ->
+            calls.incrementAndGet(); val payload = mapper.readTree(exchange.requestBody.bufferedReader().readText())
+            assertFalse(payload.has("temperature")); assertEquals(64, payload.path("max_tokens").asInt())
+            assertEquals("high", payload.path("reasoning_effort").asText())
+            val json = """{"model":"deepseek-v4-pro","choices":[{"message":{"content":"","reasoning_content":"partial thinking"},"finish_reason":"$finish"}],"usage":{"prompt_tokens":10,"completion_tokens":64,"total_tokens":74}}""".toByteArray()
+            exchange.sendResponseHeaders(200, json.size.toLong()); exchange.responseBody.use { it.write(json) }
+        }; server.start()
+        try {
+            val config = RagProperties().also { it.cloudEnabled = true; it.deepseekApiKey = "test-key"; it.deepseekBaseUrl = "http://127.0.0.1:${server.address.port}" }
+            val generator = DeepSeekRagGenerator(config, mapper)
+            val request = RagRequest("id", "i", "Q", RagMode.DEEPSEEK, cloudModel = "deepseek-v4-pro", thinking = true, maxOutputTokens = 64)
+            val result = generator.generate(request, emptyList())
+            assertEquals(RunStatus.TRUNCATED, result.status); assertEquals("", result.answer)
+            assertEquals("partial thinking", result.thinking); assertEquals(64L, result.outputTokens); assertEquals(1, calls.get())
+            finish = "stop"; assertThrows(RagFailure::class.java) { generator.generate(request, emptyList()) }; assertEquals(2, calls.get())
+        } finally { server.stop(0) }
+    }
     @Test fun `DeepSeek receives chosen params and preserves reported usage without leaking key`() {
         val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
         val calls = AtomicInteger()

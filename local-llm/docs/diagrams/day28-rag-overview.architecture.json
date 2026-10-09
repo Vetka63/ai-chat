@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "День 28 · локальный RAG",
+    "quality_profile": "showcase",
+    "viewBox": [1180, 650]
+  },
+  "components": [
+    {"id":"reader_ui","type":"frontend","label":"Интерфейс Vue","sublabel":"Вопрос · LOCAL / COMPARE","pos":[30,270],"size":[210,94]},
+    {"id":"rag_backend","type":"backend","label":"Поиск и генерация","sublabel":"Kotlin · Spring Boot","pos":[460,270],"size":[250,94]},
+    {"id":"local_index","type":"database","label":"SQLite","sublabel":"Корпус · вектора · ответы","pos":[460,40],"size":[250,94]},
+    {"id":"ollama_runtime","type":"backend","label":"Ollama","sublabel":"Embeddings · Qwen","pos":[930,270],"size":[220,94]},
+    {"id":"cloud_reference","type":"external","label":"DeepSeek API","sublabel":"Опциональное сравнение","pos":[460,510],"size":[250,94]}
+  ],
+  "connections": [
+    {"id":"ui_requests","from":"reader_ui","to":"rag_backend","label":"HTTP · polling","variant":"emphasis"},
+    {"id":"sql_snapshots","from":"rag_backend","to":"local_index","label":"SQL · индекс и снимки"},
+    {"id":"local_inference","from":"rag_backend","to":"ollama_runtime","label":"HTTP · embed / chat","variant":"emphasis"},
+    {"id":"optional_cloud","from":"rag_backend","to":"cloud_reference","label":"HTTPS · общий контекст","variant":"dashed","labelDy":24}
+  ]
+}

@@ -41,7 +41,8 @@ data class ModelAnswer(val provider: String, val requestedModel: String, val act
     val status: RunStatus = RunStatus.RUNNING, val startedAt: String? = null, val finishedAt: String? = null,
     val answer: String? = null, val milliseconds: Long? = null, val inputTokens: Long? = null, val outputTokens: Long? = null,
     val loadMilliseconds: Double? = null, val tokensPerSecond: Double? = null, val finishReason: String? = null,
-    val citationStatus: CitationStatus = CitationStatus.NOT_APPLICABLE, val citedRefs: List<String> = emptyList(), val error: String? = null)
+    val citationStatus: CitationStatus = CitationStatus.NOT_APPLICABLE, val citedRefs: List<String> = emptyList(), val error: String? = null,
+    val thinking: String? = null)
 data class RagExperiment(val id: String, val createdAt: String, val request: RagRequest,
     val status: ExperimentStatus = ExperimentStatus.PREPARING, val retrieval: RetrievalSnapshot? = null,
     val answers: List<ModelAnswer> = emptyList(), val milliseconds: Long? = null, val error: String? = null, val conclusion: String? = null)

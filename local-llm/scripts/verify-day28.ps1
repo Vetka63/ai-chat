@@ -3,10 +3,13 @@ param(
     [ValidateRange(1,5)][int]$Repeats = 3,
     [ValidateSet('LOCAL','DEEPSEEK','COMPARE')][string]$Mode = 'COMPARE',
     [string]$CloudModel = 'deepseek-v4-pro',
+    [ValidateSet('qwen3:8b','qwen3:4b-q4_K_M')][string]$LocalModel = 'qwen3:8b',
+    [Nullable[int]]$MaxOutputTokens = $null,
     [string]$OutputDirectory = (Join-Path $PSScriptRoot "../artifacts/day28-$(Get-Date -Format 'yyyyMMdd-HHmmss')"),
     [switch]$StopOnFailure
 )
 $ErrorActionPreference = 'Stop'
+if ($null -ne $MaxOutputTokens -and $MaxOutputTokens -notin 1..8192) { throw 'MaxOutputTokens должен быть 1..8192 или не задан.' }
 $taskCases = Get-Content -LiteralPath (Join-Path $PSScriptRoot '../evaluation/day28-cases.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 $taskIndexes = Invoke-RestMethod -Uri "$BaseUrl/api/v1/rag/indexes"
 $taskIndex = $taskIndexes | Where-Object { $_.status -eq 'READY' } | Select-Object -First 1
@@ -17,14 +20,23 @@ foreach ($taskRepeat in 1..$Repeats) {
     foreach ($taskCase in $taskCases) {
         $taskResultPath = Join-Path $OutputDirectory "$($taskCase.id)-$taskRepeat.json"
         $taskReceiptPath = Join-Path $OutputDirectory "$($taskCase.id)-$taskRepeat-request.json"
-        $taskRequest = @{ requestId = [guid]::NewGuid().ToString(); indexId = $taskIndex.id; question = $taskCase.question; mode = $Mode; cloudModel = $CloudModel; topK = 5; threshold = 0.35; contextCharacters = 7000; temperature = 0; thinking = $false }
+        $taskRequest = @{ requestId = [guid]::NewGuid().ToString(); indexId = $taskIndex.id; question = $taskCase.question; mode = $Mode; localModel = $LocalModel; cloudModel = $CloudModel; topK = 5; threshold = 0.35; contextCharacters = 7000; temperature = 0; thinking = $false; maxOutputTokens = $MaxOutputTokens }
         if (Test-Path -LiteralPath $taskResultPath) {
             $taskRun = Get-Content -LiteralPath $taskResultPath -Raw -Encoding UTF8 | ConvertFrom-Json
-            if ($taskRun.request.mode -ne $Mode -or $taskRun.request.cloudModel -ne $CloudModel -or $taskRun.request.indexId -ne $taskIndex.id) { throw 'Сохранённый прогон имеет другие настройки. Выберите новый OutputDirectory.' }
+            $taskSavedRequest = $taskRun.request
         } else {
-            if (Test-Path -LiteralPath $taskReceiptPath) { $taskRequest = Get-Content -LiteralPath $taskReceiptPath -Raw -Encoding UTF8 | ConvertFrom-Json }
+            $taskSavedRequest = if (Test-Path -LiteralPath $taskReceiptPath) { Get-Content -LiteralPath $taskReceiptPath -Raw -Encoding UTF8 | ConvertFrom-Json } else { $null }
+            if ($taskSavedRequest) {
+                foreach ($taskField in @('indexId','question','mode','localModel','cloudModel','topK','threshold','contextCharacters','temperature','thinking','maxOutputTokens')) {
+                    if ($taskSavedRequest.$taskField -cne $taskRequest[$taskField]) { throw 'Receipt имеет другие настройки. Выберите новый OutputDirectory.' }
+                }
+                $taskRequest = $taskSavedRequest
+            }
             else { $taskRequest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $taskReceiptPath -Encoding UTF8 }
             $taskRun = Invoke-RestMethod -Method Post -Uri "$BaseUrl/api/v1/rag/experiments" -ContentType 'application/json; charset=utf-8' -Body ([Text.Encoding]::UTF8.GetBytes(($taskRequest | ConvertTo-Json)))
+        }
+        foreach ($taskField in @('indexId','question','mode','localModel','cloudModel','topK','threshold','contextCharacters','temperature','thinking','maxOutputTokens')) {
+            if ($taskRun.request.$taskField -cne $taskRequest.$taskField) { throw 'Сохранённый прогон имеет другие настройки. Выберите новый OutputDirectory.' }
         }
         $taskDeadline = [DateTime]::UtcNow.AddMinutes(7)
         while ($taskRun.status -in @('PREPARING','RUNNING')) {

@@ -6,6 +6,16 @@ import ChatView from './features/chat/ChatView.vue'
 
 beforeEach(() => { window.location.hash = '' })
 describe('local app sections', () => {
+  it('responds to direct hash navigation and defers it while busy', async () => {
+    const wrapper = shallowMount(App)
+    wrapper.findComponent(ChatView).vm.$emit('busy', true); await nextTick()
+    window.location.hash = '#rag/saved'; window.dispatchEvent(new HashChangeEvent('hashchange')); await nextTick()
+    expect(wrapper.find('chat-view-stub').exists()).toBe(true)
+    wrapper.findComponent(ChatView).vm.$emit('busy', false); await nextTick()
+    expect(wrapper.find('rag-view-stub').exists()).toBe(true)
+    window.location.hash = '#lab'; window.dispatchEvent(new HashChangeEvent('hashchange')); await nextTick()
+    expect(wrapper.find('lab-view-stub').exists()).toBe(true); wrapper.unmount()
+  })
   it('opens day28 direct links and keeps old sections available', () => {
     window.location.hash = '#rag/example'
     const wrapper = shallowMount(App)

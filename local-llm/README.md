@@ -12,10 +12,11 @@
 
 ```powershell
 cd F:\ai-advent-challenge\ai-chat\local-llm
-docker compose -f compose.yml -f compose.gpu.yml up -d ollama
-docker compose -f compose.yml -f compose.gpu.yml exec ollama ollama pull qwen3:8b
-docker compose -f compose.yml -f compose.gpu.yml exec ollama ollama pull qwen3-embedding:0.6b
-docker compose -f compose.yml -f compose.gpu.yml up -d --build backend client
+./scripts/start-day28.ps1 -Build
+# Явно включить опциональное сравнение с DeepSeek (ключ из ../.env):
+./scripts/start-day28.ps1 -Cloud
+# После скачивания весов: backend/Ollama без внешней сети, ключ пустой:
+./scripts/start-day28.ps1 -Offline
 ```
 
 Скачивание `qwen3:8b` занимает около 5,2 ГБ, embedding-модель — около 639 МБ; для загрузки нужны сеть и время. После загрузки дни 26–27 и LOCAL дня 28 работают локально без API-ключа. Cloud-функции Ollama отключены `OLLAMA_NO_CLOUD=1`; отдельный DeepSeek adapter включается только для сравнения. Этот экземпляр Ollama и его volume независимы от прежнего Pro Git. В RAG дня 28 модели загружаются по одной (`OLLAMA_MAX_LOADED_MODELS=1`, `OLLAMA_NUM_PARALLEL=1`): это снижает пиковую нагрузку, но смена embedding/completion может добавлять время загрузки.
@@ -23,6 +24,11 @@ docker compose -f compose.yml -f compose.gpu.yml up -d --build backend client
 - UI: http://localhost:8483
 - Backend: http://localhost:8482/api/v1
 - Ollama: http://localhost:11436
+
+Скрипт проверяет фактический диск данных Docker (по решению пользователя C, не диск исходников F),
+минимум 20 GiB свободно и готовность через Docker CLI. `-CheckOnly` не запускает/не скачивает ничего.
+Backend и Ollama имеют health checks. Offline работает и после остановки контейнеров без pull.
+В offline на Windows обращайтесь через UI/proxy8483, не прямой порт backend8482.
 
 В UI три раздела: «День 28 · RAG», «День 27 · Чат» и «День 26 · Проверки». Лабораторные запуски независимы, а сообщения чата передаются в Ollama вместе с предыдущими репликами выбранного диалога и его системной инструкцией. Таблицы `runs`, `chats`, `messages` находятся в `lab.sqlite`; новый корпус/индекс/эксперименты — отдельно в `rag.sqlite`. Все сохранённые результаты доступны из разных браузеров.
 
@@ -41,7 +47,12 @@ docker compose -f compose.yml -f compose.gpu.yml exec ollama ollama ps
 
 Модели меняются серверной настройкой `LOCAL_LLM_MODELS` (список через запятую) и предварительно загружаются командой `ollama pull`. Список в UI формируется по реально установленным разрешённым моделям. Cloud-модели и embedding-модели не выполняются через генерационный API.
 
-Пустой лимит выхода не добавляет `num_predict` в запрос: используется настройка Ollama. Контекст по умолчанию — 8192 токена, температура — 0,7, reasoning выключен. При заданном лимите токены reasoning тоже входят в ограничение. Обрезание отмечается `TRUNCATED`; отсутствие ответа — `FAILED`. Размер prompt ограничен 16000 символами для первой лаборатории; это проверка размера HTTP-входа, не оценка токенов.
+Пустой лимит выхода не добавляет `num_predict` в запрос: используется настройка Ollama.
+Контекст по умолчанию — 8192 токена, reasoning выключен. Температура лаборатории/чата — 0,7,
+RAG — 0. Токены reasoning входят в бюджет. При `done_reason=length` сохраняются TRUNCATED,
+Thinking и usage, даже если итоговый текст пуст; пустой нормальный stop — FAILED.
+Эксперимент RAG с обрезанным ответом — PARTIAL, не завершённый правильный результат.
+Размер prompt первой лаборатории ограничен 16000 символами: это HTTP-вход, не оценка токенов.
 
 Чат передаёт полную историю завершённых ходов без сжатия. `truncate=false` запрещает Ollama молча выбрасывать начало переписки при превышении окна, `shift=false` запрещает сдвиг контекста во время генерации. Переполнение может дать явную ошибку или незавершённый ответ; оно не удаляет сохранённую историю. Модель фиксируется при создании чата, остальные параметры можно менять перед каждым сообщением. Сведения из других чатов не передаются.
 
@@ -51,5 +62,15 @@ docker compose -f compose.yml -f compose.gpu.yml exec ollama ollama ps
 - [Проверка и запись видео дня 26](docs/day26-video-guide.md)
 - [Проверка и запись видео дня 27](docs/day27-video-guide.md)
 - [Алгоритм чата по классам](backend/src/main/kotlin/dev/aichallenge/local/chat/README.md)
+- [Фактические результаты дня 28](docs/day28-verification.md)
+- [Гайд для видео дня 28](docs/day28-video-guide.md)
+- [Готовая архитектурная схема](docs/diagrams/day28-rag-overview.html)
+- [Финальная контрольная точка](docs/day28-resume-checkpoint.md)
+
+Восстановлены шесть рассказов и 403-чанковый индекс; новые 30 сравнений доступны в UI.
+Есть подтверждённое offline-доказательство с новым embedding, отрицательные случаи и сохранённые выводы.
+Правильный ID ссылки не означает истинность: одна Qwen-реплика добавила неверное руководство испытанием.
+Старый RAG Pro Git и ветка дня 29 не менялись. Старые Docker volumes были удалены пользователем
+при переустановке; новые результаты сохраняются в текущем volume, копии — ignored artifacts.
 
 Официальные источники: [Ollama chat API](https://docs.ollama.com/api/chat), [qwen3:8b](https://ollama.com/library/qwen3:8b), [GPU в Docker Desktop](https://docs.docker.com/desktop/features/gpu/).

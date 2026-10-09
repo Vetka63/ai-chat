@@ -62,6 +62,15 @@ class RagTest {
         assertThrows(RagFailure::class.java) { corpus.import(byteArrayOf(0xff.toByte()), "bad.txt", "Bad", null) }
         assertThrows(RagFailure::class.java) { corpus.import(raw.toByteArray(), "a.txt", "A", "НЕСУЩЕСТВУЮЩИЙ") }
     }
+    @Test fun `report fences raw markdown and preserves reasoning without changing stored answer`() {
+        val raw = "```\n# injected heading\n```"
+        val request = req().copy(question = raw)
+        val result = RagExperiment(request.requestId, "now", request, ExperimentStatus.PARTIAL,
+            answers = listOf(ModelAnswer("LOCAL", "qwen3:8b", status = RunStatus.TRUNCATED, answer = "", outputTokens = 64, thinking = raw)))
+        val report = reportText(result)
+        assertTrue(report.contains("````text\n$raw\n````")); assertTrue(report.contains("Thinking модели"))
+        assertTrue(report.contains("/64")); assertEquals("", result.answers.single().answer)
+    }
     @Test fun `chunks preserve exact source coverage offsets unicode and sections`() {
         val text = "ПРОЛОГ\n\n" + "Первый абзац с эмодзи 🐺. ".repeat(40) + "\n\nГЛАВА 1\n\n" + "Следующая история. ".repeat(80)
         val doc = RagDocument("d", "Book", "a.txt", "h", text, "now")
@@ -107,6 +116,19 @@ class RagTest {
         val service = ExperimentService(repo, RetrievalService(repo, FakeEmbedding(), config(), mapper), listOf(generator("LOCAL") { throw RagFailure("offline") }, generator("DEEPSEEK")), config(), LabProperties(), GenerationGate())
         try { val request = req(RagMode.COMPARE); service.start(request); val result = await(repo, request.requestId)
             assertEquals(ExperimentStatus.PARTIAL, result.status); assertEquals(RunStatus.FAILED, result.answers.first().status); assertEquals("Восемь имён [S1].", result.answers.last().answer)
+        } finally { service.close() }
+    }
+    @Test fun `single truncated answer is partial not a transport failure and keeps reasoning`() {
+        val repo = repository(); ready(repo)
+        val partial = object : RagGenerator {
+            override val provider = "LOCAL"
+            override fun generate(request: RagRequest, messages: List<LlmMessage>) = ModelAnswer("LOCAL", "qwen3:8b", status = RunStatus.TRUNCATED, answer = "", thinking = "partial", outputTokens = 64, finishReason = "length")
+        }
+        val service = ExperimentService(repo, RetrievalService(repo, FakeEmbedding(), config(), mapper), listOf(partial), config(), LabProperties(), GenerationGate())
+        try {
+            val request = req(); service.start(request); val result = await(repo, request.requestId)
+            assertEquals(ExperimentStatus.PARTIAL, result.status); assertEquals(64L, result.answers.single().outputTokens)
+            assertEquals("partial", result.answers.single().thinking); assertEquals(RunStatus.TRUNCATED, result.answers.single().status)
         } finally { service.close() }
     }
     @Test fun `changed embedding identity blocks generation`() {

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { api, type RuntimeInfo } from '../../api'
+import { api, HttpFailure, type RuntimeInfo } from '../../api'
 import { ragApi, isRunning, metric, type DocumentInfo, type Experiment, type ExperimentInfo, type Mode, type RagIndex, type RagRequest, type Settings } from './api'
 import './rag.css'
 
@@ -15,7 +15,9 @@ const uploadFile = ref<File>(), uploadTitle = ref(''), marker = ref(''), uncerta
 let timer: ReturnType<typeof setTimeout> | undefined, disposed = false
 const building = computed(() => indexes.value.find(i => i.status === 'BUILDING'))
 const busy = computed(() => sending.value || !!building.value || isRunning(current.value?.status))
-watch(busy, value => emit('busy', value), { immediate: true })
+const localReady = computed(() => runtime.value?.models.some(model => model.name === localModel.value) ?? false)
+const providerReady = computed(() => (mode.value === 'DEEPSEEK' || localReady.value) && (mode.value === 'LOCAL' || settings.value?.cloudReady === true))
+watch(busy, value => { emit('busy', value); if (!value) syncResource() })
 const scopeDocuments = computed(() => documents.value.filter(d => indexes.value.find(i => i.id === indexId.value)?.documentIds.includes(d.id)))
 const examples = [
   'Что Квара носил на своей броне в рассказе «Кракен» и сколько было имён?',
@@ -23,7 +25,15 @@ const examples = [
   'Почему Асторат должен был положить конец мучительным диссонансам в «Искупителе»?',
   'Почему Северина Рейн говорит, что город Термина поёт?',
 ]
-function newQuestion() { current.value = undefined; window.location.hash = 'rag' }
+function newQuestion() { if (!busy.value) { current.value = undefined; window.location.hash = 'rag' } }
+function syncResource() {
+  if (busy.value || loading.value || uncertain.value) return
+  const hash = window.location.hash
+  if (hash.startsWith('#rag/')) {
+    try { const id = decodeURIComponent(hash.slice(5)); if (id && id !== current.value?.id) void open(id) }
+    catch { error.value = 'Некорректная ссылка на результат.' }
+  } else if (hash === '#rag' && current.value) newQuestion()
+}
 async function saveConclusion() {
   if (!current.value) return
   try { current.value = await ragApi.conclude(current.value.id, conclusion.value); conclusionSaved.value = true }
@@ -37,7 +47,10 @@ async function refresh() {
   if (s.cloudModels.length && !s.cloudModels.includes(cloudModel.value)) cloudModel.value = s.cloudModels[0]!
 }
 async function open(id: string) {
-  try { current.value = await ragApi.experiment(id); window.location.hash = `rag/${id}`; uncertain.value = undefined }
+  try {
+    current.value = await ragApi.experiment(id); window.location.hash = `rag/${current.value.id}`; error.value = ''
+    if (uncertain.value?.requestId === current.value.id) { uncertain.value = undefined; localStorage.removeItem('day28-pending') }
+  }
   catch (e) { error.value = String(e instanceof Error ? e.message : e) }
 }
 async function poll() {
@@ -53,19 +66,27 @@ async function poll() {
 }
 async function start(retry?: RagRequest) {
   if (busy.value) return
-  error.value = ''; sending.value = true
+  error.value = ''
   const request: RagRequest = retry ?? { requestId: crypto.randomUUID(), indexId: indexId.value, question: question.value.trim(), mode: mode.value,
     localModel: localModel.value, cloudModel: cloudModel.value, topK: topK.value, threshold: threshold.value,
     contextCharacters: contextCharacters.value, temperature: temperature.value, thinking: thinking.value, maxOutputTokens: outputCap.value || null, documentIds: scope.value ? [scope.value] : [] }
+  // Без сохранённой квитанции не отправляем POST: неизвестный исход нельзя безопасно восстановить.
+  try { localStorage.setItem('day28-pending', JSON.stringify(request)) }
+  catch { error.value = 'Не удалось сохранить квитанцию. Запрос не отправлен.'; return }
+  sending.value = true
   try {
-    // Сохраняем receipt до отправки: после потери связи повтор использует тот же UUID и параметры.
-    localStorage.setItem('day28-pending', JSON.stringify(request)); window.location.hash = `rag/${request.requestId}`
+    window.location.hash = `rag/${request.requestId}`
     current.value = await ragApi.start(request); uncertain.value = undefined
-    localStorage.removeItem('day28-pending'); history.value = await ragApi.experiments()
+    localStorage.removeItem('day28-pending'); window.location.hash = `rag/${current.value.id}`; history.value = await ragApi.experiments()
   } catch (e) {
     error.value = String(e instanceof Error ? e.message : e)
-    try { current.value = await ragApi.experiment(request.requestId); localStorage.removeItem('day28-pending'); uncertain.value = undefined }
-    catch { uncertain.value = request }
+    if (e instanceof HttpFailure && [400, 401, 403, 409, 422].includes(e.status)) {
+      localStorage.removeItem('day28-pending'); uncertain.value = undefined
+      window.location.hash = current.value ? `rag/${current.value.id}` : 'rag'
+    } else {
+      try { current.value = await ragApi.experiment(request.requestId); localStorage.removeItem('day28-pending'); uncertain.value = undefined; error.value = ''; window.location.hash = `rag/${current.value.id}` }
+      catch { uncertain.value = request }
+    }
   } finally { sending.value = false }
 }
 async function upload() {
@@ -81,6 +102,7 @@ async function build() {
 }
 function fileChanged(event: Event) { uploadFile.value = (event.target as HTMLInputElement).files?.[0]; if (!uploadTitle.value) uploadTitle.value = uploadFile.value?.name.replace(/\.txt$/i, '') ?? '' }
 onMounted(async () => {
+  window.addEventListener('hashchange', syncResource)
   loading.value = true
   try {
     await refresh()
@@ -88,10 +110,11 @@ onMounted(async () => {
     const pending = localStorage.getItem('day28-pending')
     if (pending) uncertain.value = JSON.parse(pending) as RagRequest
     if (id) await open(id)
+    else if (uncertain.value) await open(uncertain.value.requestId)
     else { const active = history.value.find(h => isRunning(h.status)); if (active) await open(active.id) }
   } catch (e) { error.value = String(e instanceof Error ? e.message : e) } finally { loading.value = false; poll() }
 })
-onUnmounted(() => { disposed = true; if (timer) clearTimeout(timer) })
+onUnmounted(() => { disposed = true; if (timer) clearTimeout(timer); window.removeEventListener('hashchange', syncResource); emit('busy', false) })
 </script>
 
 <template>
@@ -101,7 +124,7 @@ onUnmounted(() => { disposed = true; if (timer) clearTimeout(timer) })
       <button :disabled="busy" @click="newQuestion">＋ Новый вопрос</button>
       <div class="rag-history-list">
         <button v-for="item in history" :key="item.id" :disabled="busy" :class="{ selected: current?.id === item.id }" @click="open(item.id)">
-          <span>{{ item.question }}</span><small>{{ item.mode }} · {{ item.status }}</small>
+          <span>{{ item.question }}</span><small>{{ item.mode }} · {{ item.status }}</small><small>{{ new Date(item.createdAt).toLocaleString('ru-RU') }} · {{ item.id.slice(0, 8) }}</small>
         </button>
         <p v-if="!history.length" class="muted">Ответы и сравнения сохраняются на сервере.</p>
       </div>
@@ -117,7 +140,8 @@ onUnmounted(() => { disposed = true; if (timer) clearTimeout(timer) })
       <form class="rag-composer" @submit.prevent="start()">
         <label for="rag-question">Ваш вопрос</label><textarea id="rag-question" v-model="question" :disabled="busy" maxlength="2000" placeholder="Спросите о событиях или героях загруженных рассказов…" required />
         <div class="rag-composer-actions"><label>Режим <select v-model="mode" aria-label="Режим" :disabled="busy"><option value="LOCAL">Локальная LLM</option><option value="DEEPSEEK" :disabled="!settings?.cloudReady">DeepSeek</option><option value="COMPARE" :disabled="!settings?.cloudReady">Сравнить параллельно</option></select></label>
-          <button class="primary" :disabled="busy || loading || !indexId || !question.trim() || !!uncertain">{{ busy ? 'Выполняется…' : mode === 'COMPARE' ? 'Сравнить ответы' : 'Получить ответ' }}</button></div>
+          <button class="primary" :disabled="busy || loading || !indexId || !question.trim() || !!uncertain || !providerReady">{{ busy ? 'Выполняется…' : mode === 'COMPARE' ? 'Сравнить ответы' : 'Получить ответ' }}</button></div>
+        <p v-if="mode !== 'DEEPSEEK' && !localReady" class="notice">Выбранная локальная модель ещё не установлена или runtime недоступен. Завершите загрузку и обновите страницу; автоматической замены на облако нет.</p>
       </form>
       <div class="rag-examples" v-if="!current"><button v-for="example in examples" :key="example" :disabled="busy" @click="question = example">{{ example }}</button></div>
       <section v-if="current" class="rag-result" aria-live="polite">
@@ -132,10 +156,12 @@ onUnmounted(() => { disposed = true; if (timer) clearTimeout(timer) })
             <p v-if="answer.error" class="notice error">{{ answer.error }}</p>
             <div v-if="answer.answer" class="rag-answer-text">{{ answer.answer }}</div>
             <p v-if="answer.status === 'TRUNCATED'" class="notice">Ответ обрезан лимитом. Это не завершённый результат.</p>
+            <details v-if="answer.thinking"><summary>Thinking модели</summary><pre>{{ answer.thinking }}</pre></details>
             <dl class="rag-metrics"><div><dt>Генерация</dt><dd>{{ metric(answer.milliseconds, ' мс') }}</dd></div><div><dt>Input / output</dt><dd>{{ metric(answer.inputTokens) }} / {{ metric(answer.outputTokens) }}</dd></div><div><dt>Загрузка модели</dt><dd>{{ metric(answer.loadMilliseconds, ' мс') }}</dd></div><div><dt>Токенов/с</dt><dd>{{ metric(answer.tokensPerSecond) }}</dd></div></dl>
             <p class="muted">ID ссылок: {{ answer.citationStatus }} · {{ answer.citedRefs.join(', ') || 'нет' }}. Это не проверка истинности утверждений.</p>
           </article>
         </div>
+        <details><summary>Сохранённые параметры эксперимента</summary><pre>{{ JSON.stringify(current.request, null, 2) }}</pre></details>
         <form v-if="!isRunning(current.status)" class="rag-conclusion" @submit.prevent="saveConclusion"><label for="rag-conclusion">Ваш вывод: качество, скорость, стабильность</label><textarea id="rag-conclusion" v-model="conclusion" maxlength="3000" placeholder="Какие факты подтверждены? Какая модель быстрее? Повторяется ли результат?" /><button>Сохранить вывод</button><span v-if="conclusionSaved" class="muted"> Сохранено; вывод включён в MD.</span></form>
         <section v-if="current.retrieval" class="rag-evidence"><h3>Общий контекст для выбранных моделей</h3>
           <p class="muted">Поиск: {{ metric(current.retrieval.milliseconds, ' мс') }} · {{ current.retrieval.included.length }} фрагментов · {{ current.retrieval.contextCharacters }} символов · embedding {{ current.retrieval.embeddingCacheHit ? 'из локального кеша' : 'вычислен локально' }} · всего: {{ metric(current.milliseconds, ' мс') }}</p>

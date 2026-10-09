@@ -49,6 +49,11 @@ class OllamaRuntimeTest {
         assertThrows(RuntimeFailure::class.java) { runtime.generate(GenerateRequest("qwen3:8b", "q")) }
         assertEquals(1, sent.size)
     }
+    @Test fun `empty length output keeps usage and is not retried`() = withServer(answer = "", reason = "length") { runtime, sent ->
+        val result = runtime.generate(GenerateRequest("qwen3:8b", "q", thinking = true, maxOutputTokens = 64))
+        assertEquals("", result.answer); assertEquals("length", result.doneReason); assertEquals(5, result.outputTokens)
+        assertEquals(1, sent.size)
+    }
     @Test fun `cloud model is rejected before chat request`() = withServer(remote = true) { runtime, sent ->
         assertThrows(InvalidModel::class.java) { runtime.generate(GenerateRequest("qwen3:8b", "q")) }
         assertTrue(sent.isEmpty())

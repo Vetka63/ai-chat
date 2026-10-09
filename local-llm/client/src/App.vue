@@ -1,11 +1,19 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onMounted, onUnmounted, ref, watch } from 'vue'
 import ChatView from './features/chat/ChatView.vue'
 import LabView from './features/lab/LabView.vue'
 import RagView from './features/rag/RagView.vue'
 
 const page = ref(window.location.hash.startsWith('#rag') ? 'rag' : window.location.hash === '#lab' ? 'lab' : 'chat')
 const busy = ref(false)
+function syncPage() {
+  if (busy.value) return
+  const hash = window.location.hash
+  page.value = hash === '#rag' || hash.startsWith('#rag/') ? 'rag' : hash === '#lab' ? 'lab' : 'chat'
+}
+onMounted(() => window.addEventListener('hashchange', syncPage))
+onUnmounted(() => window.removeEventListener('hashchange', syncPage))
+watch(busy, value => { if (!value) syncPage() })
 function navigate(next: string) { if (!busy.value) { page.value = next; window.location.hash = next } }
 </script>
 
