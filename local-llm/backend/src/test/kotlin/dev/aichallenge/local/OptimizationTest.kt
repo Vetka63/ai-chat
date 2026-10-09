@@ -10,6 +10,7 @@ import dev.aichallenge.local.optimization.runtime.*
 import dev.aichallenge.local.optimization.service.ExperimentService
 import dev.aichallenge.local.optimization.skills.PromptComposer
 import dev.aichallenge.local.optimization.storage.ExperimentRepository
+import dev.aichallenge.local.optimization.web.OptimizationController
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -114,6 +115,21 @@ class OptimizationTest {
             assertThrows(OptimizationFailure::class.java) { service.start(request.copy(input = "different")) }
             assertEquals("my conclusion", repo.note(done.id, "my conclusion").note)
             assertEquals("my conclusion", ExperimentRepository(config(), mapper).find(done.id)!!.note)
+        }
+    }
+    @Test fun `markdown export keeps reasoning usage and fences untrusted raw data without inference`() {
+        val calls = AtomicInteger()
+        val raw = "```\n<script>raw text</script>\n```"
+        withService(object : ModelGateway {
+            override fun generate(provider: Provider, model: String, messages: List<LlmMessage>, parameters: Parameters): Generation {
+                calls.incrementAndGet(); return Generation("", raw, "length", 100, 64, 50.0, 1.0, 100.0)
+            }
+        }) { service, repo, _ ->
+            val saved = await(repo, service.start(ExperimentRequest(input = raw)).id)
+            val report = OptimizationController(service, BenchmarkCatalog(mapper), repo).report(saved.id).body!!
+            assertTrue(report.contains("### Thinking модели")); assertTrue(report.contains("100/64"))
+            assertTrue(report.contains("````text\n$raw\n````")); assertTrue(report.contains("Ответ обрезан"))
+            assertEquals(1, calls.get())
         }
     }
     @Test fun `completed HTTP does not turn invalid output into a correct card`() {

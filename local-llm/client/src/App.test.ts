@@ -31,4 +31,18 @@ describe('local app sections', () => {
     expect(wrapper.findAll('nav button').every(b => b.attributes('disabled') === undefined)).toBe(true)
     wrapper.unmount()
   })
+  it('follows direct fragment changes and browser history between sections', async () => {
+    const wrapper = shallowMount(App)
+    window.location.hash = '#optimization/saved'; window.dispatchEvent(new HashChangeEvent('hashchange')); await nextTick()
+    expect(wrapper.find('optimization-view-stub').exists()).toBe(true)
+    window.location.hash = '#lab'; window.dispatchEvent(new HashChangeEvent('hashchange')); await nextTick()
+    expect(wrapper.find('lab-view-stub').exists()).toBe(true); wrapper.unmount()
+  })
+  it('defers external section change until the current generation releases', async () => {
+    const wrapper = shallowMount(App); wrapper.findComponent(ChatView).vm.$emit('busy', true); await nextTick()
+    window.location.hash = '#optimization/saved'; window.dispatchEvent(new HashChangeEvent('hashchange')); await nextTick()
+    expect(wrapper.find('chat-view-stub').exists()).toBe(true)
+    wrapper.findComponent(ChatView).vm.$emit('busy', false); await nextTick()
+    expect(wrapper.find('optimization-view-stub').exists()).toBe(true); wrapper.unmount()
+  })
 })

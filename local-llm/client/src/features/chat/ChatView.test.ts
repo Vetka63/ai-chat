@@ -21,6 +21,13 @@ beforeEach(() => {
   vi.mocked(chatApi.delete).mockResolvedValue(undefined)
 })
 describe('local chat UI', () => {
+  it('follows a saved chat hash without sending a new message', async () => {
+    const wrapper = mount(ChatView); await flushPromises()
+    vi.mocked(chatApi.get).mockResolvedValue({ ...chat, id: 'other', title: 'Другой чат' })
+    window.location.hash = '#chat/other'; window.dispatchEvent(new HashChangeEvent('hashchange')); await flushPromises()
+    expect(chatApi.get).toHaveBeenCalledWith('other'); expect(chatApi.send).not.toHaveBeenCalled()
+    expect(wrapper.find('h1').text()).toBe('Другой чат'); wrapper.unmount()
+  })
   it('restores server chat without generating and scrolls to last message', async () => {
     const wrapper = mount(ChatView); await flushPromises()
     expect(wrapper.text()).toContain('Привет, Сергей!')

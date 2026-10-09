@@ -54,7 +54,8 @@ class OllamaRuntime(private val config: LabProperties, private val mapper: Objec
         if (reason !in setOf("stop", "length")) throw RuntimeFailure("Ollama вернула неизвестную причину завершения: $reason.")
         val answer = response.path("message").optionalText("content")
             ?: throw RuntimeFailure("Ollama не вернула текстовое поле message.content.")
-        if (answer.isBlank()) throw RuntimeFailure("Ollama не вернула текст ответа. Возможно, лимит ушёл на reasoning; увеличьте его или отключите reasoning.")
+        // При length бюджет мог закончиться до итогового текста. Сохраняем thinking и usage как TRUNCATED.
+        if (answer.isBlank() && reason != "length") throw RuntimeFailure("Ollama не вернула текст ответа. Возможно, лимит ушёл на reasoning; увеличьте его или отключите reasoning.")
         val evalNs = if (response.hasNonNull("eval_duration")) response.path("eval_duration").asLong() else null
         val count = if (response.hasNonNull("eval_count")) response.path("eval_count").asInt() else null
         fun milliseconds(name: String): Double? = if (response.hasNonNull(name) && response.path(name).isNumber) response.path(name).asDouble() / 1_000_000 else null

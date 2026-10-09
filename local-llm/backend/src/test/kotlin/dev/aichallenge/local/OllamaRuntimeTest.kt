@@ -12,7 +12,7 @@ import java.net.InetSocketAddress
 class OllamaRuntimeTest {
     private val mapper = JsonMapper.builder().build()
 
-    private fun withServer(answer: String = "Paris", reason: String = "stop", remote: Boolean = false, chatStatus: Int = 200, action: (OllamaRuntime, MutableList<String>) -> Unit) {
+    private fun withServer(answer: String = "Paris", reason: String = "stop", remote: Boolean = false, chatStatus: Int = 200, thinking: String? = null, action: (OllamaRuntime, MutableList<String>) -> Unit) {
         val sent = mutableListOf<String>()
         val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
         server.createContext("/") { e ->
@@ -20,7 +20,7 @@ class OllamaRuntimeTest {
                 "/api/version" -> """{"version":"test"}"""
                 "/api/tags" -> """{"models":[{"name":"qwen3:8b","size":5200000000,"details":{"parameter_size":"8B","quantization_level":"Q4_K_M"}${if (remote) ",\"remote_host\":\"cloud\"" else ""}}]}"""
                 "/api/show" -> """{"capabilities":["completion"]}"""
-                "/api/chat" -> { sent.add(String(e.requestBody.readAllBytes())); mapper.writeValueAsString(mapOf("done" to true, "done_reason" to reason, "message" to mapOf("content" to answer), "prompt_eval_count" to 10, "eval_count" to 5, "eval_duration" to 100000000L, "total_duration" to 200000000L, "load_duration" to 50000000L)) }
+                "/api/chat" -> { sent.add(String(e.requestBody.readAllBytes())); mapper.writeValueAsString(mapOf("done" to true, "done_reason" to reason, "message" to mapOf("content" to answer, "thinking" to thinking), "prompt_eval_count" to 10, "eval_count" to 5, "eval_duration" to 100000000L, "total_duration" to 200000000L, "load_duration" to 50000000L)) }
                 else -> "{}"
             }
             val actualResponse = if (e.requestURI.path == "/api/chat" && chatStatus != 200)
@@ -54,6 +54,12 @@ class OllamaRuntimeTest {
     @Test fun `empty output is an error and is not retried`() = withServer(answer = "") { runtime, sent ->
         assertThrows(RuntimeFailure::class.java) { runtime.generate(GenerateRequest("qwen3:8b", "q")) }
         assertEquals(1, sent.size)
+    }
+    @Test fun `empty final text after reasoning budget exhaustion preserves truncation and usage`() = withServer(answer = "", reason = "length", thinking = "partial reasoning") { runtime, sent ->
+        val result = runtime.generate(GenerateRequest("qwen3:8b", "q", thinking = true, maxOutputTokens = 64))
+        assertEquals("length", result.doneReason); assertEquals("", result.answer)
+        assertEquals("partial reasoning", result.thinking); assertEquals(5, result.outputTokens)
+        assertEquals(10, result.inputTokens); assertEquals(1, sent.size)
     }
     @Test fun `cloud model is rejected before chat request`() = withServer(remote = true) { runtime, sent ->
         assertThrows(InvalidModel::class.java) { runtime.generate(GenerateRequest("qwen3:8b", "q")) }

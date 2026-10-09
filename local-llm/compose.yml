@@ -11,6 +11,12 @@ services:
       LLAMA_ARG_CACHE_RAM: "0"
     ports: ["127.0.0.1:${LOCAL_LLM_OLLAMA_PORT:-11436}:11434"]
     volumes: ["local-models:/root/.ollama"]
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      start_period: 15s
+      retries: 5
     restart: unless-stopped
   backend:
     build: { context: ., dockerfile: backend/Dockerfile }
@@ -25,12 +31,16 @@ services:
       OPT_CLOUD_MODELS: ${OPT_CLOUD_MODELS:-deepseek-flash,deepseek-v4-pro}
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-${LLM_API_KEY:-}}
     volumes: ["local-data:/app/data"]
-    depends_on: [ollama]
+    depends_on:
+      ollama:
+        condition: service_healthy
     restart: unless-stopped
   client:
     build: { context: ., dockerfile: client/Dockerfile }
     ports: ["127.0.0.1:${LOCAL_LLM_UI_PORT:-8483}:80"]
-    depends_on: [backend]
+    depends_on:
+      backend:
+        condition: service_healthy
     restart: unless-stopped
 volumes:
   local-models:

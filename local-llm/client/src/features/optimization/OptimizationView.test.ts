@@ -17,6 +17,20 @@ beforeEach(() => {
   vi.mocked(api.get).mockResolvedValue(experiment); vi.mocked(api.start).mockResolvedValue(experiment); vi.mocked(api.note).mockResolvedValue(experiment)
 })
 describe('optimization lab', () => {
+  it('candidate preset sets explicit specialized profile skill and safe context', async () => {
+    const wrapper = mount(OptimizationView); await flushPromises()
+    await wrapper.findAll('button').find(b => b.text() === 'Кандидат оптимизации')!.trigger('click'); await flushPromises()
+    expect(wrapper.find('select[aria-label="Шаблон задания"]').element).toHaveProperty('value', 'SPECIALIZED')
+    expect(wrapper.find('select[aria-label="Окно контекста"]').element).toHaveProperty('value', '6144')
+    expect(wrapper.find('input[aria-label="Максимум выходных токенов"]').element).toHaveProperty('value', '512')
+    expect(wrapper.find('.opt-check input').element).toHaveProperty('checked', true); wrapper.unmount()
+  })
+  it('changing visible dataset clears hidden selections from the previous dataset', async () => {
+    const wrapper = mount(OptimizationView); await flushPromises(); await wrapper.find('.opt-cases input').setValue(true)
+    await wrapper.find('.opt-case-toolbar select').setValue('holdout'); await flushPromises()
+    expect(wrapper.find('.opt-case-picker summary').text()).toContain('выбрано 0')
+    expect(wrapper.find('button[type=submit]').attributes('disabled')).toBeDefined(); wrapper.unmount()
+  })
   it('opens persisted results without generation and can save a conclusion', async () => {
     window.location.hash = '#optimization/saved'
     const wrapper = mount(OptimizationView); await flushPromises()
@@ -50,11 +64,30 @@ describe('optimization lab', () => {
     expect(wrapper.text()).toContain('invalid parameters'); expect(api.start).toHaveBeenCalledTimes(1)
     expect(localStorage.getItem('day29-receipt')).toBeNull(); expect(wrapper.find('button[type=submit]').attributes('disabled')).toBeUndefined(); wrapper.unmount()
   })
+  it('shows empty truncated answer with reasoning and keeps token metrics', async () => {
+    const altered = structuredClone(experiment); altered.status = 'PARTIAL'; altered.items[0]!.status = 'TRUNCATED'
+    altered.items[0]!.generation = { ...altered.items[0]!.generation!, answer: '', thinking: 'partial reasoning', doneReason: 'length', outputTokens: 64 }
+    vi.mocked(api.get).mockResolvedValue(altered); window.location.hash = '#optimization/saved'
+    const wrapper = mount(OptimizationView); await flushPromises()
+    expect(wrapper.text()).toContain('закончились до итогового ответа')
+    expect(wrapper.find('.opt-thinking').text()).toContain('partial reasoning')
+    expect(wrapper.text()).toContain('64'); expect(api.start).not.toHaveBeenCalled(); wrapper.unmount()
+  })
+  it('opens another saved UUID after a hash change without a new model call', async () => {
+    window.location.hash = '#optimization/saved'
+    const wrapper = mount(OptimizationView); await flushPromises()
+    const next = structuredClone(experiment); next.id = 'next'; next.note = 'next saved note'
+    vi.mocked(api.get).mockResolvedValue(next)
+    window.location.hash = '#optimization/next'; window.dispatchEvent(new HashChangeEvent('hashchange')); await flushPromises()
+    expect(api.get).toHaveBeenCalledWith('next'); expect(api.start).not.toHaveBeenCalled()
+    expect(wrapper.find('.opt-note textarea').element).toHaveProperty('value', 'next saved note'); wrapper.unmount()
+  })
   it('unknown transport result is reconciled by GET not regenerated', async () => {
     vi.mocked(api.start).mockRejectedValue(new Error('network'))
     const wrapper = mount(OptimizationView); await flushPromises(); await wrapper.find('textarea').setValue('q')
     await wrapper.find('form').trigger('submit'); await flushPromises()
-    expect(api.get).toHaveBeenCalled(); expect(api.start).toHaveBeenCalledTimes(1); expect(wrapper.text()).toContain('P1'); wrapper.unmount()
+    expect(api.get).toHaveBeenCalled(); expect(api.start).toHaveBeenCalledTimes(1); expect(wrapper.text()).toContain('P1')
+    expect(window.location.hash).toBe('#optimization/saved'); wrapper.unmount()
   })
   it('counts failures in quality denominator and warns about confounded comparisons', () => {
     const failed = structuredClone(experiment); failed.items[0]!.status = 'FAILED'; failed.items[0]!.evaluation = null

@@ -18,9 +18,10 @@ const canStart = computed(() => !running.value && !submitted.value && !!settings
   && (form.caseIds.length > 0 || form.input.trim().length > 0))
 const warnings = computed(() => current.value && compared.value ? comparisonWarnings(current.value, compared.value) : [])
 let timer: ReturnType<typeof setTimeout> | undefined, disposed = false
-watch(running, value => emit('busy', value))
+watch(running, value => { emit('busy', value); if (!value) syncResource() })
 watch(() => current.value?.id, () => { note.value = current.value?.note ?? ''; savedNote.value = false; selectedItemId.value = current.value?.items[0]?.id ?? '' })
 function message(e: unknown) { return e instanceof Error ? e.message : String(e) }
+function runStamp(e: Summary) { return `${new Date(e.createdAt).toLocaleString('ru-RU')} · ${e.id.slice(0, 8)}` }
 async function refresh() {
   try { [settings.value, cases.value, history.value] = await Promise.all([api.settings(), api.cases(), api.list()]); error.value = '' }
   catch (e) { error.value = message(e) }
@@ -54,7 +55,7 @@ function customInput() { form.caseIds = [] }
 function newExperiment() { if (!running.value) { current.value = null; compared.value = null; comparisonId.value = ''; error.value = ''; window.location.hash = 'optimization' } }
 async function reconcile() {
   if (!submitted.value) return
-  try { current.value = await api.get(submitted.value.id); submitted.value = null; localStorage.removeItem('day29-receipt'); transportError.value = ''; schedule() }
+  try { current.value = await api.get(submitted.value.id); submitted.value = null; localStorage.removeItem('day29-receipt'); transportError.value = ''; window.location.hash = `optimization/${current.value.id}`; schedule() }
   catch (e) { transportError.value = `Исход отправки пока неизвестен. Проверить статус можно повторно без нового LLM-вызова: ${message(e)}` }
 }
 async function start() {
@@ -72,7 +73,7 @@ async function start() {
 async function retrySameReceipt() {
   if (!submitted.value || pending.value) return
   pending.value = true
-  try { current.value = await api.start(submitted.value); submitted.value = null; localStorage.removeItem('day29-receipt'); transportError.value = ''; schedule() }
+  try { current.value = await api.start(submitted.value); submitted.value = null; localStorage.removeItem('day29-receipt'); transportError.value = ''; window.location.hash = `optimization/${current.value.id}`; schedule() }
   catch (e) {
     if (e instanceof HttpFailure && [400, 409, 422].includes(e.status)) { error.value = message(e); submitted.value = null; localStorage.removeItem('day29-receipt') }
     else transportError.value = message(e)
@@ -84,7 +85,17 @@ async function saveNote() {
   if (!current.value || running.value) return
   try { current.value = await api.note(current.value.id, note.value); savedNote.value = true; error.value = '' } catch (e) { error.value = message(e) }
 }
+/** Own navigation already changed current; history/direct links only re-read a different UUID. */
+function syncResource() {
+  if (running.value || submitted.value) return
+  const hash = window.location.hash
+  if (hash.startsWith('#optimization/')) {
+    try { const id = decodeURIComponent(hash.slice(14)); if (id && id !== current.value?.id) void open(id) }
+    catch { error.value = 'Некорректная ссылка на эксперимент.' }
+  } else if (hash === '#optimization' && current.value) newExperiment()
+}
 onMounted(async () => {
+  window.addEventListener('hashchange', syncResource)
   await refresh()
   const saved = localStorage.getItem('day29-receipt')
   if (saved) { try { submitted.value = JSON.parse(saved); await reconcile() } catch { error.value = 'Не удалось прочитать квитанцию.' } }
@@ -92,7 +103,7 @@ onMounted(async () => {
   if (!current.value && id) await open(id)
   if (!current.value && !submitted.value) { const active = history.value.find(e => e.status === 'RUNNING'); if (active) await open(active.id) }
 })
-onUnmounted(() => { disposed = true; clearTimeout(timer); emit('busy', false) })
+onUnmounted(() => { disposed = true; clearTimeout(timer); window.removeEventListener('hashchange', syncResource); emit('busy', false) })
 </script>
 <template>
   <div class="opt-page">
@@ -102,6 +113,7 @@ onUnmounted(() => { disposed = true; clearTimeout(timer); emit('busy', false) })
       <div class="opt-history-list">
         <button v-for="e in history" :key="e.id" :class="{ selected: current?.id === e.id }" :disabled="running" @click="open(e.id)">
           <strong>{{ e.model }}</strong><span>{{ e.profile === 'BASELINE' ? 'Базовый' : 'Специализированный' }} · skill {{ e.skillEnabled ? '✓' : '—' }}</span><small>{{ e.status }} · {{ e.finished }}/{{ e.total }}</small>
+          <small>{{ runStamp(e) }}</small>
         </button>
         <p v-if="!history.length" class="muted">Результаты появятся после запуска и сохранятся на backend.</p>
       </div>
@@ -116,7 +128,7 @@ onUnmounted(() => { disposed = true; clearTimeout(timer); emit('busy', false) })
           <div class="opt-presets"><button type="button" @click="preset(false)">Базовый профиль</button><button type="button" @click="preset(true)">Кандидат оптимизации</button><span>Кандидат — гипотеза, не гарантированное улучшение.</span></div>
           <label class="opt-input-label">Своё обращение<textarea v-model="form.input" maxlength="16000" placeholder="Введите обращение либо выберите тесты ниже…" @input="customInput" /></label>
           <details class="opt-case-picker" open><summary>Тестовый набор · выбрано {{ form.caseIds.length }}</summary>
-            <div class="opt-case-toolbar"><label>Набор<select v-model="caseMode"><option value="calibration">Для настройки · 10</option><option value="holdout">Контрольный · 10</option></select></label><button type="button" @click="chooseAll">Выбрать весь набор</button><button type="button" @click="form.caseIds = []">Снять выбор</button></div>
+            <div class="opt-case-toolbar"><label>Набор<select v-model="caseMode" @change="form.caseIds = []"><option value="calibration">Для настройки · 10</option><option value="holdout">Контрольный · 10</option></select></label><button type="button" @click="chooseAll">Выбрать весь набор</button><button type="button" @click="form.caseIds = []">Снять выбор</button></div>
             <div class="opt-cases"><label v-for="c in visibleCases" :key="c.id"><input type="checkbox" :checked="form.caseIds.includes(c.id)" @change="selectCase(c.id, ($event.target as HTMLInputElement).checked)">{{ c.title }}</label></div>
           </details>
           <div class="opt-submit"><span>{{ form.provider === 'LOCAL' ? settings?.localModel : form.cloudModel }} · {{ form.caseIds.length || 1 }} × {{ form.repetitions }} вызовов</span><button type="submit" class="primary" :disabled="!canStart">{{ running ? 'Выполняется…' : 'Запустить эксперимент' }}</button></div>
@@ -126,7 +138,7 @@ onUnmounted(() => { disposed = true; clearTimeout(timer); emit('busy', false) })
       <section v-if="current" class="opt-result">
         <header><div><h2>{{ current.model }}</h2><p>{{ current.status }} · {{ current.identity?.quantization ?? 'облачная модель' }} · {{ current.request.promptProfile }} · skill {{ current.skill ? 'включён' : 'выключен' }}</p></div><a class="text-button" :href="`/api/v1/optimization/experiments/${current.id}/report`">Скачать MD</a></header>
         <p class="muted">COMPLETED — завершение вызова, не правильность. Неудачные случаи учитываются в качестве; резюме проверяется человеком.</p>
-        <label class="opt-comparison-label">Сравнить с сохранённым экспериментом<select v-model="comparisonId" aria-label="Сравнить с экспериментом" @change="compare"><option value="">Без сравнения</option><option v-for="e in history.filter(e => e.id !== current?.id)" :key="e.id" :value="e.id">{{ e.model }} · {{ e.profile }} · {{ e.createdAt.slice(11,19) }}</option></select></label>
+        <label class="opt-comparison-label">Сравнить с сохранённым экспериментом<select v-model="comparisonId" aria-label="Сравнить с экспериментом" @change="compare"><option value="">Без сравнения</option><option v-for="e in history.filter(e => e.id !== current?.id)" :key="e.id" :value="e.id">{{ e.model }} · {{ e.profile }} · {{ runStamp(e) }}</option></select></label>
         <p v-for="warning in warnings" :key="warning" class="notice">{{ warning }}</p>
         <div class="opt-scoreboard"><article v-for="e in [current, compared].filter((e): e is Experiment => !!e)" :key="e.id"><h3>{{ e.model }}</h3><dl><dt>Завершено</dt><dd>{{ score(e).successful }}/{{ score(e).total }}</dd><dt>Точные карточки</dt><dd>{{ score(e).goldTotal ? `${score(e).exact}/${score(e).goldTotal}` : 'нет эталона' }}</dd><dt>Верные поля</dt><dd>{{ score(e).fieldTotal ? `${score(e).fields}/${score(e).fieldTotal}` : 'нет эталона' }}</dd><dt>Валидная схема</dt><dd>{{ score(e).schema }}/{{ score(e).total }}</dd><dt>Медиана успешных вызовов</dt><dd>{{ metric(score(e).medianMs) }} мс</dd><dt>Sampled max VRAM модели</dt><dd>{{ gib(score(e).maxVram) }}</dd></dl></article></div>
         <div class="opt-item-tabs"><button v-for="i in current.items" :key="i.id" :class="{ selected: item?.id === i.id }" @click="selectedItemId = i.id">{{ i.caseId ?? 'свой' }} · {{ i.repetition }} <span>{{ i.status === 'COMPLETED' ? i.evaluation?.exactFields === false ? '⚠' : '✓' : i.status === 'RUNNING' ? '…' : i.status === 'PENDING' ? '·' : '!' }}</span></button></div>
@@ -134,6 +146,8 @@ onUnmounted(() => { disposed = true; clearTimeout(timer); emit('busy', false) })
         <div class="opt-answer-grid" :class="{ comparing: !!compared }">
           <article v-for="(i, position) in [item, ...(compared ? [comparedItem] : [])]" :key="position" class="opt-answer">
             <template v-if="i"><h3>{{ position === 0 ? current.model : compared?.model }} · {{ i.status }}</h3><p v-if="i.error" class="notice error">{{ i.error }}</p><pre v-if="i.generation" class="opt-answer-text">{{ i.generation.answer }}</pre><p v-else class="muted">{{ i.status === 'RUNNING' ? 'Модель отвечает…' : 'Ответ ещё не получен.' }}</p>
+              <p v-if="i.status === 'TRUNCATED' && !i.generation?.answer.trim()" class="notice">Лимит генерации или окно контекста закончились до итогового ответа. Токены и Thinking сохранены; увеличьте лимит либо отключите Thinking для нового запуска.</p>
+              <details v-if="i.generation?.thinking" class="opt-thinking"><summary>Thinking модели до итогового ответа</summary><pre>{{ i.generation.thinking }}</pre></details>
               <div v-if="i.evaluation" class="opt-quality" :class="{ bad: !i.evaluation.validSchema || i.evaluation.exactFields === false }"><strong>JSON {{ i.evaluation.validJson ? '✓' : '✗' }} · схема {{ i.evaluation.validSchema ? '✓' : '✗' }} · поля {{ i.evaluation.totalFields ? `${i.evaluation.matchedFields}/${i.evaluation.totalFields}` : 'без эталона' }}</strong><p v-for="problem in i.evaluation.mismatches" :key="problem">{{ problem }}</p></div>
               <dl class="opt-metrics"><dt>Полное время</dt><dd>{{ metric(i.elapsedMilliseconds) }} мс</dd><dt>Загрузка модели</dt><dd>{{ metric(i.generation?.loadMilliseconds) }} мс</dd><dt>Токены вход / выход</dt><dd>{{ metric(i.generation?.inputTokens) }} / {{ metric(i.generation?.outputTokens) }}</dd><dt>Генерация</dt><dd>{{ metric(i.generation?.tokensPerSecond, 1) }} ток/с</dd><dt>Выделено runtime</dt><dd>{{ gib(i.resources?.peakAllocatedBytes) }}</dd><dt>Из них VRAM</dt><dd>{{ gib(i.resources?.peakVramBytes) }}</dd><dt>Размещение</dt><dd>{{ i.resources?.placement ?? 'неизвестно' }}</dd><dt>Фактическое окно</dt><dd>{{ metric(i.resources?.observedContextSize) }}</dd></dl>
               <details><summary>Эталон и точный промпт</summary><pre v-if="i.expected">{{ JSON.stringify(i.expected, null, 2) }}</pre><pre v-for="m in i.messages" :key="m.role">{{ m.role }}: {{ m.content }}</pre><p class="opt-hash">SHA256 {{ i.promptSha256 }}</p></details>

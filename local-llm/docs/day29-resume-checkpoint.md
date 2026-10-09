@@ -1,87 +1,79 @@
-# Контрольная точка реализации дня 29
+# День 29 — финальная контрольная точка
 
-8 октября 2026, Europe/Samara. Пользователь выбрал: «Пока сохраним checkpoint и продолжим позже».
-Не запускать новые LLM-вызовы, скачивания, сборки или восстановление Docker без новой команды.
+9 октября 2026, Europe/Samara. Реализация и обязательные проверки дня 29 завершены.
+Это актуальная точка продолжения; прежние записи про незавершённую загрузку FP16 и Docker I/O
+описывали уже устранённое инфраструктурное прерывание, а не текущее состояние.
 
-## Git и папка
+## Где мы работаем
 
-- Репозиторий: `F:\ai-advent-challenge\ai-chat`.
-- Рабочая ветка: `ai-challenge-day-29`, создана от `ai-challenge-day-27`, родитель `a05403c`.
-- День 28 сохранён отдельным локальным checkpoint-коммитом `a42a1f1` в `ai-challenge-day-28`.
-  Исправлено правило `/corpus/`, которое раньше исключало также исходник CorpusService.
-- Main и предыдущие ветки не изменялись. Push не выполнялся.
-- День 29 сохраняется локальным checkpoint-коммитом вместе с этим файлом. Это незавершённая реализация, не финальный релиз.
+- Репозиторий `F:\ai-advent-challenge\ai-chat`, ветка `ai-challenge-day-29` от дня 27.
+- HEAD `18ccb53` — прежний WIP. Итоговые правки находятся в рабочих файлах;
+  новый commit/push в этом проходе не выполнялся. Main и ветки 26–28 не менялись.
+- День 28 отдельно сохранён в `a42a1f1`, не включён в день 29.
+- UI http://localhost:8483, API 8482, Ollama 11436. Все три контейнера запущены;
+  backend и Ollama healthy. Активная модель — `qwen3:4b-q4_K_M`, cloud явно включён.
+- Установлены Q4 и FP16 Qwen3 4B; одновременно допускается одна загруженная модель.
+  Пустой `ollama ps` после простоя — нормальная выгрузка, не потеря весов.
+- Данные Docker по решению пользователя остаются на C, исходники/JSON — на F.
+  `start-day29.ps1 -CheckOnly` подтверждает более 80 GiB свободно и минимум 20 GiB.
+  Миграцию на F не возобновлять, reset/prune/down -v не выполнять.
 
-## Реализовано
+## Что завершено
 
-Изолированный домен `local-llm/backend/src/main/kotlin/dev/aichallenge/local/optimization`:
-config, models, skills, evaluation, runtime, storage, service, web.
-REST prefix `/api/v1/optimization`; отдельная `/app/data/optimization.sqlite`.
-20 синтетических incident cases: 10 calibration, 10 holdout. История/RAG не используются.
-Baseline и specialized task prompts; подключаемый `incident-triage` skill версии 2.
-Промпт-контракт версии `incident-card-v3`. Эталон никогда не передаётся модели.
+- 40 backend-тестов: успешные XML из кешированного build stage неизменённого кода;
+  29 frontend-тестов и build повторно прошли 9 октября; 7 restore-тестов прошли.
+  Итого 76; полный npm audit — 0 vulnerabilities.
+- Рабочие startup readiness/health checks, защита от нехватки диска,
+  офлайн-импорт прежних JSON без LLM, безопасный MD export.
+- Пустой ответ с `done_reason=length` сохранён как TRUNCATED вместе с thinking/usage,
+  а не потерян под видом ошибки. Пустой stop по-прежнему FAILED.
+- UI: hash-навигация, UUID reconciliation, снятие скрытых cases при смене набора,
+  даты/короткие UUID, сохранение вывода, Thinking notice, сравнение и экспорт.
+- Живые дни 26/27: три локальных запроса; два независимых чата,
+  факты «Листок», Kotlin, 7000 рублей сохранены после замены backend.
+- Финальный день 29: Q4 baseline/candidate, изолированные calibration-абляции,
+  отрицательные случаи, FP16/Q4 после прогрева и DeepSeek/Q4 на одинаковом наборе.
+- 9 октября через UI проверены provider comparison, FP16/Q4 без confounding warnings,
+  вывод после reload и реальное скачивание MD с Thinking/64 токенами. Console errors отсутствуют.
+- Viewport 390×844 проверен, временное переопределение сброшено.
 
-LOCAL и явный DeepSeek API. Один активный local model задаётся `OPT_LOCAL_MODEL` при запуске.
-Планируемые варианты: `qwen3:4b-q4_K_M`, `qwen3:4b-fp16`.
-temperature, max tokens, context, thinking, top_p/top_k/seed; облачные ограничения учтены явно.
-Нет скрытого judge, исправления ответов, cloud fallback, очередей и повторов генерации.
-Асинхронный POST 202, UUID-квитанция/idempotency, последовательный suite, общий GenerationGate.
-Точные сообщения/hash, модель/digest/quantization/runtime version, raw answer, errors, usage,
-sampled allocation нужного окна, schema и пять эталонных полей сохраняются на сервере.
-Перезапуск помечает незавершённое INTERRUPTED и сохраняет завершённые cases.
+## Главные результаты
 
-Vue UI: `client/src/features/optimization`; адрес `http://localhost:8483/#optimization`.
-Выбор provider/settings/skill/cases; результаты сбоку; ответы и метрики рядом;
-сравнение сохранённых запусков между сменами модели; warnings при смешении параметров;
-вывод пользователя и MD-экспорт. Старые экраны 26–27 остаются отдельными.
+| Серия | UUID | Точные карточки | Схема | Медиана времени |
+| --- | --- | --- | --- | --- |
+| Q4 baseline | f9fb5df2-0b87-4ac7-a2e3-18faaafcd4a8 | 6/30 | 30/30 | 515 мс |
+| Q4 candidate | 56d2d43e-2ca7-4c54-b209-6fef16c0380d | 27/30 | 30/30 | 384 мс |
+| Q4 прогретый precision reference | 78e3cdb8-92d4-4196-b535-2d43eeb434b0 | 27/30 | 30/30 | 353,5 мс |
+| FP16 прогретый candidate | 772d855b-1eb7-48c3-94e7-65f6cb317fb3 | 24/30 | 27/30 | 735,5 мс |
+| Q4 provider reference | b632686c-3721-4406-9cdb-14820f10ec25 | 9/10 | 10/10 | 386 мс |
+| DeepSeek Pro | 006da38d-4762-4a5f-9013-45f7129794df | 10/10 | 10/10 | 1876,5 мс |
 
-Скрипты: `scripts/start-day29.ps1`, `scripts/verify-day29.ps1`.
-Документы: `docs/day29-architecture.md`, `docs/day29-video-guide.md`, `docs/day29-verification.md`,
-`backend/src/main/kotlin/dev/aichallenge/local/optimization/README.md`.
+Prompt `incident-card-v3`, skill `incident-triage` v2, кандидат .7/6144/512,
+thinking false, top_p .8, top_k20, seed42. Инструкции после holdout не менялись.
+Для FP16/Q4 все inputs, prompt hashes и параметры совпадают; allocation 8,49/3,44 GiB.
+Повторы фиксированного seed — не независимая случайная выборка. Модельные ошибки h06 (обе)
+и h04 (`summary=null` у FP16) не исправлять скрыто и не удалять для красивого видео.
+Смысл summary оценивается вручную, автоматические точные карточки проверяют пять фактов + схему.
 
-## Где остановились
+## Данные и артефакты
 
-Подробные цифры и ограничения находятся в `day29-verification.md`.
-38 backend-тестов прошли в Docker до последних малых правок runtime error text.
-Актуальные 22 frontend-теста и production build прошли локально; host Node 22.11 ниже поддерживаемой версии.
-Две high-severity зависимости из npm audit требуют отдельного просмотра, автоматических upgrade не было.
+В SQLite сохранены 29 экспериментов; RUNNING нет. Офлайн восстановлены восемь старых серий
+из JSON на F. Старые чаты удалены при переустановке Docker пользователем; полного старого backup нет.
+Новые копии: `artifacts/recovery-20261008/final-data/lab.sqlite` и `optimization.sqlite`;
+обе integrity_check ok. Это backup до финального оформления документации, не синхронная реплика.
+JSON результатов — `artifacts/day29-*`; screenshot —
+`artifacts/recovery-20261008/day29-quantization-final-20261009.jpg`.
 
-Q4 установлен, завершены 111 локальных попыток и 3 paid DeepSeek smoke.
-Calibration улучшилась с 3/10 до 9/10 точных карточек. Holdout baseline: 6/30, specialized 4096: 24/30.
-Три h10 не поместились в окно 4096; h06 ошибочно получил P1 вместо P2.
-Финальный preset после проверки объёма увеличен до 6144 без изменения prompt по контрольным ответам.
-Повтор этого профиля и полный DeepSeek holdout **не стартовали**: сборка прервалась при сбое Docker.
-FP16 скачивался (примерно 7,04/8,05 GB на последнем корректном измерении), но не установлен/не проверен.
-Не заявлять готовое сравнение FP16/Q4 или полную проверку нового окна 6144.
+Новые проверочные чаты:
+`f5b6a1f8-5bd7-44d4-bfdd-d88f01ffb22b` (память, 6 сообщений),
+`92a5493f-e62c-409e-bf24-2a59fe5d3a68` (изоляция, 2 сообщения).
 
-## Инфраструктурный блокер
+В финальном восстановленном проходе — 206 локальных попыток и 10 оплаченных DeepSeek-вызовов.
+9 октября повторных LLM-вызовов нет. Открытие/сравнение/экспорт сохранённых результатов бесплатно
+и не создаёт эксперимент. Полные результаты: `day29-verification.md`; видео: `day29-video-guide.md`.
 
-Docker VM в 12:21 UTC: Buffer I/O errors, EXT4 aborted journal, filesystem remounted read-only;
-dockerd не запускается с `input/output error`. Это не подтверждённая синтаксическая ошибка daemon.json.
-Docker DataFolder: `C:\ProgramData\DockerDesktop\vm-data`; после сбоя C: имел ~2,16 GiB свободного места.
-Reset/prune/VHD/volumes не удалять. Системные настройки не менялись.
-Зависшие CLI сборки и скачивания остановлены. Пользователь отложил освобождение места/перезапуск Docker.
-Артефакты JSON на F: читаются; целостность SQLite в Docker volume ещё надо проверить после восстановления.
+## Следующие действия пользователя
 
-## Продолжение после явной команды
-
-1. Прочитать checkpoint и verification; проверить Git и реальное состояние Docker, не повторять старые completed UUID.
-2. Проверить дисковое пространство и Docker engine. При необходимости пользователь освобождает место/восстанавливает Docker;
-   никаких factory reset и удаления томов без отдельной команды.
-3. Проверить SQLite integrity и сохранённые эксперименты. JSON-копии находятся в ignored artifacts.
-4. Пересобрать backend/client актуального коммита. Последняя успешная deployed image до сбоя:
-   backend `cad6ec0e1f7048524b7d76e4110645cf5a8b5d88cfc3c1dfb7ecaa3cee564fb9`,
-   client `e841791eb0b32c9ed7c0dbad6b33eb194f969c3e04ca181e4e1a276f790f0ccc`.
-   Они имеют прежний preset 4096; рабочие файлы уже 6144. Не путать source с deployed version.
-5. Выполнить итоговый Q4 specialized+skill, temperature .7, window 6144, output 512,
-   top_p .8/top_k20/seed42/thinking false, holdout 10×3. Не менять prompt по h06.
-6. Проверить cap64 и window1024 отдельными local negative experiments: TRUNCATED/FAILED, raw результат виден.
-7. Доскачать FP16 безопасно после восстановления диска, переключить через start-day29,
-   прогнать тот же frozen suite/settings. Убедиться, что в памяти одна модель и обе реально GPU.
-8. DeepSeek Pro holdout 10×1 на тех же task instructions, без фиктивных cloud RAM/VRAM/context параметров.
-9. Проверить UI side-by-side FP16/Q4, мобильный viewport, note/MD/reload/restart на финальной сборке.
-10. Актуализировать verification, guide, осмысленно сравнить accuracy/speed/allocation; не скрывать ошибки модели.
-11. Проверить секреты, git diff, при отдельной команде push. В конце вернуть выбранную пользователем активную модель.
-
-Для итоговых прогонов использовать новые ignored-папки либо ту же квитанцию при продолжении именно старого эксперимента.
-`day29-q4-holdout-final` и `day29-deepseek-holdout` пока не содержат начатых запросов.
+Можно проверять и записывать видео. Нужных для выполнения дня 29 доработок не осталось.
+Коммит/публикация итоговых изменений, merge main, переключение на другую ветку или остановка
+приложения — только по следующей команде пользователя. Не запускать заново всю матрицу ради статуса.

@@ -28,12 +28,17 @@
 
 ## Пример полного пути
 
-Пользователь выбирает case `c01`, LOCAL, specialized+skill, temperature=0.7, context=4096, max_tokens=512.
+Пользователь выбирает case `c01`, LOCAL, specialized+skill, temperature=0.7, context=6144, max_tokens=512.
 Клиент сохраняет UUID и делает POST. Сервис фиксирует, например, `qwen3:4b-q4_K_M`, фактический digest,
-два сообщения SYSTEM/USER и их hash. Gateway отправляет в Ollama `num_ctx=4096`, `num_predict=512`.
+два сообщения SYSTEM/USER и их hash. Gateway отправляет в Ollama `num_ctx=6144`, `num_predict=512`.
 Модель возвращает сырой JSON. Evaluator сравнивает service/environment/priority/time/cause,
 не изменяя JSON. SQLite сохраняет raw answer, совпадения, длительность и model allocation.
 UI показывает карточку и позволяет скачать MD без нового inference.
+
+При `done_reason=length` сохраняется TRUNCATED, даже если итоговый answer пуст:
+reasoning мог занять весь бюджет. Thinking и usage остаются в SQLite, UI и MD.
+При нормальном stop пустой answer считается ошибкой. Экспорт не ремонтирует JSON;
+сырые тексты помещаются в fenced-блоки, чтобы Markdown внутри входа не менял структуру отчёта.
 
 После смены на FP16 UUID старого запроса всё ещё возвращает старый результат Q4. Новый запрос
 получает новый UUID и новые model metadata. Сравнение честно только при тех же input и settings.

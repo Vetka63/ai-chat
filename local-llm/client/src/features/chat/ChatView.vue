@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { api, type RuntimeInfo } from '../../api'
 import { chatApi, type Chat, type ChatSummary, type SendMessage } from './api'
 import './chat.css'
@@ -23,6 +23,15 @@ const seconds = (value: number | null) => value == null ? '—' : `${(value / 10
 const turnParameters = (requestId: string) => current.value?.messages.find(m => m.role === 'USER' && m.requestId === requestId)?.parameters
 
 function setBusy(value: boolean) { busy.value = value; emit('busy', value) }
+function syncResource() {
+  if (busy.value || loading.value) return
+  const hash = window.location.hash
+  if (hash.startsWith('#chat/')) {
+    try { const id = decodeURIComponent(hash.slice(6)); if (id && id !== current.value?.id) void openChat(id) }
+    catch { error.value = 'Некорректная ссылка на чат.' }
+  } else if (hash === '#chat' && current.value) newChat()
+}
+watch(busy, value => { if (!value) syncResource() })
 async function scrollDown() { await nextTick(); bottom.value?.scrollIntoView({ behavior: 'smooth', block: 'end' }) }
 function restoreSettings(chat: Chat) {
   const params = chat.messages.filter(m => m.role === 'USER').at(-1)?.parameters
@@ -111,12 +120,14 @@ async function retry() {
   finally { setBusy(false); await scrollDown() }
 }
 onMounted(async () => {
+  window.addEventListener('hashchange', syncResource)
   await refresh()
   const selectedId = window.location.hash.startsWith('#chat/') ? window.location.hash.slice(6) : null
   if (selectedId && chats.value.some(c => c.id === selectedId)) await openChat(selectedId)
   else if (chats.value[0]) await openChat(chats.value[0].id)
   else creating.value = true
 })
+onUnmounted(() => { window.removeEventListener('hashchange', syncResource); emit('busy', false) })
 </script>
 
 <template>

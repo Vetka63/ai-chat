@@ -41,9 +41,11 @@ class OptimizationController(private val service: ExperimentService, private val
                 appendLine("Ресурсы: ${item.resources ?: "недоступны"}.")
                 appendLine("JSON/схема: ${item.evaluation?.validJson}/${item.evaluation?.validSchema}; поля: ${item.evaluation?.matchedFields ?: "—"}/${item.evaluation?.totalFields ?: "—"}.")
                 item.evaluation?.mismatches?.forEach { appendLine("- $it") }
-                appendLine("\n### Обращение\n"); appendLine(item.input)
-                appendLine("\n### Ответ\n"); appendLine(item.generation?.answer ?: item.error ?: "Ответ ещё не получен.")
-                appendLine("\n### Точные сообщения\n"); item.messages.forEach { appendLine("${it.role}: ${it.content}\n") }
+                appendLine("\n### Обращение\n"); literal(item.input)
+                appendLine("\n### Ответ\n"); literal(item.generation?.answer ?: item.error ?: "Ответ ещё не получен.")
+                if (item.status == ItemStatus.TRUNCATED) appendLine("Ответ обрезан. При пустом итоговом тексте лимит мог закончиться на Thinking или окне контекста.\n")
+                item.generation?.thinking?.takeIf { it.isNotBlank() }?.let { appendLine("\n### Thinking модели\n"); literal(it) }
+                appendLine("\n### Точные сообщения\n"); item.messages.forEach { appendLine("${it.role}:\n"); literal(it.content) }
             }
             appendLine("## Вывод пользователя\n"); appendLine(e.note.ifBlank { "Пока не заполнен." })
             appendLine("\nСравнение: одинаковый набор входов, prompt и параметры при проверке квантования; холодную загрузку отделять от прогретых вызовов. Seed не гарантирует идентичность на разных runtime/железе.")
@@ -52,3 +54,9 @@ class OptimizationController(private val service: ExperimentService, private val
     }
 }
 data class NoteRequest(val note: String)
+
+/** Данные и raw output остаются буквальным текстом даже при Markdown/HTML внутри обращения. */
+private fun StringBuilder.literal(text: String) {
+    val marker = "`".repeat(maxOf(3, (Regex("`+").findAll(text).maxOfOrNull { it.value.length } ?: 0) + 1))
+    appendLine("${marker}text"); appendLine(text); appendLine(marker); appendLine()
+}
