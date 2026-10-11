@@ -1,16 +1,21 @@
 package dev.aichallenge.local.generation
 
 import dev.aichallenge.local.runs.RunRepository
+import dev.aichallenge.local.privateaccess.ServiceLimits
+import dev.aichallenge.local.privateaccess.PrivateProperties
 import org.springframework.stereotype.Service
 import java.time.Instant
 import java.util.UUID
 
 /** Выполняет независимый запрос: сохраняет RUNNING, вызывает runtime, сохраняет фактический исход. */
 @Service
-class GenerationService(private val runtime: LocalLlmRuntime, private val repository: RunRepository, private val gate: GenerationGate = GenerationGate()) {
+class GenerationService(private val runtime: LocalLlmRuntime, private val repository: RunRepository, private val gate: GenerationGate = GenerationGate(),
+    private val limits: ServiceLimits = ServiceLimits(PrivateProperties())) {
 
     fun generate(request: GenerateRequest): Run {
         return gate.exclusive {
+            limits.context(listOf(LlmMessage(LlmRole.USER, request.prompt)))
+            limits.generation()
             val initial = Run(UUID.randomUUID().toString(), Instant.now().toString(), request.copy(prompt = request.prompt.trim()), RunStatus.RUNNING)
             repository.save(initial)
             val start = System.nanoTime()

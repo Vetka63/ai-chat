@@ -7,8 +7,14 @@ local-llm:
   base-url: ${OLLAMA_BASE_URL:http://localhost:11436}
   models: ${LOCAL_LLM_MODELS:qwen3:8b}
   database-path: ${LOCAL_LLM_DATABASE_PATH:./data/lab.sqlite}
-  timeout-seconds: 300
-  context-size: 8192
+  timeout-seconds: ${LOCAL_LLM_TIMEOUT_SECONDS:300}
+  context-size: ${LOCAL_LLM_CONTEXT_SIZE:8192}
+private-service:
+  enabled: ${DAY30_ENABLED:false}
+  password: ${DAY30_PASSWORD:}
+  allowed-origins: ${DAY30_ALLOWED_ORIGINS:http://127.0.0.1:8583,http://localhost:8583}
+  generations-per-minute: ${DAY30_GENERATIONS_PER_MINUTE:10}
+  context-bytes: ${DAY30_CONTEXT_BYTES:24576}
 management:
   endpoints:
     web:

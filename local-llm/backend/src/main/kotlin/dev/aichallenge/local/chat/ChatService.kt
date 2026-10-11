@@ -2,6 +2,8 @@ package dev.aichallenge.local.chat
 
 import dev.aichallenge.local.config.LabProperties
 import dev.aichallenge.local.generation.*
+import dev.aichallenge.local.privateaccess.ServiceLimits
+import dev.aichallenge.local.privateaccess.PrivateProperties
 import org.springframework.stereotype.Service
 import java.time.Instant
 import java.util.UUID
@@ -9,7 +11,8 @@ import java.util.UUID
 /** Оркестрация диалога: серверная история, идемпотентность, явный retry и только локальный runtime. */
 @Service
 class ChatService(private val repository: ChatRepository, private val runtime: LocalLlmRuntime,
-    private val context: ChatContextBuilder, private val gate: GenerationGate, private val config: LabProperties) {
+    private val context: ChatContextBuilder, private val gate: GenerationGate, private val config: LabProperties,
+    private val limits: ServiceLimits = ServiceLimits(PrivateProperties())) {
 
     fun create(request: CreateChatRequest): Chat {
         if (request.model !in config.models) throw InvalidModel("Модель не разрешена серверной конфигурацией.")
@@ -29,6 +32,8 @@ class ChatService(private val repository: ChatRepository, private val runtime: L
             repository.user(id, request.requestId)?.let { return@exclusive replay(id, it, request) }
             if (get(id).messages.any { it.status == RunStatus.RUNNING })
                 throw ChatConflict("Предыдущее сообщение ещё обрабатывается. Обновите чат.")
+            limits.context(context.buildNext(get(id), request.content))
+            limits.generation()
             val pending = repository.begin(id, request)
             answer(id, pending)
         }
@@ -40,6 +45,8 @@ class ChatService(private val repository: ChatRepository, private val runtime: L
         val failed = chat.messages.lastOrNull { it.role == LlmRole.USER }
         if (failed?.requestId != requestId || failed.status != RunStatus.FAILED)
             throw ChatConflict("Повторить можно только последнее сообщение с ошибкой.")
+        limits.context(context.build(chat, failed))
+        limits.generation()
         answer(id, repository.retry(id, failed))
     }
 

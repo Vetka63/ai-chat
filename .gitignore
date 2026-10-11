@@ -19,3 +19,10 @@ ai-chat-client/node_modules/
 ai-chat-client/dist/
 ai-agents-client/node_modules/
 ai-agents-client/dist/
+local-llm/client/node_modules/
+local-llm/client/dist/
+local-llm/backend/build/
+local-llm/backend/.gradle/
+local-llm/data/
+local-llm/artifacts/
+!local-llm/.env.day30.example

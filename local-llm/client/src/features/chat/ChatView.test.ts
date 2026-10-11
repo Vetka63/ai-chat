@@ -94,4 +94,18 @@ describe('local chat UI', () => {
     expect(vi.mocked(chatApi.send).mock.calls[1]![1]).toEqual(original)
     wrapper.unmount()
   })
+  it('rate limit rejection restores draft without ambiguous replay or automatic retry', async () => {
+    vi.mocked(chatApi.send).mockRejectedValue(Object.assign(new Error('Повторите через 60 с'), { status: 429 }))
+    const wrapper = mount(ChatView); await flushPromises()
+    await wrapper.find('textarea').setValue('test rate'); await wrapper.find('.chat-composer').trigger('submit'); await flushPromises()
+    expect(wrapper.text()).toContain('Повторите через 60 с'); expect(wrapper.text()).not.toContain('Повторить безопасно')
+    expect((wrapper.find('textarea').element as HTMLTextAreaElement).value).toBe('test rate')
+    expect(chatApi.send).toHaveBeenCalledTimes(1); wrapper.unmount()
+  })
+  it('VPN HTTP generates a valid UUID without secure-context randomUUID', async () => {
+    const wrapper = mount(ChatView); await flushPromises()
+    await wrapper.find('textarea').setValue('test HTTP'); await wrapper.find('.chat-composer').trigger('submit'); await flushPromises()
+    expect(vi.mocked(chatApi.send).mock.calls[0]![1].requestId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+    wrapper.unmount()
+  })
 })

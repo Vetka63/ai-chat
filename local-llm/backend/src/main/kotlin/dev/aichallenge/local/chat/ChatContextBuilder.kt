@@ -6,6 +6,14 @@ import org.springframework.stereotype.Component
 /** Собирает messages только из выбранного чата. Ошибки и reasoning не становятся репликами ассистента. */
 @Component
 class ChatContextBuilder {
+    /** Предварительная проверка будущего контекста до сохранения нового пользовательского хода. */
+    fun buildNext(chat: Chat, content: String): List<LlmMessage> = buildList {
+        add(LlmMessage(LlmRole.SYSTEM, chat.systemPrompt))
+        chat.messages.filter { it.status == RunStatus.COMPLETED || it.status == RunStatus.TRUNCATED }
+            .forEach { add(LlmMessage(it.role, it.content)) }
+        add(LlmMessage(LlmRole.USER, content))
+    }
+
     fun build(chat: Chat, pending: ChatMessage): List<LlmMessage> = buildList {
         add(LlmMessage(LlmRole.SYSTEM, chat.systemPrompt))
         chat.messages.filter { it.status == RunStatus.COMPLETED || it.status == RunStatus.TRUNCATED || it.id == pending.id }

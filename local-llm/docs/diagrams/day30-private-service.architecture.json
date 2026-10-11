@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": { "title": "День 30 · Приватный домашний AI-сервис", "quality_profile": "showcase", "viewBox": [1300, 650] },
+  "components": [
+    { "id": "phone", "type": "frontend", "label": "iPhone · Safari", "sublabel": "ZeroTier One включён", "pos": [30, 260], "size": [190, 80] },
+    { "id": "vpn", "type": "security", "label": "ZeroTier + Firewall", "sublabel": "Только IP своего iPhone", "pos": [360, 260], "size": [205, 80] },
+    { "id": "web", "type": "frontend", "label": "Vue + Nginx", "sublabel": "127.0.0.1:8583 на ПК", "pos": [705, 260], "size": [200, 80] },
+    { "id": "api", "type": "backend", "label": "Kotlin backend", "sublabel": "Пароль · сессия · лимиты", "pos": [1040, 260], "size": [220, 80] },
+    { "id": "model", "type": "backend", "label": "Ollama · Qwen", "sublabel": "Без облачных моделей", "pos": [1040, 40], "size": [220, 80] },
+    { "id": "memory", "type": "database", "label": "SQLite дня 30", "sublabel": "Изолированная история", "pos": [1040, 500], "size": [220, 80] }
+  ],
+  "connections": [
+    { "from": "phone", "to": "vpn", "label": "Зашифрованная сеть", "variant": "security" },
+    { "from": "vpn", "to": "web", "label": "TCP proxy :8583" },
+    { "from": "web", "to": "api", "label": "HTTP /api/v1" },
+    { "from": "api", "to": "model", "label": "HTTP /api/chat" },
+    { "from": "api", "to": "memory", "label": "SQL: история чатов", "labelAt": [1150, 420] }
+  ],
+  "cards": [
+    { "dot": "emerald", "title": "Доступ", "items": ["Приватная сеть с подтверждёнными устройствами", "HTTP внутри VPN; публичного Ollama API нет"] },
+    { "dot": "amber", "title": "Ограничения", "items": ["10 генераций/мин · один активный запрос", "8192 токена окна; история не обрезается молча"] }
+  ]
+}

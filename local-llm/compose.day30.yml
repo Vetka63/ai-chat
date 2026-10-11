@@ -1,0 +1,59 @@
+name: ai-chat-day30
+services:
+  ollama:
+    image: ollama/ollama:0.35.1
+    gpus: all
+    environment:
+      OLLAMA_NO_CLOUD: "1"
+      OLLAMA_HOST: 0.0.0.0:11434
+      OLLAMA_MAX_LOADED_MODELS: "1"
+      OLLAMA_NUM_PARALLEL: "1"
+      OLLAMA_FLASH_ATTENTION: "1"
+      LLAMA_ARG_CACHE_RAM: "0"
+    volumes: ["local-models:/root/.ollama"]
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 15s
+      timeout: 10s
+      start_period: 15s
+      retries: 10
+    restart: unless-stopped
+  backend:
+    build: { context: ., dockerfile: backend/Dockerfile }
+    ports: ["127.0.0.1:8582:8080"]
+    environment:
+      OLLAMA_BASE_URL: http://ollama:11434
+      LOCAL_LLM_MODELS: ${DAY30_MODELS:-qwen3:8b}
+      LOCAL_LLM_DATABASE_PATH: /app/data/day30.sqlite
+      LOCAL_LLM_CONTEXT_SIZE: ${DAY30_CONTEXT_TOKENS:-8192}
+      DAY30_ENABLED: "true"
+      DAY30_PASSWORD: ${DAY30_PASSWORD:?Run scripts/Initialize-Day30.ps1 first}
+      DAY30_ALLOWED_ORIGINS: ${DAY30_ALLOWED_ORIGINS:-http://127.0.0.1:8583,http://localhost:8583}
+      DAY30_GENERATIONS_PER_MINUTE: ${DAY30_GENERATIONS_PER_MINUTE:-10}
+      DAY30_CONTEXT_BYTES: ${DAY30_CONTEXT_BYTES:-24576}
+    volumes: ["day30-data:/app/data"]
+    depends_on:
+      ollama: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8080/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      start_period: 45s
+      retries: 10
+    restart: unless-stopped
+  client:
+    build: { context: ., dockerfile: client/Dockerfile }
+    ports: ["127.0.0.1:8583:80"]
+    depends_on:
+      backend: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+volumes:
+  local-models:
+    external: true
+    name: ai-chat-local-llm_local-models
+  day30-data:

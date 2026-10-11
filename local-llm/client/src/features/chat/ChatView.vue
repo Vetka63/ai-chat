@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref } from 'vue'
-import { api, type RuntimeInfo } from '../../api'
+import { api, type RuntimeInfo, type PrivateSettings } from '../../api'
 import { chatApi, type Chat, type ChatSummary, type SendMessage } from './api'
 import './chat.css'
 
 const emit = defineEmits<{ busy: [value: boolean] }>()
+const props = defineProps<{ serviceSettings?: PrivateSettings | null }>()
+const day = computed(() => props.serviceSettings?.enabled ? 30 : 27)
 const runtime = ref<RuntimeInfo | null>(null), chats = ref<ChatSummary[]>([]), current = ref<Chat | null>(null)
 const creating = ref(false), model = ref(''), title = ref(''), draft = ref(''), error = ref('')
 const busy = ref(false), loading = ref(false), settingsOpen = ref(window.matchMedia?.('(min-width:1101px)').matches ?? true), deleteCandidate = ref<ChatSummary | null>(null)
@@ -86,11 +88,14 @@ async function submitRequest(body: SendMessage, recovery = false) {
     current.value = await chatApi.send(id, body); uncertain.value = null; optimistic.value = null
   } catch (e) {
     error.value = `${String(e)}. Автоматический повтор не отправлен.`
+    // Определённый отказ ДО принятия сообщения: восстановить текст, не выдавать его за потерянный ответ.
+    const status = e instanceof Error && 'status' in e ? Number(e.status) : null
+    const rejected = status != null && [400, 401, 403, 404, 413, 422, 429, 503].includes(status)
     try {
       current.value = await chatApi.get(id)
-      if (!current.value.messages.some(m => m.requestId === body.requestId)) { uncertain.value = body; draft.value = body.content }
+      if (!current.value.messages.some(m => m.requestId === body.requestId)) { uncertain.value = rejected ? null : body; draft.value = body.content }
       else uncertain.value = null
-    } catch { uncertain.value = body; draft.value = body.content }
+    } catch { uncertain.value = rejected ? null : body; draft.value = body.content }
   } finally {
     optimistic.value = null; setBusy(false)
     try { chats.value = await chatApi.list() } catch { /* исходная ошибка остаётся видимой */ }
@@ -99,7 +104,11 @@ async function submitRequest(body: SendMessage, recovery = false) {
 }
 async function send() {
   if (!canSend.value) return
-  await submitRequest({ requestId: crypto.randomUUID(), content: draft.value.trim(), temperature: temperature.value, thinking: thinking.value, maxOutputTokens: maxOutput.value })
+  // HTTP через VPN на iPhone не является Secure Context: randomUUID может отсутствовать.
+  const bytes = crypto.getRandomValues(new Uint8Array(16)); bytes[6] = (bytes[6]! & 15) | 64; bytes[8] = (bytes[8]! & 63) | 128
+  const hex = [...bytes].map(b => b.toString(16).padStart(2, '0')).join('')
+  const requestId = `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`
+  await submitRequest({ requestId, content: draft.value.trim(), temperature: temperature.value, thinking: thinking.value, maxOutputTokens: maxOutput.value })
 }
 async function resendUncertain() { if (uncertain.value) await submitRequest(uncertain.value, true) }
 async function retry() {
@@ -122,7 +131,7 @@ onMounted(async () => {
 <template>
   <div class="chat-page" :class="{ 'settings-closed': !settingsOpen }">
     <aside class="chat-sidebar">
-      <div class="chat-brand"><span class="brand-mark">L</span><div><strong>Локальный чат</strong><small>День 27 · Qwen и Ollama</small></div></div>
+      <div class="chat-brand"><span class="brand-mark">L</span><div><strong>Локальный чат</strong><small>День {{ day }} · Qwen и Ollama</small></div></div>
       <button class="new-button" :disabled="busy || loading" @click="newChat">＋ Новый чат</button>
       <div class="history-heading"><h2>Ваши диалоги</h2><button class="text-button" :disabled="busy || loading" @click="refresh">Обновить</button></div>
       <div v-if="deleteCandidate" class="chat-delete-confirm" role="alertdialog" aria-label="Удаление чата">
@@ -140,7 +149,7 @@ onMounted(async () => {
     </aside>
 
     <main class="chat-main">
-      <header class="chat-header"><div><span class="eyebrow">День 27 · приложение с локальной LLM</span><h1>{{ current?.title ?? 'Новый диалог' }}</h1><small>{{ current?.model ?? 'Выберите модель при создании чата' }}</small></div><button class="text-button" :aria-expanded="settingsOpen" @click="settingsOpen = !settingsOpen">{{ settingsOpen ? 'Скрыть настройки' : 'Настройки' }}</button></header>
+      <header class="chat-header"><div><span class="eyebrow">День {{ day }} · {{ serviceSettings?.enabled ? 'приватный AI-сервис' : 'приложение с локальной LLM' }}</span><h1>{{ current?.title ?? 'Новый диалог' }}</h1><small>{{ current?.model ?? 'Выберите модель при создании чата' }}</small></div><button class="text-button" :aria-expanded="settingsOpen" @click="settingsOpen = !settingsOpen">{{ settingsOpen ? 'Скрыть настройки' : 'Настройки' }}</button></header>
       <div v-if="error" class="notice error chat-notice" role="alert">{{ error }}</div>
       <div v-if="runtime?.error" class="notice error chat-notice" role="alert">{{ runtime.error }}</div>
       <div v-if="uncertain" class="notice chat-notice" role="status">Не удалось подтвердить сохранение сообщения. Обновите чат или повторите с тем же ID — дубликат не появится.<button :disabled="busy || loading" @click="resendUncertain">Повторить безопасно</button></div>
@@ -175,7 +184,7 @@ onMounted(async () => {
       <p class="chat-model-info">{{ current?.model ?? model }}<small>Модель фиксируется при создании чата.</small></p>
       <fieldset :disabled="busy || loading || !!uncertain"><label>Температура<input v-model.number="temperature" type="number" min="0" max="2" step="0.1"></label><label class="checkbox"><input v-model="thinking" type="checkbox">Reasoning модели</label><label>Максимум выходных токенов<input v-model="limit" type="number" min="1" max="32768" placeholder="По умолчанию Ollama"></label></fieldset>
       <p class="muted">Параметры применяются к следующему сообщению. Пустой лимит не ограничивает ответ со стороны приложения.</p>
-      <div class="chat-context-info"><h3>Как работает память</h3><p>В запрос: системная инструкция + предыдущие реплики + новое сообщение.</p><p>Окно настроено на 8192 токена. Сжатия нет. При переполнении история не обрезается молча: появится ошибка.</p><p>Во время генерации при заполнении окна ответ может остановиться как неполный.</p></div>
+      <div class="chat-context-info"><h3>Как работает память</h3><p>В запрос: системная инструкция + предыдущие реплики + новое сообщение.</p><p>Окно настроено на {{ serviceSettings?.contextTokens ?? 8192 }} токена. Сжатия нет. При переполнении история не обрезается молча: появится ошибка.</p><p>Во время генерации при заполнении окна ответ может остановиться как неполный.</p><template v-if="serviceSettings?.enabled"><h3>Защита сервиса</h3><p>{{ serviceSettings.generationsPerMinute }} генераций/мин на владельца, включая явные повторы. Только один одновременный запрос; скрытой очереди нет.</p><p>Передаваемый текст истории: максимум {{ serviceSettings.contextBytes }} байт UTF-8. Это ограничение размера, не оценка токенов. Фактические токены видны у ответа.</p><p>Сессия действует {{ serviceSettings.sessionSeconds / 3600 }} ч. После перезапуска потребуется войти снова.</p></template></div>
       <details v-if="current" class="chat-system"><summary>Системная инструкция</summary><p>{{ current.systemPrompt }}</p></details>
     </aside>
   </div>
